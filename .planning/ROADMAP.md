@@ -33,13 +33,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Repeated failed login attempts or rapid-fire upload requests are rate-limited and return 429 responses
   4. All HTTP responses include security headers (HSTS, CSP, X-Frame-Options) verifiable via browser dev tools
   5. Application logs are structured JSON (not print statements) and include request IDs for tracing
-**Plans**: TBD
+**Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] 01-01: Replace hardcoded secrets and implement environment-based configuration
-- [ ] 01-02: Implement JWT refresh token mechanism with 30-minute access token expiry
-- [ ] 01-03: Add rate limiting, security headers, and structured logging
-- [ ] 01-04: Set up Alembic migration framework with initial migration from current schema
+- [ ] 01-01-PLAN.md -- Replace hardcoded secrets and implement environment-based configuration (Wave 1)
+- [ ] 01-02-PLAN.md -- Implement JWT refresh token mechanism with 30-minute access token expiry (Wave 2)
+- [ ] 01-03-PLAN.md -- Add rate limiting, security headers, and structured logging (Wave 2, parallel with 01-02)
+- [ ] 01-04-PLAN.md -- Set up Alembic migration framework with initial migration from current schema (Wave 3)
 
 ### Phase 2: Document Processing Pipeline
 **Goal**: Users can upload documents in all supported formats and processing happens asynchronously with visible progress
