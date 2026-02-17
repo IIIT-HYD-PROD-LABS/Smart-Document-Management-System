@@ -2,49 +2,73 @@
 
 ## What This Is
 
-An intelligent document management SaaS platform for legal and finance professionals. It automatically extracts key data (dates, amounts, parties, clauses) from contracts, invoices, legal filings, and financial reports — eliminating manual document review. Built for small teams of 5-20 users who need to organize, search, and extract insights from large volumes of documents.
+An AI-powered document management system that automatically organizes and manages uploaded documents including bills, invoices, UPI receipts, travel tickets, tax documents, and bank statements. Built for IIIT Hyderabad Product Labs. Leverages ML for document classification, OCR for text extraction, and provides intelligent search and retrieval. Designed to scale from the core 6-category academic scope to an enterprise-ready SaaS platform with AI-powered extraction, advanced search, team collaboration, and production security.
 
 ## Core Value
 
-**Accurate, automated extraction of key data points (dates, deadlines, financial amounts, parties, and critical clauses) from legal and financial documents** — so professionals spend time acting on information, not hunting for it.
+**Automated classification and intelligent organization of personal and business documents** — upload any document and the system automatically identifies its type, extracts key data (dates, amounts, vendors), and makes it instantly searchable.
 
 ## Requirements
 
 ### Validated
 
 - ✓ User authentication (register, login, logout) with JWT — existing
-- ✓ Document upload with file validation (type, size) — existing
+- ✓ Multi-format document upload (PDF, JPG, PNG) with file validation — existing
 - ✓ OCR text extraction from scanned documents (Tesseract) — existing
 - ✓ PDF text extraction (pdfplumber) — existing
-- ✓ ML-powered document classification (TF-IDF + scikit-learn) — existing
+- ✓ ML-powered document classification with TF-IDF + scikit-learn (6 categories) — existing
+- ✓ Confidence score display for classifications — existing
 - ✓ Basic document search with ILIKE text matching — existing
 - ✓ Local and S3 file storage abstraction — existing
 - ✓ User-scoped data isolation (documents filtered by user_id) — existing
-- ✓ Next.js frontend with dashboard, upload, and search pages — existing
+- ✓ Next.js frontend with dashboard, upload (drag-and-drop), and search pages — existing
 - ✓ Docker containerization with docker-compose — existing
+- ✓ 6 document categories: utility bills, UPI transactions, travel tickets, tax documents, bank statements, shopping invoices — existing
 
 ### Active
 
-- [ ] Smart data extraction (dates, deadlines, amounts, parties, clauses) from legal/financial docs
+**PRD Core (from original spec):**
+- [ ] Automatic metadata extraction (date, amount, vendor) from documents
+- [ ] Full-text search with PostgreSQL FTS (replace ILIKE)
+- [ ] Filter by category, date range, amount
+- [ ] Fuzzy search for partial matches
+- [ ] Document preview functionality (PDF/image viewer in browser)
+- [ ] Analytics dashboard (documents by category, monthly trends, upload stats)
+- [ ] DOCX upload support
+- [ ] ML model improvement: train on real datasets (RVL-CDIP, Indian financial docs)
+- [ ] Model evaluation with confusion matrix, precision/recall/F1
+- [ ] Automated folder-based organization
+- [ ] Version control for updated documents
+- [ ] Image preprocessing for better OCR (deskew, threshold, noise removal)
+
+**Advanced Features (beyond PRD):**
+- [ ] Smart data extraction (dates, deadlines, amounts, parties, clauses) via LLM APIs
 - [ ] AI-powered document summaries and insights
-- [ ] Advanced full-text search with relevance ranking
 - [ ] Role-based access control (admin, editor, viewer)
-- [ ] Document-level permissions
+- [ ] Document-level permissions and sharing
 - [ ] SSO / OAuth integration (Google, Microsoft)
-- [ ] Support for all four document types: contracts, invoices, legal filings, financial reports
 - [ ] Flexible ML backend (local models + LLM APIs, user-configurable)
-- [ ] Polished, production-ready UI for legal/finance professionals
-- [ ] Production security hardening
+- [ ] Polished, production-ready UI
+- [ ] Production security hardening (structured logging, rate limiting, encryption)
+- [ ] Audit logging for compliance
+- [ ] Async document processing via Celery (currently configured but not wired)
 
 ### Out of Scope
 
 - Mobile native apps — web-first, responsive design sufficient for v1
-- Multi-tenant SaaS architecture — single-tenant for v1, small team focus
+- Multi-tenant SaaS architecture — single-tenant for v1
 - Real-time collaboration — document management, not co-editing
 - Workflow automation (approval chains, routing) — v2 feature
 - E-signature integration — separate concern, defer
+- Blockchain integration — unnecessary complexity for v1
+- Email auto-import — v2 feature
+- Multi-language OCR (regional languages) — v2 feature
 
 ## Context
+
+**Organization:** Product Labs, IIIT Hyderabad
+**Project Type:** ML/AI Product Development
+**Timeline:** 8-10 weeks (academic), with ambition to extend to production-ready SaaS
 
 **Existing Codebase:**
 Working prototype with FastAPI backend, Next.js frontend, and ML pipeline. Core document upload → OCR/extraction → classification flow is functional. The codebase has clean layered architecture but several areas need hardening for production use (see `.planning/codebase/CONCERNS.md`).
@@ -54,10 +78,28 @@ Working prototype with FastAPI backend, Next.js frontend, and ML pipeline. Core 
 - Frontend: Next.js 14.2.5, React 18, TypeScript, Tailwind CSS
 - ML: scikit-learn, Tesseract OCR, pdfplumber, OpenCV
 - Infra: Docker, Redis/Celery (configured but async processing not fully wired)
-- Storage: Local filesystem (primary for v1), S3 support exists
+- Storage: Local filesystem (primary), S3 support exists
 
-**Target Users:**
-Legal and finance professionals dealing with contracts, invoices, regulatory filings, and financial statements. They need fast, accurate data extraction and organized document access for small teams.
+**Document Categories (6 primary):**
+1. Utility Bills (electricity, water, gas, internet)
+2. UPI Transactions (PhonePe, GPay, Paytm receipts)
+3. Travel Tickets (flight, train, bus tickets, boarding passes)
+4. Tax Documents (ITR forms, Form 16, tax receipts)
+5. Bank Statements (monthly statements, transaction summaries)
+6. Shopping Invoices (e-commerce orders, retail receipts)
+
+**Target Datasets:**
+- RVL-CDIP (400K documents, 16 classes) — foundation dataset
+- Financial Document Classification (Kaggle) — Indian-specific
+- Invoice-OCR Dataset — with text annotations
+- UPI Transactions datasets (2023, 2024)
+- Synthetic data for tax documents and bank statements
+
+**Success Metrics (from PRD):**
+- Classification accuracy: >85%
+- Text extraction accuracy: >90%
+- Search response time: <2 seconds
+- User satisfaction: intuitive UI/UX
 
 **Known Issues:**
 - Hardcoded security credentials in config (SECRET_KEY defaults)
@@ -66,25 +108,27 @@ Legal and finance professionals dealing with contracts, invoices, regulatory fil
 - No structured logging
 - ILIKE search is basic — needs full-text search for production
 - ML classifier trained on synthetic data — needs real-world training data
-- Document categories are finance-specific (bills, UPI, tax) — need legal document types
+- Celery/Redis configured but async processing not wired
 
 ## Constraints
 
-- **Storage**: Local filesystem for v1 — keeps deployment simple for small teams
-- **ML Flexibility**: Must support both local models and LLM APIs (user choice) — different users have different privacy/cost requirements
-- **Security**: Legal/financial documents are sensitive — encryption at rest, audit logging, and proper access controls are non-negotiable
-- **Team Size**: Designed for 5-20 users per deployment — don't over-engineer for enterprise scale yet
+- **Timeline**: 8-10 week academic timeline for core features; advanced features can extend beyond
+- **Storage**: Local filesystem primary — keeps deployment simple
+- **ML Flexibility**: Support both local scikit-learn models and optional LLM APIs for advanced extraction
+- **Security**: Financial documents are sensitive — proper auth, validation, and error handling required
 - **Existing Stack**: Build on current FastAPI + Next.js + PostgreSQL stack — don't rewrite what works
+- **Datasets**: Use publicly available datasets (RVL-CDIP, Kaggle) + synthetic data; avoid PII
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Keep FastAPI + Next.js stack | Working prototype, team familiar with it, good ecosystem | — Pending |
+| Keep FastAPI + Next.js stack | Working prototype, good ecosystem | — Pending |
 | Local filesystem storage for v1 | Simplifies deployment, S3 support exists for later | — Pending |
-| Hybrid ML approach (local + LLM APIs) | Legal/finance users have varying privacy needs; let them choose | — Pending |
-| Small team scope (5-20 users) | Focus on doing it well for one scale before expanding | — Pending |
-| Legal + finance document focus | Clear domain focus enables better extraction models and UI | — Pending |
+| scikit-learn for classification | Meets 85%+ accuracy target, fast training, interpretable | — Pending |
+| PostgreSQL FTS over Elasticsearch | Already have PostgreSQL, sufficient for this scale | — Pending |
+| 6 Indian document categories | Matches PRD scope and available datasets | — Pending |
+| Optional LLM integration | Adds advanced extraction without being required for core flow | — Pending |
 
 ---
-*Last updated: 2026-02-17 after initialization*
+*Last updated: 2026-02-17 after initialization (updated with PRD context)*
