@@ -1,7 +1,7 @@
 # Requirements: Smart Document Management System
 
 **Defined:** 2026-02-17
-**Core Value:** Automated classification and intelligent organization of personal and business documents — upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
+**Core Value:** Automated classification and intelligent organization of personal and business documents -- upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
 
 ## v1 Requirements
 
@@ -59,14 +59,14 @@
 
 - [ ] **UI-01**: Analytics dashboard showing documents by category, monthly upload trends, and usage statistics
 - [ ] **UI-02**: Enhanced drag-and-drop upload with progress indicators and batch status
-- [ ] **UI-03**: Document version control — user can view revision history and rollback
+- [ ] **UI-03**: Document version control -- user can view revision history and rollback
 - [ ] **UI-04**: Document detail page showing extracted metadata, AI summary, and classification info
 - [ ] **UI-05**: Responsive design that works on desktop and tablet
 
 ### Infrastructure
 
 - [ ] **INFR-01**: Database schema managed via Alembic migrations (replace auto-create)
-- [ ] **INFR-02**: Audit logging — system records who accessed, uploaded, modified, or deleted documents
+- [ ] **INFR-02**: Audit logging -- system records who accessed, uploaded, modified, or deleted documents
 - [ ] **INFR-03**: CI/CD pipeline with GitHub Actions for automated testing and deployment
 - [ ] **INFR-04**: Production deployment documentation (Docker, AWS/Render setup guide)
 - [ ] **INFR-05**: Celery workers and Redis properly configured in Docker Compose
@@ -75,7 +75,7 @@
 
 ### Advanced Search
 
-- **SRCH-06**: Semantic search using document embeddings (pgvector) — "find contracts expiring in Q2"
+- **SRCH-06**: Semantic search using document embeddings (pgvector) -- "find contracts expiring in Q2"
 - **SRCH-07**: Search autocomplete with suggestions
 
 ### Multi-language
@@ -85,15 +85,15 @@
 
 ### Collaboration
 
-- **COLLAB-01**: Email integration — auto-import document attachments
+- **COLLAB-01**: Email integration -- auto-import document attachments
 - **COLLAB-02**: Document annotations and comments
-- **COLLAB-03**: Expense tracking — extract amounts and generate spending reports
+- **COLLAB-03**: Expense tracking -- extract amounts and generate spending reports
 
 ### Advanced ML
 
 - **AIML-05**: Fine-tuned BERT/RoBERTa for improved classification accuracy
 - **AIML-06**: Model versioning with MLflow
-- **AIML-07**: User feedback loop — "Report Incorrect Classification" with model retraining
+- **AIML-07**: User feedback loop -- "Report Incorrect Classification" with model retraining
 
 ### Enterprise
 
@@ -116,54 +116,54 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROC-01 | — | Pending |
-| PROC-02 | — | Pending |
-| PROC-03 | — | Pending |
-| PROC-04 | — | Pending |
-| PROC-05 | — | Pending |
-| PROC-06 | — | Pending |
-| PROC-07 | — | Pending |
-| AIML-01 | — | Pending |
-| AIML-02 | — | Pending |
-| AIML-03 | — | Pending |
-| AIML-04 | — | Pending |
-| EXTR-01 | — | Pending |
-| EXTR-02 | — | Pending |
-| EXTR-03 | — | Pending |
-| EXTR-04 | — | Pending |
-| EXTR-05 | — | Pending |
-| SRCH-01 | — | Pending |
-| SRCH-02 | — | Pending |
-| SRCH-03 | — | Pending |
-| SRCH-04 | — | Pending |
-| SRCH-05 | — | Pending |
-| SEC-01 | — | Pending |
-| SEC-02 | — | Pending |
-| SEC-03 | — | Pending |
-| SEC-04 | — | Pending |
-| SEC-05 | — | Pending |
-| RBAC-01 | — | Pending |
-| RBAC-02 | — | Pending |
-| RBAC-03 | — | Pending |
-| RBAC-04 | — | Pending |
-| RBAC-05 | — | Pending |
-| RBAC-06 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
-| UI-03 | — | Pending |
-| UI-04 | — | Pending |
-| UI-05 | — | Pending |
-| INFR-01 | — | Pending |
-| INFR-02 | — | Pending |
-| INFR-03 | — | Pending |
-| INFR-04 | — | Pending |
-| INFR-05 | — | Pending |
+| SEC-01 | Phase 1: Foundation & Security Hardening | Pending |
+| SEC-02 | Phase 1: Foundation & Security Hardening | Pending |
+| SEC-03 | Phase 1: Foundation & Security Hardening | Pending |
+| SEC-04 | Phase 1: Foundation & Security Hardening | Pending |
+| SEC-05 | Phase 1: Foundation & Security Hardening | Pending |
+| INFR-01 | Phase 1: Foundation & Security Hardening | Pending |
+| PROC-01 | Phase 2: Document Processing Pipeline | Pending |
+| PROC-02 | Phase 2: Document Processing Pipeline | Pending |
+| PROC-03 | Phase 2: Document Processing Pipeline | Pending |
+| PROC-04 | Phase 2: Document Processing Pipeline | Pending |
+| PROC-05 | Phase 2: Document Processing Pipeline | Pending |
+| PROC-06 | Phase 2: Document Processing Pipeline | Pending |
+| PROC-07 | Phase 2: Document Processing Pipeline | Pending |
+| INFR-05 | Phase 2: Document Processing Pipeline | Pending |
+| AIML-01 | Phase 3: ML Classification Upgrade | Pending |
+| AIML-02 | Phase 3: ML Classification Upgrade | Pending |
+| AIML-03 | Phase 3: ML Classification Upgrade | Pending |
+| AIML-04 | Phase 3: ML Classification Upgrade | Pending |
+| SRCH-01 | Phase 4: Search & Retrieval | Pending |
+| SRCH-02 | Phase 4: Search & Retrieval | Pending |
+| SRCH-03 | Phase 4: Search & Retrieval | Pending |
+| SRCH-04 | Phase 4: Search & Retrieval | Pending |
+| EXTR-01 | Phase 5: Smart Extraction (AI) | Pending |
+| EXTR-02 | Phase 5: Smart Extraction (AI) | Pending |
+| EXTR-03 | Phase 5: Smart Extraction (AI) | Pending |
+| EXTR-04 | Phase 5: Smart Extraction (AI) | Pending |
+| EXTR-05 | Phase 5: Smart Extraction (AI) | Pending |
+| RBAC-01 | Phase 6: Access Control & SSO | Pending |
+| RBAC-02 | Phase 6: Access Control & SSO | Pending |
+| RBAC-03 | Phase 6: Access Control & SSO | Pending |
+| RBAC-04 | Phase 6: Access Control & SSO | Pending |
+| RBAC-05 | Phase 6: Access Control & SSO | Pending |
+| RBAC-06 | Phase 6: Access Control & SSO | Pending |
+| UI-01 | Phase 7: UI & Analytics | Pending |
+| UI-02 | Phase 7: UI & Analytics | Pending |
+| UI-03 | Phase 7: UI & Analytics | Pending |
+| UI-04 | Phase 7: UI & Analytics | Pending |
+| UI-05 | Phase 7: UI & Analytics | Pending |
+| SRCH-05 | Phase 7: UI & Analytics | Pending |
+| INFR-02 | Phase 8: Production Readiness | Pending |
+| INFR-03 | Phase 8: Production Readiness | Pending |
+| INFR-04 | Phase 8: Production Readiness | Pending |
 
 **Coverage:**
 - v1 requirements: 42 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 42
+- Mapped to phases: 42
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-17*
-*Last updated: 2026-02-17 after initial definition*
+*Last updated: 2026-02-17 after roadmap creation (traceability updated)*
