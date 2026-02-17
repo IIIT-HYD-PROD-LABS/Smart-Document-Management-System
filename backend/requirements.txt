@@ -1,0 +1,48 @@
+# FastAPI & Server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.13.0
+
+# Authentication
+PyJWT==2.8.0
+bcrypt==4.1.2
+passlib[bcrypt]==1.7.4
+
+# ML & NLP
+scikit-learn==1.3.2
+numpy==1.26.2
+pandas==2.1.4
+joblib==1.3.2
+
+# OCR & Image Processing
+pytesseract==0.3.10
+opencv-python-headless==4.8.1.78
+Pillow==10.1.0
+
+# PDF Processing
+pdfplumber==0.10.3
+PyPDF2==3.0.1
+
+# AWS S3
+boto3==1.33.6
+
+# Celery & Redis
+celery==5.3.6
+redis==5.0.1
+
+# Configuration
+python-dotenv==1.0.0
+pydantic-settings==2.1.0
+
+# Testing
+pytest==7.4.3
+httpx==0.25.2
+
+# Utilities
+python-dateutil==2.8.2
+aiofiles==23.2.1

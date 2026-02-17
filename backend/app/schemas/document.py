@@ -1,0 +1,52 @@
+"""Pydantic schemas for Document request/response models."""
+
+from datetime import datetime
+from pydantic import BaseModel, Field
+
+
+class DocumentResponse(BaseModel):
+    id: int
+    filename: str
+    original_filename: str
+    file_type: str
+    file_size: int
+    category: str
+    confidence_score: float
+    extracted_text: str | None
+    status: str
+    s3_url: str | None
+    created_at: datetime
+    updated_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class DocumentListResponse(BaseModel):
+    documents: list[DocumentResponse]
+    total: int
+    page: int = 1
+    per_page: int = 20
+
+
+class DocumentUploadResponse(BaseModel):
+    id: int
+    filename: str
+    status: str
+    message: str = "Document uploaded successfully. Processing started."
+
+
+class SearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    category: str | None = None
+    page: int = 1
+    per_page: int = 20
+
+
+class DocumentStats(BaseModel):
+    total_documents: int
+    category_counts: dict[str, int]
+    recent_uploads: list[DocumentResponse]
+    processing_count: int
+    completed_count: int
+    failed_count: int
