@@ -76,6 +76,7 @@ class Settings(BaseSettings):
         insecure_values = {
             "super-secret-key-change-in-production",
             "super-secret-docker-key",
+            "your-super-secret-key-change-this-in-production",
             "changeme",
             "secret",
         }
