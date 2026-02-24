@@ -1,0 +1,27 @@
+# Environment variables (secrets)
+.env
+.env.local
+.env.production
+
+# Do NOT ignore .env.example (it is documentation)
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+venv/
+.venv/
+
+# Node
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
