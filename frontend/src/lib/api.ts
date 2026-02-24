@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -10,7 +10,27 @@ const api = axios.create({
     },
 });
 
-// Attach token to every request
+// ──── Token refresh queue pattern ────
+// Prevents multiple concurrent refresh requests when several 401s arrive simultaneously.
+
+let isRefreshing = false;
+let failedQueue: Array<{
+    resolve: (token: string) => void;
+    reject: (error: unknown) => void;
+}> = [];
+
+function processQueue(error: unknown, token: string | null = null) {
+    failedQueue.forEach((promise) => {
+        if (error) {
+            promise.reject(error);
+        } else {
+            promise.resolve(token!);
+        }
+    });
+    failedQueue = [];
+}
+
+// Attach access token to every request
 api.interceptors.request.use((config) => {
     const token = Cookies.get("token");
     if (token) {
@@ -19,17 +39,79 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// Handle 401 responses
+// Handle 401 responses with silent refresh
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
-        if (error.response?.status === 401) {
+    async (error: AxiosError) => {
+        const originalRequest = error.config as InternalAxiosRequestConfig & {
+            _retry?: boolean;
+        };
+
+        // Only attempt refresh on 401, and only once per request
+        if (error.response?.status !== 401 || originalRequest._retry) {
+            return Promise.reject(error);
+        }
+
+        // If a refresh is already in progress, queue this request
+        if (isRefreshing) {
+            return new Promise<string>((resolve, reject) => {
+                failedQueue.push({ resolve, reject });
+            }).then((newToken) => {
+                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                return api(originalRequest);
+            });
+        }
+
+        originalRequest._retry = true;
+        isRefreshing = true;
+
+        const refreshToken = Cookies.get("refresh_token");
+
+        if (!refreshToken) {
+            // No refresh token available -- clear state and redirect
+            isRefreshing = false;
+            processQueue(error, null);
             Cookies.remove("token");
+            Cookies.remove("refresh_token");
+            Cookies.remove("user");
             if (typeof window !== "undefined") {
                 window.location.href = "/login";
             }
+            return Promise.reject(error);
         }
-        return Promise.reject(error);
+
+        try {
+            // Use raw axios (NOT the api instance) to avoid interceptor loops
+            const response = await axios.post(`${API_URL}/api/auth/refresh`, {
+                refresh_token: refreshToken,
+            });
+
+            const { access_token, refresh_token: newRefreshToken, user } = response.data;
+
+            // Update cookies with new tokens
+            Cookies.set("token", access_token, { sameSite: "Strict" });
+            Cookies.set("refresh_token", newRefreshToken, { sameSite: "Strict" });
+            Cookies.set("user", JSON.stringify(user), { sameSite: "Strict" });
+
+            // Retry all queued requests with the new token
+            processQueue(null, access_token);
+
+            // Retry the original request
+            originalRequest.headers.Authorization = `Bearer ${access_token}`;
+            return api(originalRequest);
+        } catch (refreshError) {
+            // Refresh failed -- clear everything and redirect to login
+            processQueue(refreshError, null);
+            Cookies.remove("token");
+            Cookies.remove("refresh_token");
+            Cookies.remove("user");
+            if (typeof window !== "undefined") {
+                window.location.href = "/login";
+            }
+            return Promise.reject(refreshError);
+        } finally {
+            isRefreshing = false;
+        }
     }
 );
 
@@ -40,6 +122,12 @@ export const authApi = {
 
     login: (data: { email: string; password: string }) =>
         api.post("/auth/login", data),
+
+    refresh: (refreshToken: string) =>
+        axios.post(`${API_URL}/api/auth/refresh`, { refresh_token: refreshToken }),
+
+    logout: (refreshToken: string) =>
+        api.post("/auth/logout", { refresh_token: refreshToken }),
 };
 
 // ──── Documents API ────
