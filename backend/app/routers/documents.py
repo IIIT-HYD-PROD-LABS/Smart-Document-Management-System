@@ -3,11 +3,12 @@
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Query, status
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.utils.rate_limiter import limiter
 from app.database import get_db
 from app.models.user import User
 from app.models.document import Document, DocumentCategory, DocumentStatus
@@ -22,7 +23,9 @@ router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
 
 @router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(settings.RATE_LIMIT_UPLOAD)
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

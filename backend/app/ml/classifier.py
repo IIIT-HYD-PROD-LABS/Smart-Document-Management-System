@@ -1,9 +1,14 @@
 """ML classifier - Load trained model and predict document category."""
 
 import os
+
 import joblib
+import structlog
+
 from app.config import settings
 from app.ml.text_preprocessor import clean_text
+
+logger = structlog.stdlib.get_logger()
 
 
 MODEL_PATH = os.path.join(settings.MODEL_DIR, "document_classifier.pkl")
@@ -24,7 +29,7 @@ def _load_model():
             _model = joblib.load(MODEL_PATH)
             _vectorizer = joblib.load(VECTORIZER_PATH)
         else:
-            print(f"[WARNING] Model files not found at {settings.MODEL_DIR}. Run training first.")
+            logger.warning("model_files_not_found", model_dir=settings.MODEL_DIR)
             return False
     return True
 
