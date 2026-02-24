@@ -6,9 +6,9 @@ services:
     image: postgres:14-alpine
     container_name: smartdocs-db
     environment:
-      POSTGRES_DB: smart_docs
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-smart_docs}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -35,14 +35,15 @@ services:
   backend:
     build: ./backend
     container_name: smartdocs-backend
+    env_file: .env
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/smart_docs
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-smart_docs}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
-      SECRET_KEY: super-secret-docker-key
+      SECRET_KEY: ${SECRET_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,12 +58,14 @@ services:
   celery_worker:
     build: ./backend
     container_name: smartdocs-celery
+    env_file: .env
     command: celery -A app.tasks.celery_app worker --loglevel=info
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/smart_docs
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-smart_docs}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
     depends_on:
       postgres:
         condition: service_healthy
