@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Position
 
 Phase: 1 of 8 (Foundation & Security Hardening)
-Plan: 2 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-25 -- Completed 01-02-PLAN.md (JWT Refresh Token Mechanism)
+Last activity: 2026-02-25 -- Completed 01-03-PLAN.md (Rate Limiting, Security Headers & Logging)
 
-Progress: [██░░░░░░░░░░░░░░░░░░░░░░░░░░░] 2/29 (7%)
+Progress: [███░░░░░░░░░░░░░░░░░░░░░░░░░░] 3/29 (10%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 9.5min
-- Total execution time: 19min
+- Total plans completed: 3
+- Average duration: 11min
+- Total execution time: 33min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation-security-hardening | 2/4 | 19min | 9.5min |
+| 01-foundation-security-hardening | 3/4 | 33min | 11min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (6min), 01-02 (13min)
+- Last 5 plans: 01-01 (6min), 01-02 (13min), 01-03 (14min)
 - Trend: --
 
 *Updated after each plan completion*
@@ -54,6 +54,10 @@ Recent decisions affecting current work:
 - [01-02]: Token rotation on every refresh; reuse detection revokes ALL user tokens
 - [01-02]: Queue pattern in frontend prevents concurrent refresh requests
 - [01-02]: sameSite: "Strict" on all auth cookies for CSRF protection
+- [01-03]: HSTS max-age 2 years with preload, only in production (DEBUG=False)
+- [01-03]: CSP unsafe-inline for style-src only; scripts remain strict 'self'
+- [01-03]: Middleware order: CORS > SecurityHeaders > RequestLogging > CorrelationId
+- [01-03]: Swagger/ReDoc disabled in production (docs_url=None when DEBUG=False)
 
 ### Pending Todos
 
@@ -69,5 +73,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 01-02-PLAN.md (JWT Refresh Token Mechanism)
+Stopped at: Completed 01-03-PLAN.md (Rate Limiting, Security Headers & Logging)
 Resume file: None
