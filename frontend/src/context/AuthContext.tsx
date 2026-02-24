@@ -17,7 +17,7 @@ interface AuthContextType {
     isLoading: boolean;
     login: (email: string, password: string) => Promise<void>;
     register: (data: { email: string; username: string; password: string; full_name?: string }) => Promise<void>;
-    logout: () => void;
+    logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,38 +30,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const savedToken = Cookies.get("token");
         const savedUser = Cookies.get("user");
+        const savedRefreshToken = Cookies.get("refresh_token");
+
         if (savedToken && savedUser) {
             try {
                 setToken(savedToken);
                 setUser(JSON.parse(savedUser));
             } catch {
                 Cookies.remove("token");
+                Cookies.remove("refresh_token");
                 Cookies.remove("user");
             }
+        } else if (!savedToken && savedRefreshToken) {
+            // Access token missing but refresh token exists -- attempt silent refresh
+            authApi
+                .refresh(savedRefreshToken)
+                .then((response) => {
+                    const { access_token, refresh_token, user: userData } = response.data;
+                    Cookies.set("token", access_token, { sameSite: "Strict" });
+                    Cookies.set("refresh_token", refresh_token, { sameSite: "Strict" });
+                    Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict" });
+                    setToken(access_token);
+                    setUser(userData);
+                })
+                .catch(() => {
+                    // Refresh failed -- clear everything
+                    Cookies.remove("token");
+                    Cookies.remove("refresh_token");
+                    Cookies.remove("user");
+                })
+                .finally(() => {
+                    setIsLoading(false);
+                });
+            return; // Skip the setIsLoading(false) below; it runs in .finally()
         }
         setIsLoading(false);
     }, []);
 
     const login = useCallback(async (email: string, password: string) => {
         const response = await authApi.login({ email, password });
-        const { access_token, user: userData } = response.data;
-        Cookies.set("token", access_token, { expires: 7 });
-        Cookies.set("user", JSON.stringify(userData), { expires: 7 });
+        const { access_token, refresh_token, user: userData } = response.data;
+        Cookies.set("token", access_token, { sameSite: "Strict" });
+        Cookies.set("refresh_token", refresh_token, { sameSite: "Strict" });
+        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict" });
         setToken(access_token);
         setUser(userData);
     }, []);
 
     const register = useCallback(async (data: { email: string; username: string; password: string; full_name?: string }) => {
         const response = await authApi.register(data);
-        const { access_token, user: userData } = response.data;
-        Cookies.set("token", access_token, { expires: 7 });
-        Cookies.set("user", JSON.stringify(userData), { expires: 7 });
+        const { access_token, refresh_token, user: userData } = response.data;
+        Cookies.set("token", access_token, { sameSite: "Strict" });
+        Cookies.set("refresh_token", refresh_token, { sameSite: "Strict" });
+        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict" });
         setToken(access_token);
         setUser(userData);
     }, []);
 
-    const logout = useCallback(() => {
+    const logout = useCallback(async () => {
+        const refreshToken = Cookies.get("refresh_token");
+        if (refreshToken) {
+            try {
+                await authApi.logout(refreshToken);
+            } catch {
+                // Best-effort server-side revocation; clear cookies regardless
+            }
+        }
         Cookies.remove("token");
+        Cookies.remove("refresh_token");
         Cookies.remove("user");
         setToken(null);
         setUser(null);
