@@ -40,11 +40,11 @@
 
 ### Security & Auth
 
-- [ ] **SEC-01**: Hardcoded SECRET_KEY replaced with environment variables; no default secrets in code
-- [ ] **SEC-02**: JWT tokens have 30-minute expiry with refresh token mechanism
-- [ ] **SEC-03**: Rate limiting on authentication and upload endpoints
-- [ ] **SEC-04**: Security headers (HSTS, CSP, X-Frame-Options) on all responses
-- [ ] **SEC-05**: Structured JSON logging throughout the application (replace print statements)
+- [x] **SEC-01**: Hardcoded SECRET_KEY replaced with environment variables; no default secrets in code
+- [x] **SEC-02**: JWT tokens have 30-minute expiry with refresh token mechanism
+- [x] **SEC-03**: Rate limiting on authentication and upload endpoints
+- [x] **SEC-04**: Security headers (HSTS, CSP, X-Frame-Options) on all responses
+- [x] **SEC-05**: Structured JSON logging throughout the application (replace print statements)
 
 ### Access Control
 
@@ -65,7 +65,7 @@
 
 ### Infrastructure
 
-- [ ] **INFR-01**: Database schema managed via Alembic migrations (replace auto-create)
+- [x] **INFR-01**: Database schema managed via Alembic migrations (replace auto-create)
 - [ ] **INFR-02**: Audit logging -- system records who accessed, uploaded, modified, or deleted documents
 - [ ] **INFR-03**: CI/CD pipeline with GitHub Actions for automated testing and deployment
 - [ ] **INFR-04**: Production deployment documentation (Docker, AWS/Render setup guide)
@@ -116,12 +116,12 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SEC-01 | Phase 1: Foundation & Security Hardening | Pending |
-| SEC-02 | Phase 1: Foundation & Security Hardening | Pending |
-| SEC-03 | Phase 1: Foundation & Security Hardening | Pending |
-| SEC-04 | Phase 1: Foundation & Security Hardening | Pending |
-| SEC-05 | Phase 1: Foundation & Security Hardening | Pending |
-| INFR-01 | Phase 1: Foundation & Security Hardening | Pending |
+| SEC-01 | Phase 1: Foundation & Security Hardening | Complete |
+| SEC-02 | Phase 1: Foundation & Security Hardening | Complete |
+| SEC-03 | Phase 1: Foundation & Security Hardening | Complete |
+| SEC-04 | Phase 1: Foundation & Security Hardening | Complete |
+| SEC-05 | Phase 1: Foundation & Security Hardening | Complete |
+| INFR-01 | Phase 1: Foundation & Security Hardening | Complete |
 | PROC-01 | Phase 2: Document Processing Pipeline | Pending |
 | PROC-02 | Phase 2: Document Processing Pipeline | Pending |
 | PROC-03 | Phase 2: Document Processing Pipeline | Pending |
@@ -166,4 +166,4 @@
 
 ---
 *Requirements defined: 2026-02-17*
-*Last updated: 2026-02-17 after roadmap creation (traceability updated)*
+*Last updated: 2026-02-25 after Phase 1 completion (SEC-01 through SEC-05, INFR-01 marked Complete)*

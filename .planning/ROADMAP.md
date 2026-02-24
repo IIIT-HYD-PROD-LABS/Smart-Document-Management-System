@@ -12,7 +12,7 @@ This roadmap transforms the existing working prototype (FastAPI + Next.js + ML p
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation & Security Hardening** - Eliminate critical security vulnerabilities and establish migration framework before adding features
+- [x] **Phase 1: Foundation & Security Hardening** - Eliminate critical security vulnerabilities and establish migration framework before adding features
 - [ ] **Phase 2: Document Processing Pipeline** - Wire async processing, add format support, and improve OCR for reliable document ingestion
 - [ ] **Phase 3: ML Classification Upgrade** - Train classifier on real datasets and establish model evaluation metrics
 - [ ] **Phase 4: Search & Retrieval** - Replace ILIKE with PostgreSQL full-text search, filters, and fuzzy matching
@@ -36,10 +36,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] 01-01-PLAN.md -- Replace hardcoded secrets and implement environment-based configuration (Wave 1)
-- [ ] 01-02-PLAN.md -- Implement JWT refresh token mechanism with 30-minute access token expiry (Wave 2)
-- [ ] 01-03-PLAN.md -- Add rate limiting, security headers, and structured logging (Wave 2, parallel with 01-02)
-- [ ] 01-04-PLAN.md -- Set up Alembic migration framework with initial migration from current schema (Wave 3)
+- [x] 01-01-PLAN.md -- Replace hardcoded secrets and implement environment-based configuration (Wave 1)
+- [x] 01-02-PLAN.md -- Implement JWT refresh token mechanism with 30-minute access token expiry (Wave 2)
+- [x] 01-03-PLAN.md -- Add rate limiting, security headers, and structured logging (Wave 2, parallel with 01-02)
+- [x] 01-04-PLAN.md -- Set up Alembic migration framework with initial migration from current schema (Wave 3)
 
 ### Phase 2: Document Processing Pipeline
 **Goal**: Users can upload documents in all supported formats and processing happens asynchronously with visible progress
@@ -167,7 +167,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Security Hardening | 0/4 | Not started | - |
+| 1. Foundation & Security Hardening | 4/4 | Complete | 2026-02-25 |
 | 2. Document Processing Pipeline | 0/4 | Not started | - |
 | 3. ML Classification Upgrade | 0/3 | Not started | - |
 | 4. Search & Retrieval | 0/3 | Not started | - |
@@ -178,4 +178,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 
 ---
 *Roadmap created: 2026-02-17*
-*Last updated: 2026-02-17*
+*Last updated: 2026-02-25*
