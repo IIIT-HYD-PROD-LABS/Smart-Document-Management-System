@@ -1,14 +1,24 @@
 """FastAPI application entry point."""
 
+from asgi_correlation_id import CorrelationIdMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.database import engine, Base
+from app.middleware.logging import RequestLoggingMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.routers import auth, documents
+from app.utils.logging import setup_logging
+from app.utils.rate_limiter import limiter
 
-# Create database tables
+# Configure structured logging BEFORE anything else
+setup_logging()
+
+# Create database tables (Plan 01-04 will replace with Alembic migrations)
 Base.metadata.create_all(bind=engine)
 
 # Initialize FastAPI
@@ -19,11 +29,23 @@ app = FastAPI(
         "AI-powered Smart Document Management System that automatically "
         "organizes documents using ML classification, OCR, and intelligent search."
     ),
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
 )
 
-# CORS middleware
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ---------------------------------------------------------------------------
+# Middleware stack
+# Order matters: LAST added = FIRST executed on incoming requests.
+#   1. CORSMiddleware          (outermost -- handles preflight early)
+#   2. SecurityHeadersMiddleware
+#   3. RequestLoggingMiddleware
+#   4. CorrelationIdMiddleware  (innermost -- generates request ID first)
+# ---------------------------------------------------------------------------
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -31,6 +53,12 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+app.add_middleware(RequestLoggingMiddleware)
+
+app.add_middleware(CorrelationIdMiddleware)
 
 # Mount static uploads directory
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
@@ -46,7 +74,7 @@ def root():
         "name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "status": "running",
-        "docs": "/docs",
+        "docs": "/docs" if settings.DEBUG else None,
     }
 
 

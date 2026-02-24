@@ -3,5 +3,6 @@ __pycache__
 .env
 venv/
 uploads/
-models/
+# ML trained model weights (not app/models/ which contains SQLAlchemy models)
+/models/
 *.egg-info
