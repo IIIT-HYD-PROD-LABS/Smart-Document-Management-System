@@ -1,10 +1,14 @@
 """PDF text extraction module using pdfplumber with OCR fallback."""
 
 import io
+
 import pdfplumber
+import structlog
 from PIL import Image
 
 from app.ml.ocr import extract_text_from_pil_image
+
+logger = structlog.stdlib.get_logger()
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
@@ -31,7 +35,7 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
                         text_parts.append(ocr_text)
 
     except Exception as e:
-        print(f"PDF extraction error: {e}")
+        logger.error("pdf_extraction_failed", error=str(e))
         return ""
 
     return "\n\n".join(text_parts)

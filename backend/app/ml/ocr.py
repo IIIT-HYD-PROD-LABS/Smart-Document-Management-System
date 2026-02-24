@@ -3,10 +3,13 @@
 import cv2
 import numpy as np
 import pytesseract
+import structlog
 from PIL import Image
 from io import BytesIO
 
 from app.config import settings
+
+logger = structlog.stdlib.get_logger()
 
 
 # Configure Tesseract path if provided
@@ -77,7 +80,7 @@ def extract_text_from_image(image_bytes: bytes) -> str:
         return text.strip()
 
     except Exception as e:
-        print(f"OCR Error: {e}")
+        logger.error("ocr_extraction_failed", error=str(e))
         return ""
 
 
@@ -93,5 +96,5 @@ def extract_text_from_pil_image(pil_image: Image.Image) -> str:
         text = pytesseract.image_to_string(processed, config="--oem 3 --psm 6")
         return text.strip()
     except Exception as e:
-        print(f"OCR Error: {e}")
+        logger.error("ocr_pil_extraction_failed", error=str(e))
         return ""

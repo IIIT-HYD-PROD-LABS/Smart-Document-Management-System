@@ -6,8 +6,10 @@ Usage: python -m app.ml.train
 
 import os
 import random
-import numpy as np
+
 import joblib
+import numpy as np
+import structlog
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import MultinomialNB
@@ -17,7 +19,9 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 from app.config import settings
 from app.ml.text_preprocessor import clean_text
 
-# ─── Synthetic Training Data ─────────────────────────────────────────────────
+logger = structlog.stdlib.get_logger()
+
+# --- Synthetic Training Data ------------------------------------------------
 # Each category has realistic text patterns that mimic real documents.
 
 TRAINING_DATA = {
@@ -184,33 +188,36 @@ def generate_augmented_data(
 
 def train_model():
     """Train document classifier and save model + vectorizer."""
-    print("=" * 60)
-    print("  Smart Document Management System - Model Training")
-    print("=" * 60)
+    logger.info("training_started")
 
     # Generate training data
-    print("\n[1/6] Generating augmented training data...")
+    logger.info("training_step", step="1/6", action="generating_augmented_data")
     random.seed(42)
     np.random.seed(42)
     texts, labels = generate_augmented_data(TRAINING_DATA, augmentation_factor=5)
-    print(f"  Total samples: {len(texts)}")
+    logger.info("training_data_generated", total_samples=len(texts))
 
     # Clean texts
-    print("[2/6] Preprocessing text...")
+    logger.info("training_step", step="2/6", action="preprocessing_text")
     cleaned_texts = [clean_text(t) for t in texts]
 
     # Split data
-    print("[3/6] Splitting data (70% train, 15% val, 15% test)...")
+    logger.info("training_step", step="3/6", action="splitting_data")
     X_train, X_temp, y_train, y_temp = train_test_split(
         cleaned_texts, labels, test_size=0.30, random_state=42, stratify=labels
     )
     X_val, X_test, y_val, y_test = train_test_split(
         X_temp, y_temp, test_size=0.50, random_state=42, stratify=y_temp
     )
-    print(f"  Train: {len(X_train)}, Validation: {len(X_val)}, Test: {len(X_test)}")
+    logger.info(
+        "data_split_complete",
+        train_size=len(X_train),
+        val_size=len(X_val),
+        test_size=len(X_test),
+    )
 
     # TF-IDF Vectorization
-    print("[4/6] Fitting TF-IDF vectorizer...")
+    logger.info("training_step", step="4/6", action="fitting_tfidf_vectorizer")
     vectorizer = TfidfVectorizer(
         max_features=5000,
         ngram_range=(1, 2),
@@ -221,11 +228,11 @@ def train_model():
     X_train_vec = vectorizer.fit_transform(X_train)
     X_val_vec = vectorizer.transform(X_val)
     X_test_vec = vectorizer.transform(X_test)
-    print(f"  Vocabulary size: {len(vectorizer.vocabulary_)}")
+    logger.info("tfidf_fitted", vocabulary_size=len(vectorizer.vocabulary_))
 
     # Train Logistic Regression
-    print("[5/6] Training models...")
-    print("\n  --- Logistic Regression ---")
+    logger.info("training_step", step="5/6", action="training_models")
+    logger.info("model_training", model="logistic_regression")
     lr_params = {"C": [0.1, 1.0, 10.0], "max_iter": [500]}
     lr_grid = GridSearchCV(
         LogisticRegression(random_state=42, solver="lbfgs", multi_class="multinomial"),
@@ -234,11 +241,15 @@ def train_model():
     lr_grid.fit(X_train_vec, y_train)
     lr_model = lr_grid.best_estimator_
     lr_val_acc = accuracy_score(y_val, lr_model.predict(X_val_vec))
-    print(f"  Best params: {lr_grid.best_params_}")
-    print(f"  Validation accuracy: {lr_val_acc:.4f}")
+    logger.info(
+        "model_evaluated",
+        model="logistic_regression",
+        best_params=lr_grid.best_params_,
+        validation_accuracy=round(lr_val_acc, 4),
+    )
 
     # Train Naive Bayes
-    print("\n  --- Naive Bayes ---")
+    logger.info("model_training", model="naive_bayes")
     nb_params = {"alpha": [0.1, 0.5, 1.0]}
     nb_grid = GridSearchCV(
         MultinomialNB(), nb_params, cv=5, scoring="accuracy", n_jobs=-1,
@@ -246,27 +257,35 @@ def train_model():
     nb_grid.fit(X_train_vec, y_train)
     nb_model = nb_grid.best_estimator_
     nb_val_acc = accuracy_score(y_val, nb_model.predict(X_val_vec))
-    print(f"  Best params: {nb_grid.best_params_}")
-    print(f"  Validation accuracy: {nb_val_acc:.4f}")
+    logger.info(
+        "model_evaluated",
+        model="naive_bayes",
+        best_params=nb_grid.best_params_,
+        validation_accuracy=round(nb_val_acc, 4),
+    )
 
     # Select best model
     best_model = lr_model if lr_val_acc >= nb_val_acc else nb_model
     best_name = "Logistic Regression" if lr_val_acc >= nb_val_acc else "Naive Bayes"
-    print(f"\n  ✓ Best model: {best_name}")
+    logger.info("best_model_selected", model=best_name)
 
     # Final evaluation on test set
-    print("\n[6/6] Evaluating on test set...")
+    logger.info("training_step", step="6/6", action="evaluating_test_set")
     y_pred = best_model.predict(X_test_vec)
     test_acc = accuracy_score(y_test, y_pred)
-    print(f"\n  Test Accuracy: {test_acc:.4f}")
-    print("\n  Classification Report:")
-    print(classification_report(y_test, y_pred))
-    print("  Confusion Matrix:")
-    print(confusion_matrix(y_test, y_pred))
+    report = classification_report(y_test, y_pred)
+    cm = confusion_matrix(y_test, y_pred)
+    logger.info("test_evaluation_complete", test_accuracy=round(test_acc, 4))
+    logger.debug("classification_report", report=report)
+    logger.debug("confusion_matrix", matrix=cm.tolist())
 
     # Cross-validation score
     cv_scores = cross_val_score(best_model, X_train_vec, y_train, cv=5, scoring="accuracy")
-    print(f"\n  5-Fold CV Accuracy: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+    logger.info(
+        "cross_validation_complete",
+        cv_mean=round(cv_scores.mean(), 4),
+        cv_std=round(cv_scores.std(), 4),
+    )
 
     # Save model and vectorizer
     os.makedirs(settings.MODEL_DIR, exist_ok=True)
@@ -274,11 +293,12 @@ def train_model():
     vectorizer_path = os.path.join(settings.MODEL_DIR, "tfidf_vectorizer.pkl")
     joblib.dump(best_model, model_path)
     joblib.dump(vectorizer, vectorizer_path)
-    print(f"\n  ✓ Model saved to: {model_path}")
-    print(f"  ✓ Vectorizer saved to: {vectorizer_path}")
-    print("\n" + "=" * 60)
-    print("  Training complete!")
-    print("=" * 60)
+    logger.info(
+        "model_saved",
+        model_path=model_path,
+        vectorizer_path=vectorizer_path,
+    )
+    logger.info("training_complete")
 
     return best_model, vectorizer, test_acc
 
