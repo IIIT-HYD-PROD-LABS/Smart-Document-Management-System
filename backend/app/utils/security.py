@@ -1,5 +1,6 @@
 """JWT authentication and password hashing utilities."""
 
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -33,8 +34,17 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def create_refresh_token() -> tuple[str, datetime]:
+    """Generate an opaque refresh token and its expiry timestamp."""
+    token = secrets.token_urlsafe(64)
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
+    return token, expires_at
 
 
 def decode_access_token(token: str) -> dict:
