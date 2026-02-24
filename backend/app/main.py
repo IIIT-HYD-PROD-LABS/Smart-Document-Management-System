@@ -8,7 +8,6 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
-from app.database import engine, Base
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.routers import auth, documents
@@ -18,8 +17,11 @@ from app.utils.rate_limiter import limiter
 # Configure structured logging BEFORE anything else
 setup_logging()
 
-# Create database tables (Plan 01-04 will replace with Alembic migrations)
-Base.metadata.create_all(bind=engine)
+# Database tables managed by Alembic migrations (see backend/alembic/)
+# Database setup:
+# Fresh database: cd backend && alembic upgrade head
+# Existing database (from create_all): cd backend && alembic stamp head
+# New migration: cd backend && alembic revision --autogenerate -m "description"
 
 # Initialize FastAPI
 app = FastAPI(
