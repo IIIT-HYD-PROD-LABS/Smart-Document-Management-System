@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Position
 
 Phase: 1 of 8 (Foundation & Security Hardening)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-25 -- Completed 01-01-PLAN.md (Environment & Config Hardening)
+Last activity: 2026-02-25 -- Completed 01-02-PLAN.md (JWT Refresh Token Mechanism)
 
-Progress: [█░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 1/29 (3%)
+Progress: [██░░░░░░░░░░░░░░░░░░░░░░░░░░░] 2/29 (7%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 6min
-- Total execution time: 6min
+- Total plans completed: 2
+- Average duration: 9.5min
+- Total execution time: 19min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation-security-hardening | 1/4 | 6min | 6min |
+| 01-foundation-security-hardening | 2/4 | 19min | 9.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (6min)
+- Last 5 plans: 01-01 (6min), 01-02 (13min)
 - Trend: --
 
 *Updated after each plan completion*
@@ -50,6 +50,10 @@ Recent decisions affecting current work:
 - [01-01]: ACCESS_TOKEN_EXPIRE_MINUTES default reduced from 1440 to 30 minutes
 - [01-01]: CORS restricted to explicit origins from ALLOWED_ORIGINS env var
 - [01-01]: Rate limiter module created early for Wave 2 plans to import
+- [01-02]: Opaque refresh tokens (not JWT) for server-side revocability
+- [01-02]: Token rotation on every refresh; reuse detection revokes ALL user tokens
+- [01-02]: Queue pattern in frontend prevents concurrent refresh requests
+- [01-02]: sameSite: "Strict" on all auth cookies for CSRF protection
 
 ### Pending Todos
 
@@ -59,9 +63,11 @@ None.
 
 - Research flagged LLM hallucination risk (69-88%) for Phase 5 -- will need validation with real documents
 - ~~Hardcoded SECRET_KEY is a critical security issue to resolve immediately in Phase 1~~ RESOLVED in 01-01
+- Rate limiter requires Redis to be running; without Redis, rate limits won't persist across restarts
+- No Alembic migrations yet; table creation relies on SQLAlchemy auto-create
 
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 01-01-PLAN.md (Environment & Config Hardening)
+Stopped at: Completed 01-02-PLAN.md (JWT Refresh Token Mechanism)
 Resume file: None
