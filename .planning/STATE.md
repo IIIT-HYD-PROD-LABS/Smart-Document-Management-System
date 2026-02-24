@@ -5,32 +5,32 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Automated classification and intelligent organization of personal and business documents -- upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
-**Current focus:** Phase 1: Foundation & Security Hardening
+**Current focus:** Phase 1 complete. Ready for Phase 2: Document Processing Pipeline
 
 ## Current Position
 
-Phase: 1 of 8 (Foundation & Security Hardening)
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-02-25 -- Completed 01-03-PLAN.md (Rate Limiting, Security Headers & Logging)
+Phase: 1 of 8 (Foundation & Security Hardening) -- COMPLETE
+Plan: 4 of 4 in current phase
+Status: Phase complete
+Last activity: 2026-02-25 -- Completed 01-04-PLAN.md (Alembic Migration Framework)
 
-Progress: [███░░░░░░░░░░░░░░░░░░░░░░░░░░] 3/29 (10%)
+Progress: [████░░░░░░░░░░░░░░░░░░░░░░░░░] 4/29 (14%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 11min
-- Total execution time: 33min
+- Total plans completed: 4
+- Average duration: 10min
+- Total execution time: 41min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation-security-hardening | 3/4 | 33min | 11min |
+| 01-foundation-security-hardening | 4/4 | 41min | 10min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (6min), 01-02 (13min), 01-03 (14min)
+- Last 5 plans: 01-01 (6min), 01-02 (13min), 01-03 (14min), 01-04 (8min)
 - Trend: --
 
 *Updated after each plan completion*
@@ -58,6 +58,8 @@ Recent decisions affecting current work:
 - [01-03]: CSP unsafe-inline for style-src only; scripts remain strict 'self'
 - [01-03]: Middleware order: CORS > SecurityHeaders > RequestLogging > CorrelationId
 - [01-03]: Swagger/ReDoc disabled in production (docs_url=None when DEBUG=False)
+- [01-04]: Manual migration used when autogenerate fails (no live DB required)
+- [01-04]: alembic.ini sqlalchemy.url overridden by env.py using settings.DATABASE_URL
 
 ### Pending Todos
 
@@ -68,10 +70,11 @@ None.
 - Research flagged LLM hallucination risk (69-88%) for Phase 5 -- will need validation with real documents
 - ~~Hardcoded SECRET_KEY is a critical security issue to resolve immediately in Phase 1~~ RESOLVED in 01-01
 - Rate limiter requires Redis to be running; without Redis, rate limits won't persist across restarts
-- No Alembic migrations yet; table creation relies on SQLAlchemy auto-create
+- ~~No Alembic migrations yet; table creation relies on SQLAlchemy auto-create~~ RESOLVED in 01-04
+- New models in future phases must be imported in backend/alembic/env.py for autogenerate to work
 
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 01-03-PLAN.md (Rate Limiting, Security Headers & Logging)
+Stopped at: Completed 01-04-PLAN.md (Alembic Migration Framework) -- Phase 1 complete
 Resume file: None
