@@ -5,33 +5,34 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Automated classification and intelligent organization of personal and business documents -- upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
-**Current focus:** Phase 1 complete. Ready for Phase 2: Document Processing Pipeline
+**Current focus:** Phase 2 complete. Ready for Phase 3: Search & Retrieval Engine
 
 ## Current Position
 
-Phase: 1 of 8 (Foundation & Security Hardening) -- COMPLETE
+Phase: 2 of 8 (Document Processing Pipeline) -- COMPLETE
 Plan: 4 of 4 in current phase
-Status: Phase verified and complete
-Last activity: 2026-02-25 -- Phase 1 verified (5/5 must-haves passed after gap fixes)
+Status: Phase complete
+Last activity: 2026-03-01 -- Phase 2 executed (4 plans, 3 waves)
 
-Progress: [████░░░░░░░░░░░░░░░░░░░░░░░░░] 4/29 (14%)
+Progress: [████████░░░░░░░░░░░░░░░░░░░░░] 8/29 (28%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 10min
-- Total execution time: 41min
+- Total plans completed: 8
+- Average duration: ~8min
+- Total execution time: ~65min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation-security-hardening | 4/4 | 41min | 10min |
+| 02-document-processing-pipeline | 4/4 | ~24min | ~6min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (6min), 01-02 (13min), 01-03 (14min), 01-04 (8min)
-- Trend: --
+- Last 5 plans: 01-03 (14min), 01-04 (8min), 02-01 (~6min), 02-02 (~6min), 02-03+04 (~6min)
+- Trend: Improving
 
 *Updated after each plan completion*
 
@@ -60,6 +61,16 @@ Recent decisions affecting current work:
 - [01-03]: Swagger/ReDoc disabled in production (docs_url=None when DEBUG=False)
 - [01-04]: Manual migration used when autogenerate fails (no live DB required)
 - [01-04]: alembic.ini sqlalchemy.url overridden by env.py using settings.DATABASE_URL
+- [02-01]: JSONB column for extracted_metadata (flexible schema over separate columns)
+- [02-01]: python-docx for DOCX text extraction from paragraphs + tables
+- [02-01]: Morphological open/close in OCR pipeline for noise removal
+- [02-01]: Multi-PSM retry (psm 6 -> psm 3) for sparse OCR results
+- [02-02]: Upload returns 202 Accepted with Celery task dispatch (non-blocking)
+- [02-02]: Celery progress stages: reading (10%) -> extracting (30%) -> metadata (60%) -> saving (80%)
+- [02-02]: Exponential backoff retry: 60s * 2^retries on task failure
+- [02-03]: Frontend polls /status every 2.5s after upload completes
+- [02-04]: dateutil.parse(fuzzy=True, dayfirst=True) for Indian date formats
+- [02-04]: Amount extraction validates 0.01-10M range to filter false positives
 
 ### Pending Todos
 
@@ -72,9 +83,10 @@ None.
 - Rate limiter requires Redis to be running; without Redis, rate limits won't persist across restarts
 - ~~No Alembic migrations yet; table creation relies on SQLAlchemy auto-create~~ RESOLVED in 01-04
 - New models in future phases must be imported in backend/alembic/env.py for autogenerate to work
+- Metadata extraction is regex-based v1 -- Phase 5 LLM will improve accuracy significantly
 
 ## Session Continuity
 
-Last session: 2026-02-25
-Stopped at: Phase 1 verified and complete. Ready for Phase 2: Document Processing Pipeline.
+Last session: 2026-03-01
+Stopped at: Phase 2 complete. Ready for Phase 3: Search & Retrieval Engine.
 Resume file: None
