@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, Query, status
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 
@@ -22,15 +22,18 @@ from app.services.storage_service import save_file, delete_file
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
 
-@router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit(settings.RATE_LIMIT_UPLOAD)
 async def upload_document(
     request: Request,
+    response: Response,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Upload a document file for OCR + ML classification."""
+    """Upload a document file for async OCR + ML classification."""
+    from app.tasks.document_tasks import process_document_task
+
     # Validate file type
     ext = Path(file.filename).suffix.lstrip(".").lower()
     if ext not in settings.ALLOWED_EXTENSIONS:
@@ -53,7 +56,7 @@ async def upload_document(
     # Save file to storage
     file_path, s3_url = save_file(file_bytes, file.filename)
 
-    # Create document record
+    # Create document record with PENDING status
     doc = Document(
         user_id=current_user.id,
         filename=os.path.basename(file_path) if file_path else file.filename,
@@ -62,36 +65,59 @@ async def upload_document(
         file_size=file_size,
         file_path=file_path,
         s3_url=s3_url,
-        status=DocumentStatus.PROCESSING,
+        status=DocumentStatus.PENDING,
     )
     db.add(doc)
     db.commit()
     db.refresh(doc)
 
-    # Process document synchronously for now (Celery integration optional)
-    try:
-        from app.ml.classifier import extract_and_classify
-        extracted_text, category, confidence = extract_and_classify(file_bytes, ext)
-
-        doc.extracted_text = extracted_text
-        doc.category = DocumentCategory(category) if category != "unknown" else DocumentCategory.UNKNOWN
-        doc.confidence_score = confidence
-        doc.status = DocumentStatus.COMPLETED
-    except Exception as e:
-        doc.status = DocumentStatus.FAILED
-        doc.extracted_text = f"Processing error: {str(e)}"
-
+    # Dispatch async processing
+    task = process_document_task.delay(doc.id)
+    doc.celery_task_id = task.id
     db.commit()
-    db.refresh(doc)
 
     return DocumentUploadResponse(
         id=doc.id,
         filename=doc.original_filename,
-        status=doc.status.value,
-        message=f"Document classified as '{doc.category.value}' with {doc.confidence_score:.0%} confidence."
-        if doc.status == DocumentStatus.COMPLETED
-        else "Document processing failed.",
+        status="pending",
+        task_id=task.id,
+        message="Document uploaded. Processing started.",
     )
+
+
+@router.get("/{document_id}/status")
+def get_document_status(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get processing status of a document."""
+    from celery.result import AsyncResult
+    from app.tasks import celery_app
+
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.user_id == current_user.id,
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    result = {
+        "document_id": doc.id,
+        "status": doc.status.value,
+        "category": doc.category.value if doc.category else None,
+        "confidence_score": doc.confidence_score,
+    }
+
+    # If still processing, check Celery task for progress
+    if doc.celery_task_id and doc.status in (DocumentStatus.PENDING, DocumentStatus.PROCESSING):
+        task_result = AsyncResult(doc.celery_task_id, app=celery_app)
+        if task_result.state == "PROGRESS":
+            result["progress"] = task_result.info
+        elif task_result.state == "PENDING":
+            result["progress"] = {"stage": "queued", "progress": 0}
+
+    return result
 
 
 @router.get("/search", response_model=DocumentListResponse)
