@@ -30,6 +30,12 @@ backend/datasets/training/
 # ML Model artifacts
 backend/models/
 
+# Playwright MCP logs
+.playwright-mcp/
+
+# Screenshots (test artifacts)
+*.png
+
 # OS
 .DS_Store
 Thumbs.db

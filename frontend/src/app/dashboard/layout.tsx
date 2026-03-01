@@ -4,17 +4,10 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
-import {
-    FiHome,
-    FiUpload,
-    FiSearch,
-    FiBarChart2,
-    FiLogOut,
-    FiFileText,
-} from "react-icons/fi";
+import { FiHome, FiUpload, FiSearch, FiBarChart2, FiLogOut, FiFileText } from "react-icons/fi";
 
 const navItems = [
-    { href: "/dashboard", icon: FiHome, label: "Dashboard" },
+    { href: "/dashboard", icon: FiHome, label: "Overview" },
     { href: "/dashboard/upload", icon: FiUpload, label: "Upload" },
     { href: "/dashboard/documents", icon: FiFileText, label: "Documents" },
     { href: "/dashboard/search", icon: FiSearch, label: "Search" },
@@ -32,70 +25,65 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     if (isLoading || !user) {
         return (
-            <div className="min-h-screen bg-mesh flex items-center justify-center">
-                <div className="w-10 h-10 border-3 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
+            <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-[#27272a] border-t-[#a1a1aa] rounded-full animate-spin" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-mesh flex">
-            {/* Sidebar */}
-            <aside className="w-64 fixed left-0 top-0 h-full glass border-r border-slate-800 flex flex-col z-40">
-                {/* Logo */}
-                <div className="px-6 h-16 flex items-center border-b border-slate-800/50">
-                    <Link href="/dashboard" className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
-                            <span className="text-white font-bold text-sm">S</span>
-                        </div>
-                        <span className="text-lg font-bold gradient-text">SmartDocs</span>
+        <div className="min-h-screen bg-[#09090b] flex">
+            <aside className="w-56 fixed left-0 top-0 h-full bg-[#09090b] border-r border-[#1f1f23] flex flex-col z-40">
+                <div className="px-5 h-14 flex items-center border-b border-[#1f1f23]">
+                    <Link href="/dashboard" className="text-sm font-semibold text-white tracking-tight">
+                        SmartDocs
                     </Link>
                 </div>
 
-                {/* Nav */}
-                <nav className="flex-1 py-6 px-3 space-y-1">
+                <nav className="flex-1 py-3 px-2">
                     {navItems.map((item) => {
                         const isActive = pathname === item.href;
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
-                                        ? "bg-primary-600/20 text-primary-300 border border-primary-500/20"
-                                        : "text-slate-400 hover:text-white hover:bg-white/5"
-                                    }`}
+                                className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] transition-colors cursor-pointer mb-0.5 ${
+                                    isActive
+                                        ? "bg-[#18181b] text-white font-medium"
+                                        : "text-[#71717a] hover:text-[#a1a1aa] hover:bg-[#111113]"
+                                }`}
                             >
-                                <item.icon className="w-4.5 h-4.5" />
+                                <item.icon className="w-4 h-4" />
                                 {item.label}
                             </Link>
                         );
                     })}
                 </nav>
 
-                {/* User */}
-                <div className="border-t border-slate-800/50 p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
+                <div className="border-t border-[#1f1f23] p-3">
+                    <div className="flex items-center gap-2.5 px-2 mb-3">
+                        <div className="w-7 h-7 rounded-full bg-[#18181b] border border-[#27272a] flex items-center justify-center text-[11px] font-medium text-[#a1a1aa]">
                             {user.username?.[0]?.toUpperCase() || "U"}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-white truncate">{user.username}</p>
-                            <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                            <p className="text-[13px] font-medium text-white truncate">{user.username}</p>
+                            <p className="text-[11px] text-[#52525b] truncate">{user.email}</p>
                         </div>
                     </div>
                     <button
                         onClick={() => { logout(); router.push("/login"); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-[13px] text-[#52525b] hover:text-[#ef4444] rounded-md hover:bg-[#111113] transition-colors cursor-pointer"
                     >
-                        <FiLogOut className="w-4 h-4" />
-                        Sign Out
+                        <FiLogOut className="w-3.5 h-3.5" />
+                        Sign out
                     </button>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 ml-64 p-8">
-                {children}
+            <main className="flex-1 ml-56 p-8">
+                <div className="max-w-5xl">
+                    {children}
+                </div>
             </main>
         </div>
     );

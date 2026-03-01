@@ -160,8 +160,11 @@ export const documentsApi = {
     getByCategory: (category: string) =>
         api.get(`/documents/category/${category}`),
 
-    search: (query: string, category?: string) =>
-        api.post("/documents/search", { query, category }),
+    search: (query: string, category?: string) => {
+        const params = new URLSearchParams({ q: query });
+        if (category) params.append("category", category);
+        return api.get(`/documents/search?${params.toString()}`);
+    },
 
     getStats: () =>
         api.get("/documents/stats"),
