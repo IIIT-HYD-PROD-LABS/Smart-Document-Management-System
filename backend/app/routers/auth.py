@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -49,7 +49,7 @@ def _create_token_pair(user: User, db: Session) -> TokenPairResponse:
 
 @router.post("/register", response_model=TokenPairResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def register(request: Request, payload: UserRegister, db: Session = Depends(get_db)):
+def register(request: Request, response: Response, payload: UserRegister, db: Session = Depends(get_db)):
     """Register a new user account and return a token pair."""
     # Check for existing email
     if db.query(User).filter(User.email == payload.email).first():
@@ -79,7 +79,7 @@ def register(request: Request, payload: UserRegister, db: Session = Depends(get_
 
 @router.post("/login", response_model=TokenPairResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def login(request: Request, payload: UserLogin, db: Session = Depends(get_db)):
+def login(request: Request, response: Response, payload: UserLogin, db: Session = Depends(get_db)):
     """Authenticate user and return a token pair."""
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
