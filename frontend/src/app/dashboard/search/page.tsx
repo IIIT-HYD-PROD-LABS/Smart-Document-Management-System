@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
 import { documentsApi } from "@/lib/api";
 import { FiSearch, FiFileText } from "react-icons/fi";
 
@@ -24,6 +23,7 @@ export default function SearchPage() {
             setSearched(true);
         } catch {
             setResults([]);
+            setSearched(true);
         } finally {
             setLoading(false);
         }
@@ -32,86 +32,68 @@ export default function SearchPage() {
     return (
         <div>
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-white">Search Documents</h1>
-                <p className="text-slate-400 mt-1">Find documents by content, keywords, or category</p>
+                <h1 className="text-lg font-semibold text-white">Search</h1>
+                <p className="text-sm text-[#52525b] mt-1">Find documents by content or keywords</p>
             </div>
 
-            {/* Search Bar */}
-            <form onSubmit={handleSearch} className="glass-card p-6 mb-8">
-                <div className="flex gap-3">
-                    <div className="relative flex-1">
-                        <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                        <input
-                            type="text"
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            className="input-field !pl-11"
-                            placeholder="Search by content, keywords, amount…"
-                        />
-                    </div>
-                    <select
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className="input-field !w-40"
-                    >
-                        <option value="">All Categories</option>
-                        {categories.filter(Boolean).map((c) => (
-                            <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                        ))}
-                    </select>
-                    <button type="submit" disabled={loading} className="btn-primary whitespace-nowrap">
-                        {loading ? "Searching…" : "Search"}
-                    </button>
+            <form onSubmit={handleSearch} className="flex gap-2 mb-8">
+                <div className="relative flex-1">
+                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#52525b] w-4 h-4" />
+                    <input
+                        type="text"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-[#111113] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors"
+                        placeholder="Search by content, keywords..."
+                    />
                 </div>
+                <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="px-3 py-2 bg-[#111113] border border-[#27272a] rounded-md text-sm text-[#a1a1aa] focus:outline-none focus:border-[#3f3f46] transition-colors cursor-pointer"
+                >
+                    <option value="">All</option>
+                    {categories.filter(Boolean).map((c) => (
+                        <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                    ))}
+                </select>
+                <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-4 py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                    {loading ? "..." : "Search"}
+                </button>
             </form>
 
-            {/* Results */}
             {searched && (
                 <div>
-                    <p className="text-sm text-slate-400 mb-4">
-                        {results.length} result{results.length !== 1 ? "s" : ""} found
+                    <p className="text-xs text-[#52525b] mb-4">
+                        {results.length} result{results.length !== 1 ? "s" : ""}
                     </p>
                     {results.length > 0 ? (
-                        <div className="space-y-3">
-                            {results.map((doc, i) => (
-                                <motion.div
-                                    key={doc.id}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.05 }}
-                                    className="glass-card p-5"
-                                >
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-10 h-10 rounded-xl bg-primary-600/15 flex items-center justify-center shrink-0 mt-0.5">
-                                            <FiFileText className="w-5 h-5 text-primary-400" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-3 mb-1">
-                                                <p className="text-sm font-medium text-white">{doc.original_filename}</p>
-                                                <span className="text-xs px-2.5 py-0.5 rounded-full bg-primary-500/10 text-primary-400 capitalize">
-                                                    {doc.category}
-                                                </span>
-                                            </div>
-                                            {doc.extracted_text && (
-                                                <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
-                                                    {doc.extracted_text.substring(0, 250)}
-                                                </p>
-                                            )}
-                                            <div className="flex items-center gap-4 mt-2 text-xs text-slate-600">
-                                                <span>{new Date(doc.created_at).toLocaleDateString()}</span>
-                                                {doc.confidence_score && (
-                                                    <span>{(doc.confidence_score * 100).toFixed(0)}% confidence</span>
-                                                )}
-                                            </div>
-                                        </div>
+                        <div className="bg-[#111113] border border-[#27272a] rounded-lg divide-y divide-[#1f1f23]">
+                            {results.map((doc) => (
+                                <div key={doc.id} className="px-5 py-4">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <FiFileText className="w-4 h-4 text-[#52525b]" />
+                                        <span className="text-sm text-white">{doc.original_filename}</span>
+                                        <span className="text-[11px] px-2 py-0.5 rounded bg-[#10b981]/10 text-[#10b981]">{doc.category}</span>
+                                        {doc.confidence_score > 0 && (
+                                            <span className="text-[11px] text-[#52525b]">{(doc.confidence_score * 100).toFixed(0)}%</span>
+                                        )}
                                     </div>
-                                </motion.div>
+                                    {doc.extracted_text && (
+                                        <p className="text-xs text-[#71717a] leading-relaxed line-clamp-2 ml-7">
+                                            {doc.extracted_text.substring(0, 200)}
+                                        </p>
+                                    )}
+                                </div>
                             ))}
                         </div>
                     ) : (
-                        <div className="text-center py-16 glass-card">
-                            <FiSearch className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                            <p className="text-slate-400">No documents match your search</p>
+                        <div className="bg-[#111113] border border-[#27272a] rounded-lg py-16 text-center">
+                            <p className="text-sm text-[#52525b]">No documents match your search</p>
                         </div>
                     )}
                 </div>

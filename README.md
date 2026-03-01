@@ -1,172 +1,104 @@
-# Smart Document Management System
+# SmartDocs
 
-> AI-powered document management system with intelligent ML classification, OCR text extraction, async processing, and real dataset training. Built for IIIT Hyderabad Production Labs.
+**AI-powered document management system** built for IIIT Hyderabad Production Labs. Upload any document — PDFs, scanned images, DOCX — and the system automatically extracts text via OCR, classifies it using machine learning, and makes it searchable.
+
+---
+
+## Features
+
+- **ML Document Classification** — Automatically categorizes documents into bills, invoices, tax forms, bank statements, UPI receipts, and tickets using a trained Logistic Regression model (76.4% accuracy on real data)
+- **OCR Text Extraction** — Extracts text from scanned PDFs and images using Tesseract with adaptive preprocessing (grayscale, blur, thresholding, deskew, morphological ops, multi-PSM retry)
+- **Async Processing** — Upload returns immediately (HTTP 202). Celery workers handle OCR + classification in the background with real-time status polling
+- **Full-Text Search** — Search across all extracted document content with category filtering
+- **Secure Auth** — JWT access tokens + opaque refresh tokens with rotation and reuse detection. bcrypt password hashing. Rate limiting on all endpoints
+- **Multi-Format Support** — PDF (text + scanned), PNG, JPG, TIFF, DOCX
+
+---
 
 ## Architecture
 
 ```
-+----------------------------------------------+
-|              Next.js Frontend                |
-|   (Dashboard, Upload, Search, Analytics)     |
-+----------------------------------------------+
-|              FastAPI Backend                 |
-|   (Auth, Documents API, ML Pipeline)         |
-+----------+----------+-----------------------+
-| PostgreSQL|  Redis   |  Celery Workers       |
-| (Database)| (Broker) |  (Async Processing)   |
-+----------+----------+-----------------------+
-|              ML Pipeline                     |
-|  (OCR -> Text Extraction -> Classification)  |
-+----------------------------------------------+
+┌──────────────────────────────────────────────┐
+│              Next.js Frontend                │
+│     Landing · Auth · Dashboard · Search      │
+└──────────────────┬───────────────────────────┘
+                   │ REST API
+┌──────────────────┴───────────────────────────┐
+│              FastAPI Backend                  │
+│   Auth · Documents API · ML Pipeline         │
+├────────────┬────────────┬────────────────────┤
+│ PostgreSQL │   Redis    │   Celery Workers   │
+│ (Data)     │  (Broker)  │ (OCR + Classify)   │
+└────────────┴────────────┴────────────────────┘
 ```
 
 ## Tech Stack
 
-| Layer      | Technology                                     |
-|------------|------------------------------------------------|
-| Frontend   | Next.js 14, TypeScript, Tailwind CSS, Framer Motion |
-| Backend    | FastAPI, SQLAlchemy, Pydantic, Uvicorn         |
-| Database   | PostgreSQL 14, Alembic migrations              |
-| ML/NLP     | scikit-learn, Tesseract OCR, pdfplumber, python-docx |
-| Async      | Celery + Redis (non-blocking document processing) |
-| Auth       | JWT access + opaque refresh tokens, bcrypt     |
-| Storage    | Local filesystem / AWS S3                      |
-| DevOps     | Docker, Docker Compose                         |
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
+| Backend | FastAPI, SQLAlchemy, Pydantic v2, Uvicorn |
+| Database | PostgreSQL 14, Alembic migrations |
+| ML | scikit-learn (LogisticRegression + TF-IDF), Tesseract OCR, pdfplumber, python-docx |
+| Async | Celery + Redis |
+| Auth | JWT (HS256) + opaque refresh tokens, bcrypt, slowapi rate limiting |
+| Infra | Docker, Docker Compose (5 services) |
 
-## Project Status
-
-| Phase | Name | Status | Plans |
-|-------|------|--------|-------|
-| 1 | Foundation & Security Hardening | COMPLETE | 4/4 |
-| 2 | Document Processing Pipeline | COMPLETE | 4/4 |
-| 3 | ML Classification Upgrade | Next | 0/3 |
-| 4 | Search & Retrieval Engine | Pending | 0/4 |
-| 5 | LLM Smart Extraction | Pending | 0/4 |
-| 6 | Multi-User & RBAC | Pending | 0/4 |
-| 7 | Analytics Dashboard | Pending | 0/3 |
-| 8 | Production Deployment | Pending | 0/3 |
-
-**Overall Progress:** 8/29 plans complete (28%)
-
-### Phase 1 - Foundation & Security Hardening (COMPLETE)
-- Environment-based configuration (no hardcoded secrets)
-- JWT refresh token rotation with reuse detection
-- Rate limiting on auth and upload endpoints
-- Security headers (HSTS, CSP, X-Frame-Options)
-- Structured JSON logging with correlation IDs
-- Alembic migration framework
-
-### Phase 2 - Document Processing Pipeline (COMPLETE)
-- DOCX text extraction (paragraphs + tables)
-- Enhanced OCR with morphological preprocessing and multi-PSM retry
-- Async processing via Celery (upload returns 202 Accepted)
-- Frontend bulk upload with per-file progress bars
-- Processing status polling (2.5s interval)
-- Automatic metadata extraction (dates, amounts, vendor)
-
-### Dataset Pipeline (Phase 3 Groundwork)
-- 7 Kaggle datasets downloaded (~19 GB)
-- Automated download/prepare/train pipeline
-- Initial real-data training: 76.4% accuracy (Logistic Regression)
-- Target: >85% accuracy in Phase 3
-
-## Project Structure
-
-```
-backend/
-    app/
-        main.py              # FastAPI application
-        config.py            # Environment configuration
-        database.py          # SQLAlchemy setup
-        models/              # DB models (User, Document, RefreshToken)
-        schemas/             # Pydantic request/response schemas
-        routers/             # API routes (auth, documents)
-        services/            # Storage service (local/S3)
-        middleware/           # Security headers, request logging
-        ml/                  # ML pipeline
-            ocr.py           # Image preprocessing + Tesseract OCR
-            pdf_extractor.py # PDF text extraction (pdfplumber)
-            docx_extractor.py # DOCX text extraction (python-docx)
-            text_preprocessor.py # Text cleaning for ML
-            classifier.py    # Document classification orchestrator
-            metadata_extractor.py # Date/amount/vendor extraction
-            train.py         # Model training (synthetic + real data)
-            datasets/        # Dataset download & preparation
-                download.py  # Kaggle dataset downloader
-                prepare.py   # OCR-based data preparation pipeline
-        tasks/               # Celery async tasks
-        utils/               # JWT, rate limiter, security
-    alembic/                 # Database migrations
-    Dockerfile
-    requirements.txt
-frontend/
-    src/
-        app/                 # Next.js pages
-            page.tsx         # Landing page
-            login/           # Login page
-            register/        # Register page
-            dashboard/       # Dashboard (protected)
-                page.tsx     # Overview + stats
-                upload/      # Drag-drop bulk upload with progress
-                documents/   # Document browser
-                search/      # Full-text search
-                analytics/   # Charts & insights
-        context/             # React auth context
-        lib/                 # API client (Axios + token refresh)
-    Dockerfile
-    package.json
-docker-compose.yml           # 5-service orchestration
-```
+---
 
 ## Quick Start
 
-### 1. Clone & Configure
+### Prerequisites
+
+- Docker & Docker Compose
+
+### 1. Clone and configure
 
 ```bash
+git clone https://github.com/10srav/SMART-DOCUMENT-MANAGEMENT-SYSTEM--IIITHYD-PROD-LABS.git
 cd "SMART DOCUMENT MANAGEMENT SYSTEM- IIITHYD PROD LABS"
 cp backend/.env.example backend/.env
-# Edit backend/.env with your settings (SECRET_KEY must be >= 32 chars)
+# Edit backend/.env — set SECRET_KEY (>= 32 chars) and database credentials
 ```
 
-### 2. Run with Docker Compose
+### 2. Start all services
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-This starts all 5 services:
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs (disabled in production)
-- **PostgreSQL**: localhost:5432
-- **Redis**: localhost:6379
+This launches 5 containers:
 
-### 3. Train ML Model
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Frontend | http://localhost:3000 | Next.js UI |
+| Backend | http://localhost:8000 | FastAPI REST API |
+| Swagger | http://localhost:8000/docs | Interactive API docs (debug mode) |
+| PostgreSQL | localhost:5432 | Database |
+| Redis | localhost:6379 | Celery message broker |
+
+### 3. Train the ML model
 
 ```bash
-# Train with synthetic data (default, no external datasets needed):
+# Synthetic data (no external deps):
 docker compose exec backend python -m app.ml.train --synthetic-only
 
-# Train with real Kaggle datasets (requires KAGGLE_USERNAME/KAGGLE_KEY):
+# Real Kaggle datasets (requires KAGGLE_USERNAME + KAGGLE_KEY in .env):
 docker compose exec backend python -m app.ml.train --full-pipeline
 
-# Train with combined real + synthetic data:
+# Combined (real + synthetic augmentation):
 docker compose exec backend python -m app.ml.train --combined
 ```
 
-### 4. Run Locally (without Docker)
+### 4. Local development (without Docker)
 
 **Backend:**
 ```bash
 cd backend
-python -m venv venv
-venv\Scripts\activate  # Windows
+python -m venv venv && source venv/bin/activate  # or venv\Scripts\activate on Windows
 pip install -r requirements.txt
-
-# Train the ML model first
-python -m app.ml.train
-
-# Run server
+alembic upgrade head
+python -m app.ml.train --synthetic-only
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -177,50 +109,176 @@ npm install
 npm run dev
 ```
 
+---
+
+## API Reference
+
+### Authentication
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Create account |
+| POST | `/api/auth/login` | Get access + refresh token pair |
+| POST | `/api/auth/refresh` | Rotate refresh token |
+| POST | `/api/auth/logout` | Revoke refresh token |
+
+### Documents (all require `Authorization: Bearer <token>`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/documents/upload` | Upload file (returns 202, async processing) |
+| GET | `/api/documents/{id}/status` | Poll processing status |
+| GET | `/api/documents/all` | List all documents (paginated) |
+| GET | `/api/documents/{id}` | Get document detail |
+| GET | `/api/documents/search?q=…` | Full-text search with optional `category` filter |
+| GET | `/api/documents/category/{cat}` | Filter by category |
+| GET | `/api/documents/stats` | Dashboard statistics |
+| DELETE | `/api/documents/{id}` | Delete document + file |
+
+---
+
 ## Document Categories
 
-The ML classifier automatically categorizes documents into:
+| Category | Examples | Training Data |
+|----------|----------|---------------|
+| Bills | Utility bills, phone bills | Financial images (India) |
+| UPI | UPI transaction receipts | UPI Transactions 2024 (250K records) |
+| Tickets | Event/travel tickets | Synthetic |
+| Tax | ITR forms, tax documents | ITR Form 16 images |
+| Bank | Bank statements, passbooks | Bank statements CSV + images |
+| Invoices | Purchase invoices, receipts | Invoice OCR (8K images), RVL-CDIP |
 
-| Category  | Description                     | Real Data Sources |
-|-----------|---------------------------------|-------------------|
-| Bills     | Utility bills, phone bills      | Financial images India |
-| UPI       | UPI transaction receipts        | UPI Transactions 2024 (250K records) |
-| Tickets   | Event/travel tickets            | Synthetic (real dataset pending) |
-| Tax       | Tax documents, ITR forms        | ITR Form 16 images |
-| Bank      | Bank statements, passbooks      | Bank statements CSV + images |
-| Invoices  | Purchase invoices, receipts     | Invoice OCR (8K images), RVL-CDIP |
+---
 
-## API Endpoints
+## Processing Pipeline
 
-| Method | Endpoint                        | Description              | Auth |
-|--------|---------------------------------|--------------------------|------|
-| POST   | `/api/auth/register`            | Register new user        | No |
-| POST   | `/api/auth/login`               | Login & get token pair   | No |
-| POST   | `/api/auth/refresh`             | Refresh access token     | No |
-| POST   | `/api/auth/logout`              | Revoke refresh token     | Yes |
-| POST   | `/api/documents/upload`         | Upload doc (returns 202) | Yes |
-| GET    | `/api/documents/{id}/status`    | Processing status        | Yes |
-| GET    | `/api/documents/all`            | List all documents       | Yes |
-| GET    | `/api/documents/{id}`           | Get document details     | Yes |
-| POST   | `/api/documents/search`         | Full-text search         | Yes |
-| GET    | `/api/documents/category/{cat}` | Filter by category       | Yes |
-| GET    | `/api/documents/stats`          | Dashboard statistics     | Yes |
-| DELETE | `/api/documents/{id}`           | Delete document          | Yes |
+```
+Upload (HTTP 202)
+  │
+  ▼
+Celery Worker picks up task
+  │
+  ├─ PDF? ──► pdfplumber text extraction
+  │            └─ fallback to OCR if < 50 chars
+  ├─ DOCX? ─► python-docx (paragraphs + tables)
+  ├─ Image? ► Tesseract OCR
+  │            ├─ Grayscale → Gaussian blur → Adaptive threshold
+  │            ├─ Deskew correction
+  │            ├─ Morphological open/close
+  │            └─ Multi-PSM retry (PSM 6 → PSM 3)
+  │
+  ▼
+Text Preprocessing (clean, normalize, preserve financial patterns)
+  │
+  ▼
+TF-IDF + Logistic Regression Classification
+  │
+  ▼
+Metadata Extraction (dates, amounts, vendor — regex + dateutil)
+  │
+  ▼
+Status: COMPLETED (category + confidence score + metadata)
+```
 
-## Prerequisites
+---
 
-- **Docker & Docker Compose** (recommended)
-- **Python 3.11+** (for local backend)
-- **Node.js 18+** (for local frontend)
-- **PostgreSQL 14+** (for local DB)
-- **Tesseract OCR** (for image text extraction)
+## Project Structure
+
+```
+backend/
+  app/
+    main.py                  # FastAPI app, middleware, routes
+    config.py                # Pydantic settings from .env
+    database.py              # SQLAlchemy engine + session
+    models/                  # User, Document, RefreshToken
+    schemas/                 # Request/response Pydantic models
+    routers/                 # auth.py, documents.py
+    services/                # storage_service.py (local/S3)
+    middleware/               # Security headers, request logging
+    ml/
+      ocr.py                 # Image preprocessing + Tesseract
+      pdf_extractor.py       # pdfplumber + OCR fallback
+      docx_extractor.py      # python-docx extraction
+      text_preprocessor.py   # Text cleaning for ML
+      classifier.py          # Classification orchestrator
+      metadata_extractor.py  # Date/amount/vendor regex extraction
+      train.py               # Model training pipeline
+      datasets/              # Kaggle download + data preparation
+    tasks/                   # Celery task definitions
+    utils/                   # JWT, rate limiter, logging
+  alembic/                   # Database migrations
+  Dockerfile
+  requirements.txt
+
+frontend/
+  src/
+    app/
+      page.tsx               # Landing page
+      login/                 # Sign in
+      register/              # Sign up
+      dashboard/
+        page.tsx             # Overview (stats, categories, recent)
+        upload/              # Drag-drop upload with progress
+        documents/           # Document list with category filters
+        search/              # Full-text search
+        analytics/           # Category distribution, processing status
+    context/                 # Auth context (token management)
+    lib/                     # Axios API client with refresh interceptor
+  Dockerfile
+
+docker-compose.yml           # PostgreSQL, Redis, Backend, Celery, Frontend
+```
+
+---
+
+## Development Progress
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Foundation & Security Hardening | Done |
+| 2 | Document Processing Pipeline | Done |
+| 3 | ML Classification Upgrade (target >85%) | Next |
+| 4 | Search & Retrieval Engine | Planned |
+| 5 | LLM Smart Extraction | Planned |
+| 6 | Multi-User & RBAC | Planned |
+| 7 | Analytics Dashboard | Planned |
+| 8 | Production Deployment | Planned |
+
+### Completed
+
+**Phase 1** — JWT refresh token rotation with reuse detection, bcrypt auth, rate limiting (slowapi), security headers (HSTS, CSP, X-Frame-Options), structured JSON logging with correlation IDs, Alembic migration framework.
+
+**Phase 2** — Multi-format text extraction (PDF, DOCX, images), OCR with adaptive preprocessing, async Celery processing (202 Accepted + status polling), frontend bulk upload with per-file progress, metadata extraction (dates, amounts, vendor).
+
+**Dataset Pipeline** — 7 Kaggle datasets (~19 GB), automated download/prepare/train pipeline, 76.4% accuracy baseline with Logistic Regression.
+
+**UI Redesign** — Minimalist dark theme (Linear/Notion-inspired), Inter font, zinc/neutral palette, no glassmorphism. Clean dashboard with stats, category filters, full-text search, analytics.
+
+---
+
+## Environment Variables
+
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/smart_docs
+SECRET_KEY=your-secret-key-minimum-32-characters
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+UPLOAD_DIR=./uploads
+MAX_FILE_SIZE_MB=50
+USE_S3=false
+REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/0
+ML_CONFIDENCE_THRESHOLD=0.3
+DEBUG=true
+```
+
+See `backend/.env.example` for the full list.
+
+---
 
 ## Team
 
-- **Sravan** (10srav) - Development Lead
-- **Jyothika** - Team Member
-- **Organization**: Product Labs, IIIT Hyderabad
+**Sravan** (10srav) — Development Lead
+**Jyothika** — Team Member
 
-## License
-
-Built for IIIT Hyderabad Production Labs.
+Built for **Product Labs, IIIT Hyderabad**.
