@@ -22,6 +22,14 @@ node_modules/
 *.swp
 *.swo
 
+# ML Datasets (large, downloaded from Kaggle)
+backend/datasets/raw/
+backend/datasets/processed/
+backend/datasets/training/
+
+# ML Model artifacts
+backend/models/
+
 # OS
 .DS_Store
 Thumbs.db
