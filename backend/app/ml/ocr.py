@@ -37,6 +37,13 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
         cv2.THRESH_BINARY, 11, 2
     )
 
+    # Morphological opening to remove small noise spots
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
+
+    # Morphological closing to fill small gaps in text
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
+
     # Deskew
     coords = np.column_stack(np.where(thresh > 0))
     if len(coords) > 5:
@@ -71,11 +78,20 @@ def extract_text_from_image(image_bytes: bytes) -> str:
         # Preprocess
         processed = preprocess_image(image)
 
-        # Run OCR
+        # Run OCR with multi-PSM retry
         text = pytesseract.image_to_string(
             processed,
             config="--oem 3 --psm 6",
         )
+
+        # If sparse result, retry with fully automatic page segmentation
+        if len(text.strip()) < 20:
+            text_auto = pytesseract.image_to_string(
+                processed,
+                config="--oem 3 --psm 3",
+            )
+            if len(text_auto.strip()) > len(text.strip()):
+                text = text_auto
 
         return text.strip()
 
