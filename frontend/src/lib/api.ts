@@ -132,13 +132,24 @@ export const authApi = {
 
 // ──── Documents API ────
 export const documentsApi = {
-    upload: (file: File) => {
+    upload: (file: File, onProgress?: (percent: number) => void) => {
         const formData = new FormData();
         formData.append("file", file);
         return api.post("/documents/upload", formData, {
             headers: { "Content-Type": "multipart/form-data" },
+            onUploadProgress: (progressEvent) => {
+                if (onProgress && progressEvent.total) {
+                    const percent = Math.round(
+                        (progressEvent.loaded * 100) / progressEvent.total
+                    );
+                    onProgress(percent);
+                }
+            },
         });
     },
+
+    getStatus: (documentId: number) =>
+        api.get(`/documents/${documentId}/status`),
 
     getAll: (skip = 0, limit = 50) =>
         api.get(`/documents/all?skip=${skip}&limit=${limit}`),

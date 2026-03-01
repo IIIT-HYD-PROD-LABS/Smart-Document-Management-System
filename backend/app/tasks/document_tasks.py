@@ -6,6 +6,7 @@ from app.tasks import celery_app
 from app.database import SessionLocal
 from app.models.document import Document, DocumentStatus, DocumentCategory
 from app.ml.classifier import extract_and_classify
+from app.ml.metadata_extractor import extract_metadata
 
 logger = structlog.stdlib.get_logger()
 
@@ -52,7 +53,11 @@ def process_document_task(self, document_id: int):
             file_bytes, doc.file_type
         )
 
-        # Stage 3: Saving results
+        # Stage 3: Metadata extraction
+        self.update_state(state="PROGRESS", meta={"stage": "extracting_metadata", "progress": 60})
+        metadata = extract_metadata(extracted_text) if extracted_text else {"dates": [], "amounts": [], "vendor": None}
+
+        # Stage 4: Saving results
         self.update_state(state="PROGRESS", meta={"stage": "saving_results", "progress": 80})
 
         doc.extracted_text = extracted_text
@@ -62,6 +67,7 @@ def process_document_task(self, document_id: int):
             else DocumentCategory.UNKNOWN
         )
         doc.confidence_score = confidence
+        doc.extracted_metadata = metadata
         doc.status = DocumentStatus.COMPLETED
         db.commit()
 
@@ -76,6 +82,7 @@ def process_document_task(self, document_id: int):
             "document_id": document_id,
             "category": category,
             "confidence": confidence,
+            "metadata": metadata,
             "status": "completed",
         }
 
