@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
 import { documentsApi } from "@/lib/api";
@@ -9,7 +9,11 @@ import { FiUploadCloud, FiFile, FiCheckCircle, FiX, FiLoader } from "react-icons
 
 interface UploadItem {
     file: File;
-    status: "queued" | "uploading" | "done" | "error";
+    status: "queued" | "uploading" | "uploaded" | "processing" | "completed" | "failed" | "error";
+    uploadProgress: number;
+    processingProgress?: { stage: string; progress: number };
+    documentId?: number;
+    taskId?: string;
     result?: any;
     error?: string;
 }
@@ -17,9 +21,52 @@ interface UploadItem {
 export default function UploadPage() {
     const [uploads, setUploads] = useState<UploadItem[]>([]);
     const [uploading, setUploading] = useState(false);
+    const pollTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+    const updateItem = useCallback((file: File, updates: Partial<UploadItem>) => {
+        setUploads((prev) =>
+            prev.map((u) => (u.file === file ? { ...u, ...updates } : u))
+        );
+    }, []);
+
+    const pollProcessingStatus = useCallback((file: File, documentId: number) => {
+        const poll = async () => {
+            try {
+                const { data } = await documentsApi.getStatus(documentId);
+                if (data.status === "completed") {
+                    updateItem(file, {
+                        status: "completed",
+                        result: {
+                            category: data.category,
+                            confidence_score: data.confidence_score,
+                        },
+                    });
+                    return;
+                }
+                if (data.status === "failed") {
+                    updateItem(file, { status: "failed", error: "Processing failed" });
+                    return;
+                }
+                // Still processing
+                updateItem(file, {
+                    status: "processing",
+                    processingProgress: data.progress,
+                });
+                const timer = setTimeout(poll, 2500);
+                pollTimers.current.set(file.name, timer);
+            } catch {
+                updateItem(file, { status: "failed", error: "Status check failed" });
+            }
+        };
+        poll();
+    }, [updateItem]);
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
-        const newItems: UploadItem[] = acceptedFiles.map((f) => ({ file: f, status: "queued" }));
+        const newItems: UploadItem[] = acceptedFiles.map((f) => ({
+            file: f,
+            status: "queued",
+            uploadProgress: 0,
+        }));
         setUploads((prev) => [...prev, ...newItems]);
     }, []);
 
@@ -30,6 +77,7 @@ export default function UploadPage() {
             "image/png": [".png"],
             "image/jpeg": [".jpg", ".jpeg"],
             "image/tiff": [".tiff", ".tif"],
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
         },
         maxSize: 16 * 1024 * 1024,
     });
@@ -38,41 +86,66 @@ export default function UploadPage() {
         setUploading(true);
         const queued = uploads.filter((u) => u.status === "queued");
 
-        for (let i = 0; i < queued.length; i++) {
-            const item = queued[i];
-            setUploads((prev) =>
-                prev.map((u) => (u.file === item.file ? { ...u, status: "uploading" } : u))
-            );
+        for (const item of queued) {
+            updateItem(item.file, { status: "uploading", uploadProgress: 0 });
+
             try {
-                const res = await documentsApi.upload(item.file);
-                setUploads((prev) =>
-                    prev.map((u) =>
-                        u.file === item.file ? { ...u, status: "done", result: res.data } : u
-                    )
-                );
+                const res = await documentsApi.upload(item.file, (percent) => {
+                    updateItem(item.file, { uploadProgress: percent });
+                });
+
+                const { id, task_id } = res.data;
+                updateItem(item.file, {
+                    status: "uploaded",
+                    uploadProgress: 100,
+                    documentId: id,
+                    taskId: task_id,
+                });
+
+                // Start polling for processing status
+                pollProcessingStatus(item.file, id);
             } catch (err: any) {
-                setUploads((prev) =>
-                    prev.map((u) =>
-                        u.file === item.file
-                            ? { ...u, status: "error", error: err.response?.data?.detail || "Upload failed" }
-                            : u
-                    )
-                );
+                updateItem(item.file, {
+                    status: "error",
+                    error: err.response?.data?.detail || "Upload failed",
+                });
             }
         }
 
         setUploading(false);
-        const doneCount = uploads.filter((u) => u.status === "done").length + queued.length;
-        toast.success(`Uploaded ${doneCount} document(s)`);
     };
 
     const removeItem = (file: File) => {
+        // Clear any active poll timer
+        const timer = pollTimers.current.get(file.name);
+        if (timer) {
+            clearTimeout(timer);
+            pollTimers.current.delete(file.name);
+        }
         setUploads((prev) => prev.filter((u) => u.file !== file));
+    };
+
+    const clearAll = () => {
+        // Clear all poll timers
+        pollTimers.current.forEach((timer) => clearTimeout(timer));
+        pollTimers.current.clear();
+        setUploads([]);
     };
 
     const formatSize = (bytes: number) => {
         const mb = bytes / (1024 * 1024);
         return mb >= 1 ? `${mb.toFixed(1)} MB` : `${(bytes / 1024).toFixed(1)} KB`;
+    };
+
+    const getStageLabel = (stage: string) => {
+        const labels: Record<string, string> = {
+            queued: "Queued",
+            reading_file: "Reading file",
+            extracting_text: "Extracting text",
+            extracting_metadata: "Extracting metadata",
+            saving_results: "Saving results",
+        };
+        return labels[stage] || stage;
     };
 
     return (
@@ -93,10 +166,10 @@ export default function UploadPage() {
                 <input {...getInputProps()} />
                 <FiUploadCloud className={`w-14 h-14 mx-auto mb-4 transition-colors ${isDragActive ? "text-primary-400" : "text-slate-500"}`} />
                 <p className="text-lg font-medium text-white mb-2">
-                    {isDragActive ? "Drop files here…" : "Drop files here or click to browse"}
+                    {isDragActive ? "Drop files here\u2026" : "Drop files here or click to browse"}
                 </p>
                 <p className="text-sm text-slate-500">
-                    Supports PDF, PNG, JPG, TIFF — Max 16 MB per file
+                    Supports PDF, PNG, JPG, TIFF, DOCX — Max 16 MB per file
                 </p>
             </div>
 
@@ -109,7 +182,7 @@ export default function UploadPage() {
                         </h2>
                         <div className="flex gap-3">
                             <button
-                                onClick={() => setUploads([])}
+                                onClick={clearAll}
                                 className="btn-ghost text-sm text-slate-400"
                             >
                                 Clear All
@@ -119,7 +192,7 @@ export default function UploadPage() {
                                 disabled={uploading || uploads.every((u) => u.status !== "queued")}
                                 className="btn-primary text-sm"
                             >
-                                {uploading ? "Uploading…" : "Upload All"}
+                                {uploading ? "Uploading\u2026" : "Upload All"}
                             </button>
                         </div>
                     </div>
@@ -132,35 +205,60 @@ export default function UploadPage() {
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: 10 }}
-                                    className="glass-card p-4 flex items-center gap-4"
+                                    className="glass-card p-4"
                                 >
-                                    <div className="w-10 h-10 rounded-xl bg-primary-600/20 flex items-center justify-center">
-                                        {item.status === "done" ? (
-                                            <FiCheckCircle className="w-5 h-5 text-emerald-400" />
-                                        ) : item.status === "uploading" ? (
-                                            <FiLoader className="w-5 h-5 text-primary-400 animate-spin" />
-                                        ) : item.status === "error" ? (
-                                            <FiX className="w-5 h-5 text-red-400" />
-                                        ) : (
-                                            <FiFile className="w-5 h-5 text-slate-400" />
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-xl bg-primary-600/20 flex items-center justify-center">
+                                            {item.status === "completed" ? (
+                                                <FiCheckCircle className="w-5 h-5 text-emerald-400" />
+                                            ) : item.status === "uploading" || item.status === "uploaded" || item.status === "processing" ? (
+                                                <FiLoader className="w-5 h-5 text-primary-400 animate-spin" />
+                                            ) : item.status === "error" || item.status === "failed" ? (
+                                                <FiX className="w-5 h-5 text-red-400" />
+                                            ) : (
+                                                <FiFile className="w-5 h-5 text-slate-400" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-white truncate">{item.file.name}</p>
+                                            <p className="text-xs text-slate-500">
+                                                {formatSize(item.file.size)}
+                                            </p>
+                                        </div>
+                                        {item.status === "queued" && (
+                                            <button onClick={() => removeItem(item.file)} className="text-slate-500 hover:text-red-400">
+                                                <FiX className="w-4 h-4" />
+                                            </button>
                                         )}
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-white truncate">{item.file.name}</p>
-                                        <p className="text-xs text-slate-500">
-                                            {formatSize(item.file.size)}
-                                            {item.result && (
-                                                <span className="ml-2 text-emerald-400">
-                                                    → {item.result.category} ({(item.result.confidence_score * 100).toFixed(0)}%)
-                                                </span>
-                                            )}
-                                            {item.error && <span className="ml-2 text-red-400">{item.error}</span>}
+
+                                    {/* Upload progress bar */}
+                                    {item.status === "uploading" && (
+                                        <div className="w-full bg-slate-700 rounded-full h-1.5 mt-3">
+                                            <div
+                                                className="bg-primary-500 h-1.5 rounded-full transition-all duration-300"
+                                                style={{ width: `${item.uploadProgress}%` }}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Processing status */}
+                                    {(item.status === "uploaded" || item.status === "processing") && (
+                                        <p className="text-xs text-primary-400 mt-2">
+                                            Processing{item.processingProgress ? `: ${getStageLabel(item.processingProgress.stage)}` : "..."}
                                         </p>
-                                    </div>
-                                    {item.status === "queued" && (
-                                        <button onClick={() => removeItem(item.file)} className="text-slate-500 hover:text-red-400">
-                                            <FiX className="w-4 h-4" />
-                                        </button>
+                                    )}
+
+                                    {/* Completed result */}
+                                    {item.status === "completed" && item.result && (
+                                        <p className="text-xs text-emerald-400 mt-2">
+                                            {item.result.category} ({(item.result.confidence_score * 100).toFixed(0)}%)
+                                        </p>
+                                    )}
+
+                                    {/* Error message */}
+                                    {(item.status === "error" || item.status === "failed") && item.error && (
+                                        <p className="text-xs text-red-400 mt-2">{item.error}</p>
                                     )}
                                 </motion.div>
                             ))}
