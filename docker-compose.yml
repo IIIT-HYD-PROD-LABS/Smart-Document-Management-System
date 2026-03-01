@@ -59,7 +59,8 @@ services:
     build: ./backend
     container_name: smartdocs-celery
     env_file: .env
-    command: celery -A app.tasks.celery_app worker --loglevel=info
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-smart_docs}
       REDIS_URL: redis://redis:6379/0
@@ -75,6 +76,12 @@ services:
       - ./backend:/app
       - backend_uploads:/app/uploads
       - backend_models:/app/models
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping --timeout 10"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
 
   # Next.js Frontend
   frontend:
