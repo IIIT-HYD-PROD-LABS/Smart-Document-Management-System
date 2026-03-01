@@ -1,11 +1,27 @@
 """
 ML Model Training Script
-Generates synthetic training data and trains document classifiers.
-Usage: python -m app.ml.train
+Trains document classifiers using real datasets + synthetic augmentation.
+
+Usage:
+    # Train with real dataset (if available) + synthetic fallback:
+    python -m app.ml.train
+
+    # Train with synthetic data only (original behavior):
+    python -m app.ml.train --synthetic-only
+
+    # Train with real data only (requires datasets to be downloaded):
+    python -m app.ml.train --real-only
+
+    # Full pipeline: download → prepare → train:
+    python -m app.ml.train --full-pipeline
 """
 
+import argparse
+import csv
+import json
 import os
 import random
+from pathlib import Path
 
 import joblib
 import numpy as np
@@ -21,10 +37,14 @@ from app.ml.text_preprocessor import clean_text
 
 logger = structlog.stdlib.get_logger()
 
-# --- Synthetic Training Data ------------------------------------------------
-# Each category has realistic text patterns that mimic real documents.
+BASE_DIR = Path(__file__).resolve().parent.parent.parent  # backend/
+TRAINING_CSV = BASE_DIR / "datasets" / "training" / "train_data.csv"
+EVAL_DIR = BASE_DIR / "models" / "evaluation"
 
-TRAINING_DATA = {
+# --- Synthetic Training Data ------------------------------------------------
+# Fallback data for when real datasets aren't available.
+
+SYNTHETIC_DATA = {
     "bills": [
         "electricity bill payment due date amount kwh units consumed meter reading billing period customer account power supply company tariff charges",
         "water bill monthly charges consumption gallons cubic meter utility municipal corporation sewage charges due date payment",
@@ -186,23 +206,108 @@ def generate_augmented_data(
     return texts, labels
 
 
-def train_model():
-    """Train document classifier and save model + vectorizer."""
-    logger.info("training_started")
+def load_real_data() -> tuple[list[str], list[str]] | None:
+    """Load real training data from prepared CSV if available."""
+    if not TRAINING_CSV.exists():
+        logger.info("real_data_not_found", path=str(TRAINING_CSV))
+        return None
 
-    # Generate training data
-    logger.info("training_step", step="1/6", action="generating_augmented_data")
+    texts = []
+    labels = []
+    valid_categories = {"bills", "upi", "tickets", "tax", "bank", "invoices"}
+
+    with open(TRAINING_CSV, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row["category"] in valid_categories and row["text"].strip():
+                texts.append(row["text"])
+                labels.append(row["category"])
+
+    if not texts:
+        logger.warning("real_data_empty", path=str(TRAINING_CSV))
+        return None
+
+    logger.info("real_data_loaded", total_samples=len(texts))
+    return texts, labels
+
+
+def train_model(mode: str = "auto"):
+    """
+    Train document classifier and save model + vectorizer.
+
+    Modes:
+        auto: Use real data if available, fall back to synthetic
+        synthetic: Synthetic data only (original behavior)
+        real: Real data only (fails if no CSV)
+        combined: Merge real + synthetic (best accuracy)
+    """
+    logger.info("training_started", mode=mode)
+
     random.seed(42)
     np.random.seed(42)
-    texts, labels = generate_augmented_data(TRAINING_DATA, augmentation_factor=5)
-    logger.info("training_data_generated", total_samples=len(texts))
 
-    # Clean texts
-    logger.info("training_step", step="2/6", action="preprocessing_text")
+    # ── Step 1: Load training data based on mode ──
+    logger.info("training_step", step="1/7", action="loading_data")
+
+    real_data = None
+    if mode in ("auto", "real", "combined"):
+        real_data = load_real_data()
+
+    texts = []
+    labels = []
+    data_source = "none"
+
+    if mode == "real":
+        if real_data is None:
+            logger.error("no_real_data", hint="Run: python -m app.ml.datasets.download && python -m app.ml.datasets.prepare")
+            return None, None, 0.0
+        texts, labels = real_data
+        data_source = "real"
+
+    elif mode == "synthetic":
+        texts, labels = generate_augmented_data(SYNTHETIC_DATA, augmentation_factor=5)
+        data_source = "synthetic"
+
+    elif mode == "combined":
+        # Merge real + synthetic
+        syn_texts, syn_labels = generate_augmented_data(SYNTHETIC_DATA, augmentation_factor=3)
+        texts.extend(syn_texts)
+        labels.extend(syn_labels)
+        if real_data:
+            texts.extend(real_data[0])
+            labels.extend(real_data[1])
+            data_source = "combined"
+        else:
+            data_source = "synthetic"
+            logger.warning("combined_mode_no_real_data", fallback="synthetic only")
+
+    else:  # auto
+        if real_data:
+            # Use combined: real data + lighter synthetic augmentation
+            syn_texts, syn_labels = generate_augmented_data(SYNTHETIC_DATA, augmentation_factor=2)
+            texts.extend(syn_texts)
+            labels.extend(syn_labels)
+            texts.extend(real_data[0])
+            labels.extend(real_data[1])
+            data_source = "combined"
+        else:
+            texts, labels = generate_augmented_data(SYNTHETIC_DATA, augmentation_factor=5)
+            data_source = "synthetic"
+
+    logger.info("training_data_loaded", total_samples=len(texts), source=data_source)
+
+    # ── Step 2: Clean texts ──
+    logger.info("training_step", step="2/7", action="preprocessing_text")
     cleaned_texts = [clean_text(t) for t in texts]
 
-    # Split data
-    logger.info("training_step", step="3/6", action="splitting_data")
+    # Filter out empty texts after cleaning
+    valid_pairs = [(t, l) for t, l in zip(cleaned_texts, labels) if t.strip()]
+    cleaned_texts = [p[0] for p in valid_pairs]
+    labels = [p[1] for p in valid_pairs]
+    logger.info("preprocessing_complete", valid_samples=len(cleaned_texts))
+
+    # ── Step 3: Split data ──
+    logger.info("training_step", step="3/7", action="splitting_data")
     X_train, X_temp, y_train, y_temp = train_test_split(
         cleaned_texts, labels, test_size=0.30, random_state=42, stratify=labels
     )
@@ -216,8 +321,8 @@ def train_model():
         test_size=len(X_test),
     )
 
-    # TF-IDF Vectorization
-    logger.info("training_step", step="4/6", action="fitting_tfidf_vectorizer")
+    # ── Step 4: TF-IDF Vectorization ──
+    logger.info("training_step", step="4/7", action="fitting_tfidf_vectorizer")
     vectorizer = TfidfVectorizer(
         max_features=5000,
         ngram_range=(1, 2),
@@ -230,8 +335,10 @@ def train_model():
     X_test_vec = vectorizer.transform(X_test)
     logger.info("tfidf_fitted", vocabulary_size=len(vectorizer.vocabulary_))
 
-    # Train Logistic Regression
-    logger.info("training_step", step="5/6", action="training_models")
+    # ── Step 5: Train models ──
+    logger.info("training_step", step="5/7", action="training_models")
+
+    # Logistic Regression
     logger.info("model_training", model="logistic_regression")
     lr_params = {"C": [0.1, 1.0, 10.0], "max_iter": [500]}
     lr_grid = GridSearchCV(
@@ -248,7 +355,7 @@ def train_model():
         validation_accuracy=round(lr_val_acc, 4),
     )
 
-    # Train Naive Bayes
+    # Naive Bayes
     logger.info("model_training", model="naive_bayes")
     nb_params = {"alpha": [0.1, 0.5, 1.0]}
     nb_grid = GridSearchCV(
@@ -264,22 +371,21 @@ def train_model():
         validation_accuracy=round(nb_val_acc, 4),
     )
 
-    # Select best model
+    # ── Step 6: Select best model ──
     best_model = lr_model if lr_val_acc >= nb_val_acc else nb_model
     best_name = "Logistic Regression" if lr_val_acc >= nb_val_acc else "Naive Bayes"
     logger.info("best_model_selected", model=best_name)
 
-    # Final evaluation on test set
-    logger.info("training_step", step="6/6", action="evaluating_test_set")
+    # ── Step 7: Final evaluation ──
+    logger.info("training_step", step="6/7", action="evaluating_test_set")
     y_pred = best_model.predict(X_test_vec)
     test_acc = accuracy_score(y_test, y_pred)
-    report = classification_report(y_test, y_pred)
+    report = classification_report(y_test, y_pred, output_dict=True)
+    report_str = classification_report(y_test, y_pred)
     cm = confusion_matrix(y_test, y_pred)
     logger.info("test_evaluation_complete", test_accuracy=round(test_acc, 4))
-    logger.debug("classification_report", report=report)
-    logger.debug("confusion_matrix", matrix=cm.tolist())
 
-    # Cross-validation score
+    # Cross-validation
     cv_scores = cross_val_score(best_model, X_train_vec, y_train, cv=5, scoring="accuracy")
     logger.info(
         "cross_validation_complete",
@@ -287,21 +393,91 @@ def train_model():
         cv_std=round(cv_scores.std(), 4),
     )
 
-    # Save model and vectorizer
+    # ── Save model, vectorizer, and evaluation report ──
+    logger.info("training_step", step="7/7", action="saving_artifacts")
     os.makedirs(settings.MODEL_DIR, exist_ok=True)
+    os.makedirs(EVAL_DIR, exist_ok=True)
+
     model_path = os.path.join(settings.MODEL_DIR, "document_classifier.pkl")
     vectorizer_path = os.path.join(settings.MODEL_DIR, "tfidf_vectorizer.pkl")
     joblib.dump(best_model, model_path)
     joblib.dump(vectorizer, vectorizer_path)
+
+    # Save evaluation report as JSON
+    eval_report = {
+        "data_source": data_source,
+        "total_samples": len(cleaned_texts),
+        "train_size": len(X_train),
+        "val_size": len(X_val),
+        "test_size": len(X_test),
+        "best_model": best_name,
+        "test_accuracy": round(test_acc, 4),
+        "cv_mean": round(cv_scores.mean(), 4),
+        "cv_std": round(cv_scores.std(), 4),
+        "vocabulary_size": len(vectorizer.vocabulary_),
+        "lr_validation_accuracy": round(lr_val_acc, 4),
+        "nb_validation_accuracy": round(nb_val_acc, 4),
+        "classification_report": report,
+        "confusion_matrix": cm.tolist(),
+        "categories": sorted(set(labels)),
+    }
+
+    eval_path = EVAL_DIR / "evaluation_report.json"
+    with open(eval_path, "w") as f:
+        json.dump(eval_report, f, indent=2)
+
     logger.info(
         "model_saved",
         model_path=model_path,
         vectorizer_path=vectorizer_path,
+        eval_path=str(eval_path),
     )
-    logger.info("training_complete")
 
+    # Print summary
+    print("\n" + "=" * 60)
+    print("Training Complete")
+    print("=" * 60)
+    print(f"  Data source:       {data_source}")
+    print(f"  Total samples:     {len(cleaned_texts)}")
+    print(f"  Vocabulary size:   {len(vectorizer.vocabulary_)}")
+    print(f"  Best model:        {best_name}")
+    print(f"  Test accuracy:     {test_acc:.4f}")
+    print(f"  CV score:          {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
+    print(f"\nPer-category metrics:")
+    print(report_str)
+    print(f"\nArtifacts saved to: {settings.MODEL_DIR}")
+    print(f"Evaluation report:  {eval_path}")
+    print("=" * 60)
+
+    logger.info("training_complete")
     return best_model, vectorizer, test_acc
 
 
+def main():
+    parser = argparse.ArgumentParser(description="Train document classifier")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--synthetic-only", action="store_true", help="Train with synthetic data only")
+    group.add_argument("--real-only", action="store_true", help="Train with real data only (requires download)")
+    group.add_argument("--combined", action="store_true", help="Merge real + synthetic data")
+    group.add_argument("--full-pipeline", action="store_true", help="Download → prepare → train")
+    args = parser.parse_args()
+
+    if args.full_pipeline:
+        print("Running full pipeline: download → prepare → train\n")
+        from app.ml.datasets.download import download_all
+        from app.ml.datasets.prepare import prepare_training_data
+        download_all()
+        prepare_training_data()
+        train_model(mode="combined")
+    elif args.synthetic_only:
+        train_model(mode="synthetic")
+    elif args.real_only:
+        train_model(mode="real")
+    elif args.combined:
+        train_model(mode="combined")
+    else:
+        train_model(mode="auto")
+
+
 if __name__ == "__main__":
-    train_model()
+    main()

@@ -53,6 +53,9 @@ asgi-correlation-id==4.3.4
 pytest==7.4.3
 httpx==0.25.2
 
+# Dataset Management
+kaggle==1.6.17
+
 # Utilities
 python-dateutil==2.8.2
 aiofiles==23.2.1
