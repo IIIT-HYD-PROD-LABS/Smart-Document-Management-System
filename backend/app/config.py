@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = str(BASE_DIR / "uploads")
     MAX_FILE_SIZE_MB: int = 50
     ALLOWED_EXTENSIONS: list[str] = [
-        "pdf", "png", "jpg", "jpeg", "tiff", "bmp"
+        "pdf", "png", "jpg", "jpeg", "tiff", "bmp", "docx"
     ]
 
     # AWS S3 (optional - set USE_S3=true to enable)

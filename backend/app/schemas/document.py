@@ -13,6 +13,7 @@ class DocumentResponse(BaseModel):
     category: str
     confidence_score: float
     extracted_text: str | None
+    extracted_metadata: dict | None = None
     status: str
     s3_url: str | None
     created_at: datetime
@@ -34,6 +35,7 @@ class DocumentUploadResponse(BaseModel):
     filename: str
     status: str
     message: str = "Document uploaded successfully. Processing started."
+    task_id: str | None = None
 
 
 class SearchRequest(BaseModel):

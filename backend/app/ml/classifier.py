@@ -70,12 +70,15 @@ def extract_and_classify(file_bytes: bytes, file_type: str) -> tuple[str, str, f
     Full pipeline: extract text → classify document.
     Returns (extracted_text, category, confidence).
     """
+    from app.ml.docx_extractor import extract_text_from_docx
     from app.ml.ocr import extract_text_from_image
     from app.ml.pdf_extractor import extract_text_from_pdf
 
     # Extract text based on file type
     if file_type == "pdf":
         extracted_text = extract_text_from_pdf(file_bytes)
+    elif file_type == "docx":
+        extracted_text = extract_text_from_docx(file_bytes)
     else:
         extracted_text = extract_text_from_image(file_bytes)
 

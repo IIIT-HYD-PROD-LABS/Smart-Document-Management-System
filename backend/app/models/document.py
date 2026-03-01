@@ -4,7 +4,7 @@ import enum
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Text, DateTime, Enum,
-    ForeignKey, Index,
+    ForeignKey, Index, JSON,
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -58,6 +58,10 @@ class Document(Base):
         nullable=False,
         index=True,
     )
+
+    # Async processing
+    celery_task_id = Column(String(255), nullable=True, index=True)
+    extracted_metadata = Column(JSON, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
