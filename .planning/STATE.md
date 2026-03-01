@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Automated classification and intelligent organization of personal and business documents -- upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
-**Current focus:** Phase 2 complete. Ready for Phase 3: Search & Retrieval Engine
+**Current focus:** Phase 2 complete + dataset pipeline built. Ready for Phase 3: ML Classification Upgrade
 
 ## Current Position
 
 Phase: 2 of 8 (Document Processing Pipeline) -- COMPLETE
 Plan: 4 of 4 in current phase
-Status: Phase complete
-Last activity: 2026-03-01 -- Phase 2 executed (4 plans, 3 waves)
+Status: Phase complete + Phase 3 dataset groundwork done
+Last activity: 2026-03-01 -- Phase 2 executed + real dataset pipeline built and tested
 
 Progress: [████████░░░░░░░░░░░░░░░░░░░░░] 8/29 (28%)
 
@@ -76,6 +76,16 @@ Recent decisions affecting current work:
 
 None.
 
+### Dataset Pipeline (Phase 3 Groundwork)
+
+- 7 Kaggle datasets downloaded (~19 GB raw data) inside Docker container
+- Dataset download script: `python -m app.ml.datasets.download`
+- Data preparation pipeline: `python -m app.ml.datasets.prepare`
+- Training supports 4 modes: auto, synthetic, real, combined
+- Initial combined training: 76.4% accuracy on real data (LR, 4,392 vocab, 1,210 samples)
+- Per-category: UPI 100%, tickets 100%, tax 87%, bank 73%, invoices 64%, bills 57%
+- Path to 85%: increase --max-per-category from 50 to 1000+ in Phase 3
+
 ### Blockers/Concerns
 
 - Research flagged LLM hallucination risk (69-88%) for Phase 5 -- will need validation with real documents
@@ -84,9 +94,10 @@ None.
 - ~~No Alembic migrations yet; table creation relies on SQLAlchemy auto-create~~ RESOLVED in 01-04
 - New models in future phases must be imported in backend/alembic/env.py for autogenerate to work
 - Metadata extraction is regex-based v1 -- Phase 5 LLM will improve accuracy significantly
+- ~~ML classifier trained on synthetic data only~~ RESOLVED: real dataset pipeline operational
 
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Phase 2 complete. Ready for Phase 3: Search & Retrieval Engine.
+Stopped at: Phase 2 complete + dataset pipeline built. Ready for Phase 3: ML Classification Upgrade.
 Resume file: None
