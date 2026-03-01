@@ -3,7 +3,7 @@
 import time
 
 import structlog
-from correlation_id import correlation_id
+from asgi_correlation_id import correlation_id
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response

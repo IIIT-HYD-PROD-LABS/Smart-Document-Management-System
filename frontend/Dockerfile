@@ -16,7 +16,8 @@ ENV NODE_ENV=production
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+# Copy public folder if it exists (optional assets)
+COPY --from=builder /app/public* ./public/
 
 EXPOSE 3000
 
