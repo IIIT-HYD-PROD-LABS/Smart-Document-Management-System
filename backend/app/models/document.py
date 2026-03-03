@@ -6,8 +6,12 @@ from sqlalchemy import (
     Column, Integer, String, Float, Text, DateTime, Enum,
     ForeignKey, Index, JSON,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, deferred
 from app.database import Base
+
+
+def utcnow():
+    return datetime.now(timezone.utc)
 
 
 class DocumentCategory(str, enum.Enum):
@@ -49,7 +53,7 @@ class Document(Base):
         index=True,
     )
     confidence_score = Column(Float, default=0.0)
-    extracted_text = Column(Text, nullable=True)
+    extracted_text = Column(Text, nullable=True, deferred=True)
 
     # Processing status
     status = Column(
@@ -64,11 +68,11 @@ class Document(Base):
     extracted_metadata = Column(JSON, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=utcnow)
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=utcnow,
+        onupdate=utcnow,
     )
 
     # Relationship
@@ -78,6 +82,7 @@ class Document(Base):
     __table_args__ = (
         Index("idx_documents_category_user", "category", "user_id"),
         Index("idx_documents_created_at", "created_at"),
+        Index("idx_documents_user_id", "user_id"),
     )
 
     def __repr__(self):

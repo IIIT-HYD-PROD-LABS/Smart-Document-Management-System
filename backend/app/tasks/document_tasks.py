@@ -23,6 +23,7 @@ def process_document_task(self, document_id: int):
     Reports progress stages via self.update_state for frontend polling.
     """
     db = SessionLocal()
+    doc = None
     try:
         doc = db.query(Document).filter(Document.id == document_id).first()
         if not doc:
@@ -49,9 +50,24 @@ def process_document_task(self, document_id: int):
         self.update_state(state="PROGRESS", meta={"stage": "extracting_text", "progress": 30})
         logger.info("processing_document", document_id=document_id, file_type=doc.file_type)
 
-        extracted_text, category, confidence = extract_and_classify(
-            file_bytes, doc.file_type
-        )
+        classification_result = extract_and_classify(file_bytes, doc.file_type)
+
+        # Validate classification result structure before unpacking
+        if (
+            not isinstance(classification_result, (list, tuple))
+            or len(classification_result) != 3
+        ):
+            logger.error(
+                "invalid_classification_result",
+                document_id=document_id,
+                result=classification_result,
+            )
+            doc.status = DocumentStatus.FAILED
+            doc.extracted_text = "Classification service returned an unexpected result."
+            db.commit()
+            return {"error": "Classification failed due to unexpected result format"}
+
+        extracted_text, category, confidence = classification_result
 
         # Stage 3: Metadata extraction
         self.update_state(state="PROGRESS", meta={"stage": "extracting_metadata", "progress": 60})
@@ -89,9 +105,10 @@ def process_document_task(self, document_id: int):
     except Exception as e:
         logger.error("document_processing_failed", document_id=document_id, error=str(e))
         try:
-            doc.status = DocumentStatus.FAILED
-            doc.extracted_text = f"Processing error: {str(e)}"
-            db.commit()
+            if doc is not None:
+                doc.status = DocumentStatus.FAILED
+                doc.extracted_text = f"Processing error: {str(e)}"
+                db.commit()
         except Exception as rollback_err:
             logger.error("status_update_failed", error=str(rollback_err))
             db.rollback()

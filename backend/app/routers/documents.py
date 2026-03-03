@@ -59,7 +59,7 @@ async def upload_document(
     # Create document record with PENDING status
     doc = Document(
         user_id=current_user.id,
-        filename=os.path.basename(file_path) if file_path else file.filename,
+        filename=file.filename,
         original_filename=file.filename,
         file_type=ext,
         file_size=file_size,
