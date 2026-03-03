@@ -13,6 +13,16 @@ from app.config import settings
 logger = structlog.stdlib.get_logger()
 
 
+def _get_s3_client():
+    """Create a configured boto3 S3 client."""
+    return boto3.client(
+        "s3",
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.AWS_REGION,
+    )
+
+
 def generate_filename(original_filename: str) -> str:
     """Generate a unique filename preserving the original extension."""
     ext = Path(original_filename).suffix
@@ -29,12 +39,7 @@ def save_file_local(file_bytes: bytes, filename: str) -> str:
 
 def upload_to_s3(file_bytes: bytes, filename: str) -> str:
     """Upload file to AWS S3. Returns the S3 URL."""
-    s3_client = boto3.client(
-        "s3",
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name=settings.AWS_REGION,
-    )
+    s3_client = _get_s3_client()
     s3_key = f"documents/{filename}"
     s3_client.put_object(
         Bucket=settings.S3_BUCKET_NAME,
@@ -46,12 +51,7 @@ def upload_to_s3(file_bytes: bytes, filename: str) -> str:
 
 def get_presigned_url(s3_key: str, expiration: int = 3600) -> str:
     """Generate a presigned URL for downloading from S3."""
-    s3_client = boto3.client(
-        "s3",
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name=settings.AWS_REGION,
-    )
+    s3_client = _get_s3_client()
     try:
         url = s3_client.generate_presigned_url(
             "get_object",
@@ -84,13 +84,8 @@ def delete_file(file_path: str | None, s3_url: str | None) -> None:
     if file_path and os.path.exists(file_path):
         os.remove(file_path)
     if s3_url and settings.USE_S3:
-        s3_key = s3_url.split(f".amazonaws.com/")[-1]
-        s3_client = boto3.client(
-            "s3",
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            region_name=settings.AWS_REGION,
-        )
+        s3_key = s3_url.split(".amazonaws.com/")[-1]
+        s3_client = _get_s3_client()
         try:
             s3_client.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=s3_key)
         except ClientError as e:

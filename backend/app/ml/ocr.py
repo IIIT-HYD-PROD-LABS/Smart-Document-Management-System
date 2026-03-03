@@ -1,5 +1,7 @@
 """OCR module - Extract text from images using Tesseract + OpenCV preprocessing."""
 
+from __future__ import annotations
+
 import cv2
 import numpy as np
 import pytesseract
