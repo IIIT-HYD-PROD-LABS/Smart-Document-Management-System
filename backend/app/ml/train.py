@@ -298,10 +298,10 @@ def train_model(mode: str = "auto"):
 
     # ── Step 2: Clean texts ──
     logger.info("training_step", step="2/7", action="preprocessing_text")
-    cleaned_texts = [clean_text(t) for t in texts]
+    all_cleaned = [clean_text(t) for t in texts]
 
     # Filter out empty texts after cleaning
-    valid_pairs = [(t, l) for t, l in zip(cleaned_texts, labels) if t.strip()]
+    valid_pairs = [(t, l) for t, l in zip(all_cleaned, labels) if t.strip()]
     cleaned_texts = [p[0] for p in valid_pairs]
     filtered_labels = [p[1] for p in valid_pairs]
     logger.info("preprocessing_complete", valid_samples=len(cleaned_texts))

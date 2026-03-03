@@ -23,6 +23,7 @@ def process_document_task(self, document_id: int):
     Reports progress stages via self.update_state for frontend polling.
     """
     db = SessionLocal()
+    doc = None
     try:
         doc = db.query(Document).filter(Document.id == document_id).first()
         if not doc:
@@ -49,9 +50,10 @@ def process_document_task(self, document_id: int):
         self.update_state(state="PROGRESS", meta={"stage": "extracting_text", "progress": 30})
         logger.info("processing_document", document_id=document_id, file_type=doc.file_type)
 
-        extracted_text, category, confidence = extract_and_classify(
-            file_bytes, doc.file_type
-        )
+        result = extract_and_classify(file_bytes, doc.file_type)
+        extracted_text: str = result[0]
+        category: str = result[1]
+        confidence: float = result[2]
 
         # Stage 3: Metadata extraction
         self.update_state(state="PROGRESS", meta={"stage": "extracting_metadata", "progress": 60})
@@ -88,13 +90,14 @@ def process_document_task(self, document_id: int):
 
     except Exception as e:
         logger.error("document_processing_failed", document_id=document_id, error=str(e))
-        try:
-            doc.status = DocumentStatus.FAILED
-            doc.extracted_text = f"Processing error: {str(e)}"
-            db.commit()
-        except Exception as rollback_err:
-            logger.error("status_update_failed", error=str(rollback_err))
-            db.rollback()
+        if doc is not None:
+            try:
+                doc.status = DocumentStatus.FAILED
+                doc.extracted_text = f"Processing error: {str(e)}"
+                db.commit()
+            except Exception as rollback_err:
+                logger.error("status_update_failed", error=str(rollback_err))
+                db.rollback()
         raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
 
     finally:

@@ -34,6 +34,12 @@ async def upload_document(
     """Upload a document file for async OCR + ML classification."""
     from app.tasks.document_tasks import process_document_task
 
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Filename is required.",
+        )
+
     # Validate file type
     ext = Path(file.filename).suffix.lstrip(".").lower()
     if ext not in settings.ALLOWED_EXTENSIONS:
