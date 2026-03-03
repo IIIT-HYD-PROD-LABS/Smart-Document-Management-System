@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, Query, status
-from sqlalchemy import or_, func
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -144,13 +144,13 @@ def search_documents(
         )
     )
 
-    # Category filter
+    # Category filter (ignore invalid categories silently)
     if category:
         try:
             cat_enum = DocumentCategory(category.lower())
             query = query.filter(Document.category == cat_enum)
         except ValueError:
-            pass
+            pass  # Invalid category in search filter is non-fatal; skip it
 
     total = query.count()
     documents = (

@@ -1,7 +1,7 @@
 """Pydantic schemas for User request/response models."""
 
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 # --- Request Schemas ---

@@ -271,7 +271,7 @@ def extract_text_from_file(file_path: Path) -> str:
         return ""
 
 
-def prepare_training_data(max_per_category: int = 300, min_text_length: int = 20, skip_ocr: bool = False) -> Path:
+def prepare_training_data(max_per_category: int = 300, min_text_length: int = 20, skip_ocr: bool = False) -> Path | None:
     """
     Process all raw datasets into a unified training CSV.
 
