@@ -21,7 +21,6 @@ import argparse
 import os
 import shutil
 import sys
-import zipfile
 from pathlib import Path
 
 import structlog

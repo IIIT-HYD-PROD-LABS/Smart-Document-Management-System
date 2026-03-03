@@ -92,7 +92,8 @@ def process_document_task(self, document_id: int):
             doc.status = DocumentStatus.FAILED
             doc.extracted_text = f"Processing error: {str(e)}"
             db.commit()
-        except Exception:
+        except Exception as rollback_err:
+            logger.error("status_update_failed", error=str(rollback_err))
             db.rollback()
         raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
 

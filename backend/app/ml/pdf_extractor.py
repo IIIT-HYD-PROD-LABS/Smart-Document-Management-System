@@ -4,7 +4,6 @@ import io
 
 import pdfplumber
 import structlog
-from PIL import Image
 
 from app.ml.ocr import extract_text_from_pil_image
 
@@ -53,5 +52,6 @@ def extract_metadata_from_pdf(pdf_bytes: bytes) -> dict:
                 "creator": metadata.get("Creator", ""),
                 "created": str(metadata.get("CreationDate", "")),
             }
-    except Exception:
+    except Exception as e:
+        logger.warning("pdf_metadata_extraction_failed", error=str(e))
         return {}

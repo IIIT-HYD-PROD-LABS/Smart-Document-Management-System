@@ -5,9 +5,12 @@ import uuid
 from pathlib import Path
 
 import boto3
+import structlog
 from botocore.exceptions import ClientError
 
 from app.config import settings
+
+logger = structlog.stdlib.get_logger()
 
 
 def generate_filename(original_filename: str) -> str:
@@ -56,7 +59,8 @@ def get_presigned_url(s3_key: str, expiration: int = 3600) -> str:
             ExpiresIn=expiration,
         )
         return url
-    except ClientError:
+    except ClientError as e:
+        logger.warning("presigned_url_failed", key=s3_key, error=str(e))
         return ""
 
 
@@ -89,5 +93,5 @@ def delete_file(file_path: str | None, s3_url: str | None) -> None:
         )
         try:
             s3_client.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=s3_key)
-        except ClientError:
-            pass
+        except ClientError as e:
+            logger.warning("s3_delete_failed", key=s3_key, error=str(e))

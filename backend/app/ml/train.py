@@ -303,13 +303,13 @@ def train_model(mode: str = "auto"):
     # Filter out empty texts after cleaning
     valid_pairs = [(t, l) for t, l in zip(cleaned_texts, labels) if t.strip()]
     cleaned_texts = [p[0] for p in valid_pairs]
-    labels = [p[1] for p in valid_pairs]
+    filtered_labels = [p[1] for p in valid_pairs]
     logger.info("preprocessing_complete", valid_samples=len(cleaned_texts))
 
     # ── Step 3: Split data ──
     logger.info("training_step", step="3/7", action="splitting_data")
     X_train, X_temp, y_train, y_temp = train_test_split(
-        cleaned_texts, labels, test_size=0.30, random_state=42, stratify=labels
+        cleaned_texts, filtered_labels, test_size=0.30, random_state=42, stratify=filtered_labels
     )
     X_val, X_test, y_val, y_test = train_test_split(
         X_temp, y_temp, test_size=0.50, random_state=42, stratify=y_temp

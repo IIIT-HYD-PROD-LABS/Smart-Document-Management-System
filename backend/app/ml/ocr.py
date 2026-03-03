@@ -5,7 +5,6 @@ import numpy as np
 import pytesseract
 import structlog
 from PIL import Image
-from io import BytesIO
 
 from app.config import settings
 
