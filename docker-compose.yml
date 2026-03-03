@@ -1,24 +1,6 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:14-alpine
-    container_name: smartdocs-db
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-smart_docs}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # Redis (Message Broker)
   redis:
     image: redis:7-alpine
@@ -91,6 +73,5 @@ services:
       - backend
 
 volumes:
-  postgres_data:
   backend_uploads:
   backend_models:

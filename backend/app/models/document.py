@@ -43,7 +43,7 @@ class Document(Base):
 
     # ML classification
     category = Column(
-        Enum(DocumentCategory),
+        Enum(DocumentCategory, values_callable=lambda e: [x.value for x in e]),
         default=DocumentCategory.UNKNOWN,
         nullable=False,
         index=True,
@@ -53,7 +53,7 @@ class Document(Base):
 
     # Processing status
     status = Column(
-        Enum(DocumentStatus),
+        Enum(DocumentStatus, values_callable=lambda e: [x.value for x in e]),
         default=DocumentStatus.PENDING,
         nullable=False,
         index=True,
