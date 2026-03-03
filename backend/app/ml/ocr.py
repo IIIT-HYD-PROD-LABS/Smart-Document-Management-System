@@ -78,12 +78,16 @@ def extract_text_from_image(image_bytes: bytes) -> str:
         processed = preprocess_image(image)
 
         # Run OCR with multi-PSM retry
+        # Tesseract config:
+        #   --oem 3 : OCR Engine Mode 3 (default; use both legacy + LSTM engines where available)
+        #   --psm 6 : Page Segmentation Mode 6 (assume a single uniform block of text)
         text = pytesseract.image_to_string(
             processed,
             config="--oem 3 --psm 6",
         )
 
         # If sparse result, retry with fully automatic page segmentation
+        #   --psm 3 : Page Segmentation Mode 3 (fully automatic page segmentation)
         if len(text.strip()) < 20:
             text_auto = pytesseract.image_to_string(
                 processed,
