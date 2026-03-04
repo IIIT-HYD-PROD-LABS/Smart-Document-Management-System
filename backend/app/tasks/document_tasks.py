@@ -93,12 +93,16 @@ def process_document_task(self, document_id: int):
         if doc is not None:
             try:
                 doc.status = DocumentStatus.FAILED
-                doc.extracted_text = f"Processing error: {str(e)}"
+                doc.extracted_text = f"Processing error: {e}"
                 db.commit()
             except Exception as rollback_err:
                 logger.error("status_update_failed", error=str(rollback_err))
                 db.rollback()
-        raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
+        try:
+            raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
+        except self.MaxRetriesExceededError:
+            logger.error("max_retries_exceeded", document_id=document_id)
+            raise
 
     finally:
         db.close()

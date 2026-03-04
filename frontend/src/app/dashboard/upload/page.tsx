@@ -4,7 +4,6 @@ import { useState, useCallback, useRef } from "react";
 import { useDropzone } from "react-dropzone";
 import { AnimatePresence, motion } from "framer-motion";
 import { documentsApi } from "@/lib/api";
-import toast from "react-hot-toast";
 import { FiUploadCloud, FiFile, FiCheckCircle, FiX, FiLoader } from "react-icons/fi";
 
 interface UploadItem {

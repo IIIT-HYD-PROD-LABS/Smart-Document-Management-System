@@ -151,12 +151,8 @@ def search_documents(
     )
 
     # Category filter (ignore invalid categories silently)
-    if category:
-        try:
-            cat_enum = DocumentCategory(category.lower())
-            query = query.filter(Document.category == cat_enum)
-        except ValueError:
-            pass  # Invalid category in search filter is non-fatal; skip it
+    if category and category.lower() in {c.value for c in DocumentCategory}:
+        query = query.filter(Document.category == DocumentCategory(category.lower()))
 
     total = query.count()
     documents = (

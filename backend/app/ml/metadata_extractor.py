@@ -48,7 +48,7 @@ def extract_dates(text: str) -> list[str]:
                 if 2000 <= parsed.year <= 2030:
                     dates.append(parsed.strftime("%Y-%m-%d"))
             except (ValueError, OverflowError):
-                pass
+                continue
     return list(dict.fromkeys(dates))[:5]
 
 
@@ -74,7 +74,7 @@ def extract_amounts(text: str) -> list[dict]:
                     amounts.append({"amount": value, "currency": currency})
                     seen.add(value)
             except ValueError:
-                pass
+                continue
     return amounts[:10]
 
 
