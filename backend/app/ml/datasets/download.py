@@ -280,7 +280,7 @@ def download_all():
     print("=" * 50)
     for cat in ["bills", "upi", "tickets", "tax", "bank", "invoices"]:
         count = total_counts.get(cat, 0)
-        bar = "█" * min(count // 10, 30)
+        bar = "#" * min(count // 10, 30)
         print(f"  {cat:<12} {count:>5} files  {bar}")
     print(f"\n  Total: {sum(total_counts.values())} files")
     print(f"  Location: {PROCESSED_DIR}")
