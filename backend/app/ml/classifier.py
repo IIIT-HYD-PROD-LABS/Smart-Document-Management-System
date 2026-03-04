@@ -14,9 +14,6 @@ logger = structlog.stdlib.get_logger()
 MODEL_PATH = os.path.join(settings.MODEL_DIR, "document_classifier.pkl")
 VECTORIZER_PATH = os.path.join(settings.MODEL_DIR, "tfidf_vectorizer.pkl")
 
-# Category labels
-CATEGORIES = ["bills", "upi", "tickets", "tax", "bank", "invoices"]
-
 _model = None
 _vectorizer = None
 

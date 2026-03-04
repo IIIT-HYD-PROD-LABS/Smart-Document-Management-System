@@ -253,8 +253,6 @@ def train_model(mode: str = "auto"):
     if mode in ("auto", "real", "combined"):
         real_data = load_real_data()
 
-    texts = []
-    labels = []
     data_source = "none"
 
     if mode == "real":
@@ -271,8 +269,8 @@ def train_model(mode: str = "auto"):
     elif mode == "combined":
         # Merge real + synthetic
         syn_texts, syn_labels = generate_augmented_data(SYNTHETIC_DATA, augmentation_factor=3)
-        texts.extend(syn_texts)
-        labels.extend(syn_labels)
+        texts = list(syn_texts)
+        labels = list(syn_labels)
         if real_data:
             texts.extend(real_data[0])
             labels.extend(real_data[1])
@@ -285,8 +283,8 @@ def train_model(mode: str = "auto"):
         if real_data:
             # Use combined: real data + lighter synthetic augmentation
             syn_texts, syn_labels = generate_augmented_data(SYNTHETIC_DATA, augmentation_factor=2)
-            texts.extend(syn_texts)
-            labels.extend(syn_labels)
+            texts = list(syn_texts)
+            labels = list(syn_labels)
             texts.extend(real_data[0])
             labels.extend(real_data[1])
             data_source = "combined"

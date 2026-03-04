@@ -154,7 +154,7 @@ def ensure_kaggle_api():
         sys.exit(1)
 
 
-def download_dataset(api, dataset_name: str) -> Path:
+def download_dataset(api, dataset_name: str) -> Path | None:
     """Download a single dataset from Kaggle."""
     if dataset_name not in DATASET_REGISTRY:
         logger.error("unknown_dataset", name=dataset_name, available=list(DATASET_REGISTRY.keys()))

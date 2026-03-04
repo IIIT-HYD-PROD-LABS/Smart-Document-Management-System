@@ -10,9 +10,10 @@ from app.database import Base
 # CRITICAL: Import ALL models so they register with Base.metadata.
 # If a model is not imported here, Alembic autogenerate will generate
 # a DROP TABLE migration for that model's table.
-from app.models.user import User          # noqa: F401
-from app.models.document import Document  # noqa: F401
-from app.models.refresh_token import RefreshToken  # noqa: F401
+from app.models.user import User
+from app.models.document import Document
+from app.models.refresh_token import RefreshToken
+_models = (User, Document, RefreshToken)
 
 config = context.config
 
