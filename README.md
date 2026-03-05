@@ -279,6 +279,6 @@ See `backend/.env.example` for the full list.
 ## Team
 
 **Sravan** (10srav) — Development Lead
-**Jyothika** — Team Member
+**Jyothika** — CORE MEMBER
 
 Built for **Product Labs, IIIT Hyderabad**.
