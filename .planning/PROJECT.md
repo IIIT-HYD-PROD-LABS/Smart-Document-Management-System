@@ -28,30 +28,30 @@ An AI-powered document management system that automatically organizes and manage
 ### Active
 
 **PRD Core (from original spec):**
-- [ ] Automatic metadata extraction (date, amount, vendor) from documents
-- [ ] Full-text search with PostgreSQL FTS (replace ILIKE)
-- [ ] Filter by category, date range, amount
-- [ ] Fuzzy search for partial matches
-- [ ] Document preview functionality (PDF/image viewer in browser)
-- [ ] Analytics dashboard (documents by category, monthly trends, upload stats)
-- [ ] DOCX upload support
-- [ ] ML model improvement: train on real datasets (RVL-CDIP, Indian financial docs)
-- [ ] Model evaluation with confusion matrix, precision/recall/F1
-- [ ] Automated folder-based organization
-- [ ] Version control for updated documents
-- [ ] Image preprocessing for better OCR (deskew, threshold, noise removal)
+- ✓ Automatic metadata extraction (date, amount, vendor) from documents — Phase 2
+- [ ] Full-text search with PostgreSQL FTS (replace ILIKE) — Phase 4
+- [ ] Filter by category, date range, amount — Phase 4
+- [ ] Fuzzy search for partial matches — Phase 4
+- [ ] Document preview functionality (PDF/image viewer in browser) — Phase 7
+- [ ] Analytics dashboard (documents by category, monthly trends, upload stats) — Phase 7
+- ✓ DOCX upload support — Phase 2
+- ✓ ML model improvement: train on real datasets (RVL-CDIP, Indian financial docs) — Phase 3 (85.06% Linear SVC)
+- ✓ Model evaluation with confusion matrix, precision/recall/F1 — Phase 3
+- [ ] Automated folder-based organization — Phase 7
+- [ ] Version control for updated documents — Phase 7
+- ✓ Image preprocessing for better OCR (deskew, threshold, noise removal) — Phase 2
 
 **Advanced Features (beyond PRD):**
-- [ ] Smart data extraction (dates, deadlines, amounts, parties, clauses) via LLM APIs
-- [ ] AI-powered document summaries and insights
-- [ ] Role-based access control (admin, editor, viewer)
-- [ ] Document-level permissions and sharing
-- [ ] SSO / OAuth integration (Google, Microsoft)
-- [ ] Flexible ML backend (local models + LLM APIs, user-configurable)
-- [ ] Polished, production-ready UI
-- [ ] Production security hardening (structured logging, rate limiting, encryption)
-- [ ] Audit logging for compliance
-- [ ] Async document processing via Celery (currently configured but not wired)
+- [ ] Smart data extraction (dates, deadlines, amounts, parties, clauses) via LLM APIs — Phase 5
+- [ ] AI-powered document summaries and insights — Phase 5
+- [ ] Role-based access control (admin, editor, viewer) — Phase 6
+- [ ] Document-level permissions and sharing — Phase 6
+- [ ] SSO / OAuth integration (Google, Microsoft) — Phase 6
+- [ ] Flexible ML backend (local models + LLM APIs, user-configurable) — Phase 5
+- [ ] Polished, production-ready UI — Phase 7
+- ✓ Production security hardening (structured logging, rate limiting, encryption) — Phase 1
+- [ ] Audit logging for compliance — Phase 8
+- ✓ Async document processing via Celery (currently configured but not wired) — Phase 2
 
 ### Out of Scope
 
