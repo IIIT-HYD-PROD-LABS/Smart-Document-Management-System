@@ -168,7 +168,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 |-------|----------------|--------|-----------|
 | 1. Foundation & Security Hardening | 4/4 | Complete | 2026-02-25 |
 | 2. Document Processing Pipeline | 4/4 | Complete | 2026-03-01 |
-| 3. ML Classification Upgrade | 0/2 | Not started | - |
+| 3. ML Classification Upgrade | 1/2 | In Progress|  |
 | 4. Search & Retrieval | 0/3 | Not started | - |
 | 5. Smart Extraction (AI) | 0/4 | Not started | - |
 | 6. Access Control & SSO | 0/4 | Not started | - |
