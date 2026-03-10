@@ -173,4 +173,9 @@ export const documentsApi = {
         api.delete(`/documents/${id}`),
 };
 
+// ──── ML API ────
+export const mlApi = {
+    getEvaluation: () => api.get("/ml/evaluation"),
+};
+
 export default api;
