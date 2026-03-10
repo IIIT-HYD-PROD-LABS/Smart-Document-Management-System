@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Automated classification and intelligent organization of personal and business documents -- upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
-**Current focus:** Phase 3 in progress: ML Classification Upgrade (Plan 1 of 4 complete)
+**Current focus:** Phase 3 complete: ML Classification Upgrade (2/2 plans done). Next: Phase 4
 
 ## Current Position
 
-Phase: 3 of 8 (ML Classification Upgrade)
-Plan: 1 of 4 in current phase
-Status: Plan 03-01 complete -- classifier upgraded to 85% accuracy
-Last activity: 2026-03-10 -- Phase 3 Plan 1 executed: ML classification upgrade with LinearSVC
+Phase: 3 of 8 (ML Classification Upgrade) -- COMPLETE
+Plan: 2 of 2 in current phase
+Status: Phase 3 complete -- classifier at 85%, evaluation dashboard live
+Last activity: 2026-03-10 -- Phase 3 Plan 2 executed: ML evaluation API + confidence badges + evaluation page
 
-Progress: [█████████░░░░░░░░░░░░░░░░░░░░] 9/29 (31%)
+Progress: [██████████░░░░░░░░░░░░░░░░░░░] 10/29 (34%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: ~9min
-- Total execution time: ~78min
+- Total plans completed: 10
+- Average duration: ~8min
+- Total execution time: ~84min
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [█████████░░░░░░░░░░░░░░
 |-------|-------|-------|----------|
 | 01-foundation-security-hardening | 4/4 | 41min | 10min |
 | 02-document-processing-pipeline | 4/4 | ~24min | ~6min |
-| 03-ml-classification-upgrade | 1/4 | 13min | 13min |
+| 03-ml-classification-upgrade | 2/2 | 19min | ~10min |
 
 **Recent Trend:**
-- Last 5 plans: 01-04 (8min), 02-01 (~6min), 02-02 (~6min), 02-03+04 (~6min), 03-01 (13min)
-- Trend: Stable (ML training tasks take longer due to model fitting)
+- Last 5 plans: 02-01 (~6min), 02-02 (~6min), 02-03+04 (~6min), 03-01 (13min), 03-02 (6min)
+- Trend: Stable
 
 *Updated after each plan completion*
 
@@ -76,6 +76,9 @@ Recent decisions affecting current work:
 - [03-01]: Manual C-value search over nested GridSearchCV for small-class CV stability
 - [03-01]: TF-IDF (1,3) ngrams with 15K features and class_weight='balanced' on LR
 - [03-01]: Synthetic augmentation factor=10 in combined mode to boost underrepresented categories
+- [03-02]: ConfidenceBadge duplicated per-page (not shared component) to minimize file additions
+- [03-02]: ML router at /api/ml prefix, separate from /api/documents
+- [03-02]: Confusion matrix uses intensity-based red shading for off-diagonal errors
 
 ### Pending Todos
 
@@ -104,5 +107,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-10
-Stopped at: Completed 03-01-PLAN.md -- classifier upgraded to 85% accuracy with LinearSVC
+Stopped at: Completed 03-02-PLAN.md -- evaluation dashboard with confidence badges
 Resume file: None

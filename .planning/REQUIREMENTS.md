@@ -19,8 +19,8 @@
 
 - [x] **AIML-01**: System classifies documents into 6 categories (utility bills, UPI transactions, travel tickets, tax documents, bank statements, shopping invoices) with >85% accuracy
 - [x] **AIML-02**: ML classifier is trained on real datasets (RVL-CDIP, Indian financial document datasets) instead of synthetic data
-- [ ] **AIML-03**: System displays confidence score for each classification with color-coded indicators (green/yellow/red)
-- [ ] **AIML-04**: Model evaluation includes confusion matrix, precision, recall, and F1-score metrics
+- [x] **AIML-03**: System displays confidence score for each classification with color-coded indicators (green/yellow/red)
+- [x] **AIML-04**: Model evaluation includes confusion matrix, precision, recall, and F1-score metrics
 
 ### Smart Extraction (AI)
 
@@ -132,8 +132,8 @@
 | INFR-05 | Phase 2: Document Processing Pipeline | Pending |
 | AIML-01 | Phase 3: ML Classification Upgrade | Complete |
 | AIML-02 | Phase 3: ML Classification Upgrade | Complete |
-| AIML-03 | Phase 3: ML Classification Upgrade | Pending |
-| AIML-04 | Phase 3: ML Classification Upgrade | Pending |
+| AIML-03 | Phase 3: ML Classification Upgrade | Complete |
+| AIML-04 | Phase 3: ML Classification Upgrade | Complete |
 | SRCH-01 | Phase 4: Search & Retrieval | Pending |
 | SRCH-02 | Phase 4: Search & Retrieval | Pending |
 | SRCH-03 | Phase 4: Search & Retrieval | Pending |
