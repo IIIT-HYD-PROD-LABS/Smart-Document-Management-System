@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Automated classification and intelligent organization of personal and business documents -- upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
-**Current focus:** Phase 2 complete + dataset pipeline built. Ready for Phase 3: ML Classification Upgrade
+**Current focus:** Phase 3 in progress: ML Classification Upgrade (Plan 1 of 4 complete)
 
 ## Current Position
 
-Phase: 2 of 8 (Document Processing Pipeline) -- COMPLETE
-Plan: 4 of 4 in current phase
-Status: Phase complete + Phase 3 dataset groundwork done
-Last activity: 2026-03-01 -- Phase 2 executed + real dataset pipeline built and tested
+Phase: 3 of 8 (ML Classification Upgrade)
+Plan: 1 of 4 in current phase
+Status: Plan 03-01 complete -- classifier upgraded to 85% accuracy
+Last activity: 2026-03-10 -- Phase 3 Plan 1 executed: ML classification upgrade with LinearSVC
 
-Progress: [████████░░░░░░░░░░░░░░░░░░░░░] 8/29 (28%)
+Progress: [█████████░░░░░░░░░░░░░░░░░░░░] 9/29 (31%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: ~8min
-- Total execution time: ~65min
+- Total plans completed: 9
+- Average duration: ~9min
+- Total execution time: ~78min
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [████████░░░░░░░░░░░░░░░
 |-------|-------|-------|----------|
 | 01-foundation-security-hardening | 4/4 | 41min | 10min |
 | 02-document-processing-pipeline | 4/4 | ~24min | ~6min |
+| 03-ml-classification-upgrade | 1/4 | 13min | 13min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (14min), 01-04 (8min), 02-01 (~6min), 02-02 (~6min), 02-03+04 (~6min)
-- Trend: Improving
+- Last 5 plans: 01-04 (8min), 02-01 (~6min), 02-02 (~6min), 02-03+04 (~6min), 03-01 (13min)
+- Trend: Stable (ML training tasks take longer due to model fitting)
 
 *Updated after each plan completion*
 
@@ -71,6 +72,10 @@ Recent decisions affecting current work:
 - [02-03]: Frontend polls /status every 2.5s after upload completes
 - [02-04]: dateutil.parse(fuzzy=True, dayfirst=True) for Indian date formats
 - [02-04]: Amount extraction validates 0.01-10M range to filter false positives
+- [03-01]: LinearSVC with CalibratedClassifierCV for probability-calibrated SVM classification
+- [03-01]: Manual C-value search over nested GridSearchCV for small-class CV stability
+- [03-01]: TF-IDF (1,3) ngrams with 15K features and class_weight='balanced' on LR
+- [03-01]: Synthetic augmentation factor=10 in combined mode to boost underrepresented categories
 
 ### Pending Todos
 
@@ -82,9 +87,9 @@ None.
 - Dataset download script: `python -m app.ml.datasets.download`
 - Data preparation pipeline: `python -m app.ml.datasets.prepare`
 - Training supports 4 modes: auto, synthetic, real, combined
-- Initial combined training: 76.4% accuracy on real data (LR, 4,392 vocab, 1,210 samples)
-- Per-category: UPI 100%, tickets 100%, tax 87%, bank 73%, invoices 64%, bills 57%
-- Path to 85%: increase --max-per-category from 50 to 1000+ in Phase 3
+- Combined training: 85.06% accuracy (Linear SVC, 15K vocab, 2,050 samples)
+- Per-category: UPI 100%, tickets 100%, tax 95%, bank 79%, bills 72%, invoices 67%
+- Achieved >85% target via LinearSVC + augmentation_factor=10 + TF-IDF (1,3) ngrams
 
 ### Blockers/Concerns
 
@@ -98,6 +103,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-01
-Stopped at: Phase 2 complete + dataset pipeline built. Ready for Phase 3: ML Classification Upgrade.
+Last session: 2026-03-10
+Stopped at: Completed 03-01-PLAN.md -- classifier upgraded to 85% accuracy with LinearSVC
 Resume file: None
