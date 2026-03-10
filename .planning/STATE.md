@@ -3,11 +3,27 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
+stopped_at: Completed 04-01-PLAN.md -- FTS schema foundation with tsvector column, GIN indexes, trigger, test scaffold
+last_updated: "2026-03-10T21:44:31.582Z"
+last_activity: "2026-03-10 -- Phase 3 Plan 2 executed: ML evaluation API + confidence badges + evaluation page"
+progress:
+  total_phases: 8
+  completed_phases: 2
+  total_plans: 13
+  completed_plans: 7
+  percent: 54
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: completed
 stopped_at: Completed 03-02-PLAN.md -- evaluation dashboard with confidence badges
 last_updated: "2026-03-10T11:27:06.630Z"
 last_activity: "2026-03-10 -- Phase 3 Plan 2 executed: ML evaluation API + confidence badges + evaluation page"
 progress:
-  total_phases: 8
+  [█████░░░░░] 54%
   completed_phases: 2
   total_plans: 10
   completed_plans: 6
@@ -52,6 +68,7 @@ Progress: [██████████░░░░░░░░░░░░░
 - Trend: Stable
 
 *Updated after each plan completion*
+| Phase 04-search-retrieval P01 | 15 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -95,6 +112,8 @@ Recent decisions affecting current work:
 - [03-02]: ConfidenceBadge duplicated per-page (not shared component) to minimize file additions
 - [03-02]: ML router at /api/ml prefix, separate from /api/documents
 - [03-02]: Confusion matrix uses intensity-based red shading for off-diagonal errors
+- [Phase 04-search-retrieval]: Stored TSVECTOR column + trigger over functional index to avoid Alembic autogenerate false-diff bug (issue #1390)
+- [Phase 04-search-retrieval]: GIN index for search_vector created via op.execute() only (not SQLAlchemy Index in __table_args__) to prevent Alembic false diffs
 
 ### Pending Todos
 
@@ -122,6 +141,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10
-Stopped at: Completed 03-02-PLAN.md -- evaluation dashboard with confidence badges
+Last session: 2026-03-10T21:44:31.578Z
+Stopped at: Completed 04-01-PLAN.md -- FTS schema foundation with tsvector column, GIN indexes, trigger, test scaffold
 Resume file: None

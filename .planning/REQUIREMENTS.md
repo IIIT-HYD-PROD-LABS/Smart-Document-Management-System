@@ -32,10 +32,10 @@
 
 ### Search & Retrieval
 
-- [ ] **SRCH-01**: User can perform full-text search across all document content with relevance ranking (PostgreSQL FTS)
+- [x] **SRCH-01**: User can perform full-text search across all document content with relevance ranking (PostgreSQL FTS)
 - [ ] **SRCH-02**: User can filter search results by category, date range, and amount
 - [ ] **SRCH-03**: Search supports fuzzy matching for partial terms and typos
-- [ ] **SRCH-04**: Search response time is under 2 seconds
+- [x] **SRCH-04**: Search response time is under 2 seconds
 - [ ] **SRCH-05**: User can preview documents in-browser (PDF viewer, image viewer) without downloading
 
 ### Security & Auth
@@ -134,10 +134,10 @@
 | AIML-02 | Phase 3: ML Classification Upgrade | Complete |
 | AIML-03 | Phase 3: ML Classification Upgrade | Complete |
 | AIML-04 | Phase 3: ML Classification Upgrade | Complete |
-| SRCH-01 | Phase 4: Search & Retrieval | Pending |
+| SRCH-01 | Phase 4: Search & Retrieval | Complete |
 | SRCH-02 | Phase 4: Search & Retrieval | Pending |
 | SRCH-03 | Phase 4: Search & Retrieval | Pending |
-| SRCH-04 | Phase 4: Search & Retrieval | Pending |
+| SRCH-04 | Phase 4: Search & Retrieval | Complete |
 | EXTR-01 | Phase 5: Smart Extraction (AI) | Pending |
 | EXTR-02 | Phase 5: Smart Extraction (AI) | Pending |
 | EXTR-03 | Phase 5: Smart Extraction (AI) | Pending |
