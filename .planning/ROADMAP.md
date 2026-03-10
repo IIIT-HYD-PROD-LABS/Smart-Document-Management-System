@@ -86,9 +86,9 @@ Plans:
 **Plans**: 3 plans in 3 waves
 
 Plans:
-- [ ] 04-01-PLAN.md -- Add tsvector column, GIN indexes, pg_trgm extension, and test scaffold (Wave 1)
-- [ ] 04-02-PLAN.md -- Replace ILIKE with FTS + ts_rank; add category/date/amount filters and frontend filter UI (Wave 2)
-- [ ] 04-03-PLAN.md -- Add trigram fuzzy OR-combine and verify sub-2-second performance (Wave 3)
+- [x] 04-01-PLAN.md -- Add tsvector column, GIN indexes, pg_trgm extension, and test scaffold (Wave 1)
+- [x] 04-02-PLAN.md -- Replace ILIKE with FTS + ts_rank; add category/date/amount filters and frontend filter UI (Wave 2)
+- [x] 04-03-PLAN.md -- Add trigram fuzzy OR-combine and verify sub-2-second performance (Wave 3)
 
 ### Phase 5: Smart Extraction (AI)
 **Goal**: Documents are automatically enriched with LLM-extracted structured data, summaries, and confidence-scored fields
