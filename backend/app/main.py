@@ -10,7 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
-from app.routers import auth, documents
+from app.routers import auth, documents, ml
 from app.utils.logging import setup_logging
 from app.utils.rate_limiter import limiter
 
@@ -68,6 +68,7 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 # Include routers
 app.include_router(auth.router)
 app.include_router(documents.router)
+app.include_router(ml.router)
 
 
 @app.get("/", tags=["Root"])
