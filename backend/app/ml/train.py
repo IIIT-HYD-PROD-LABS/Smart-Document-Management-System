@@ -27,8 +27,10 @@ import joblib
 import numpy as np
 import structlog
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.svm import LinearSVC
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
@@ -322,9 +324,9 @@ def train_model(mode: str = "auto"):
     # ── Step 4: TF-IDF Vectorization ──
     logger.info("training_step", step="4/7", action="fitting_tfidf_vectorizer")
     vectorizer = TfidfVectorizer(
-        max_features=5000,
-        ngram_range=(1, 2),
-        min_df=2,
+        max_features=15000,
+        ngram_range=(1, 3),
+        min_df=1,
         max_df=0.95,
         sublinear_tf=True,
     )
@@ -340,7 +342,7 @@ def train_model(mode: str = "auto"):
     logger.info("model_training", model="logistic_regression")
     lr_params = {"C": [0.1, 1.0, 10.0], "max_iter": [500]}
     lr_grid = GridSearchCV(
-        LogisticRegression(random_state=42, solver="lbfgs", multi_class="multinomial"),
+        LogisticRegression(random_state=42, solver="lbfgs", multi_class="multinomial", class_weight="balanced"),
         lr_params, cv=5, scoring="accuracy", n_jobs=-1,
     )
     lr_grid.fit(X_train_vec, y_train)
@@ -369,9 +371,31 @@ def train_model(mode: str = "auto"):
         validation_accuracy=round(nb_val_acc, 4),
     )
 
+    # Linear SVC
+    logger.info("model_training", model="linear_svc")
+    svc_base = LinearSVC(random_state=42, max_iter=2000)
+    svc_params = {"estimator__C": [0.1, 1.0, 10.0]}
+    svc_grid = GridSearchCV(
+        CalibratedClassifierCV(svc_base, cv=3),
+        svc_params, cv=5, scoring="accuracy", n_jobs=-1,
+    )
+    svc_grid.fit(X_train_vec, y_train)
+    svc_model = svc_grid.best_estimator_
+    svc_val_acc = accuracy_score(y_val, svc_model.predict(X_val_vec))
+    logger.info(
+        "model_evaluated",
+        model="linear_svc",
+        best_params=svc_grid.best_params_,
+        validation_accuracy=round(svc_val_acc, 4),
+    )
+
     # ── Step 6: Select best model ──
-    best_model = lr_model if lr_val_acc >= nb_val_acc else nb_model
-    best_name = "Logistic Regression" if lr_val_acc >= nb_val_acc else "Naive Bayes"
+    models = [
+        ("Logistic Regression", lr_model, lr_val_acc),
+        ("Naive Bayes", nb_model, nb_val_acc),
+        ("Linear SVC", svc_model, svc_val_acc),
+    ]
+    best_name, best_model, _ = max(models, key=lambda x: x[2])
     logger.info("best_model_selected", model=best_name)
 
     # ── Step 7: Final evaluation ──
@@ -415,6 +439,7 @@ def train_model(mode: str = "auto"):
         "vocabulary_size": len(vectorizer.vocabulary_),
         "lr_validation_accuracy": round(lr_val_acc, 4),
         "nb_validation_accuracy": round(nb_val_acc, 4),
+        "svc_validation_accuracy": round(svc_val_acc, 4),
         "classification_report": report,
         "confusion_matrix": cm.tolist(),
         "categories": sorted(set(labels)),
@@ -441,6 +466,10 @@ def train_model(mode: str = "auto"):
     print(f"  Best model:        {best_name}")
     print(f"  Test accuracy:     {test_acc:.4f}")
     print(f"  CV score:          {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
+    print(f"\nValidation accuracies:")
+    print(f"  Logistic Regression: {lr_val_acc:.4f}")
+    print(f"  Naive Bayes:         {nb_val_acc:.4f}")
+    print(f"  Linear SVC:          {svc_val_acc:.4f}")
     print(f"\nPer-category metrics:")
     print(report_str)
     print(f"\nArtifacts saved to: {settings.MODEL_DIR}")
