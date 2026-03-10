@@ -2,15 +2,19 @@
 Test scaffold for FTS and trigram search functionality (SRCH-01 through SRCH-04).
 
 SRCH-01 and SRCH-02 tests are implemented here using mocked DB queries.
-SRCH-03 and SRCH-04 remain as stubs -- implemented in plan 04-03.
+SRCH-03 and SRCH-04 connect to real PostgreSQL to validate trigram fuzzy matching
+and sub-2-second performance under GIN indexes.
 
-Note: FTS/trigram tests require real PostgreSQL -- tested here via mocked router
-queries so we validate parameter passing and response shape without needing
-a live Postgres instance.
+Note: FTS/trigram tests require real PostgreSQL. Tests skip gracefully if only
+SQLite or no DB is available.
 """
+import os
+import time
 import pytest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 
 
 # ---------------------------------------------------------------------------
@@ -159,16 +163,115 @@ def test_search_with_amount_filter():
 
 
 # ---------------------------------------------------------------------------
-# SRCH-03 / SRCH-04: stubs for plan 04-03
+# SRCH-03 / SRCH-04: Real PostgreSQL tests (skip gracefully if unavailable)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.skip(reason="stub -- implement in plan 04-03 (requires PostgreSQL + pg_trgm)")
-def test_fuzzy_typo_matching():
-    """SRCH-03: 'electrcity' typo query returns electricity documents via trigram."""
-    pass
+@pytest.fixture(scope="module")
+def pg_db():
+    """Real PostgreSQL session for FTS/trigram tests. Skips if not available."""
+    db_url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
+    if not db_url or "sqlite" in db_url:
+        pytest.skip("Real PostgreSQL required for FTS/trigram tests")
+    try:
+        engine = create_engine(db_url)
+        # Verify connection is reachable
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        yield session
+        session.close()
+    except Exception as exc:
+        pytest.skip(f"PostgreSQL not reachable: {exc}")
 
 
-@pytest.mark.skip(reason="stub -- implement in plan 04-03 (requires PostgreSQL + GIN index)")
-def test_search_performance():
-    """SRCH-04: search returns in under 2 seconds with GIN index in place."""
-    pass
+def test_fuzzy_typo_matching(pg_db):
+    """SRCH-03: 'electrcity' typo query returns electricity documents via trigram.
+
+    Inserts a real row into the documents table with extracted_text containing
+    'electricity', then runs the OR-combine FTS+trigram query with the typo
+    'electrcity'. Asserts the document is returned via trigram similarity.
+    Cleans up the test row unconditionally.
+    """
+    session = pg_db
+
+    # Ensure pg_trgm extension is available
+    try:
+        session.execute(text("SELECT similarity('test', 'tset')"))
+    except Exception:
+        pytest.skip("pg_trgm extension not available in test DB")
+
+    # Insert a test document row with known extracted_text
+    insert_sql = text("""
+        INSERT INTO documents (
+            user_id, filename, original_filename, file_type, file_size,
+            file_path, status, extracted_text, created_at, updated_at
+        ) VALUES (
+            0, 'test_trigram.pdf', 'test_trigram.pdf', 'pdf', 1024,
+            '/tmp/test_trigram.pdf', 'completed',
+            'This is an electricity bill for April',
+            NOW(), NOW()
+        ) RETURNING id
+    """)
+    result = session.execute(insert_sql)
+    doc_id = result.fetchone()[0]
+    session.commit()
+
+    try:
+        # Update search_vector for the inserted row
+        session.execute(text(
+            "UPDATE documents SET search_vector = to_tsvector('english', extracted_text) "
+            "WHERE id = :doc_id"
+        ), {"doc_id": doc_id})
+        session.commit()
+
+        # Run the OR-combine FTS + trigram query (mirrors the search endpoint logic)
+        q = "electrcity"
+        search_sql = text("""
+            SELECT id FROM documents
+            WHERE id = :doc_id
+              AND (
+                search_vector @@ plainto_tsquery('english', :q)
+                OR extracted_text % :q
+              )
+        """)
+        rows = session.execute(search_sql, {"doc_id": doc_id, "q": q}).fetchall()
+        found_ids = [r[0] for r in rows]
+
+        assert doc_id in found_ids, (
+            f"Expected doc_id {doc_id} in fuzzy search results for 'electrcity', "
+            f"but got: {found_ids}. Trigram OR-combine may not be working."
+        )
+    finally:
+        session.execute(text("DELETE FROM documents WHERE id = :doc_id"), {"doc_id": doc_id})
+        session.commit()
+
+
+def test_search_performance(pg_db):
+    """SRCH-04: Search query completes in under 2 seconds (GIN index performance).
+
+    Measures wall time of executing the full OR-combine FTS+trigram query
+    against the real database. Asserts elapsed < 2.0 seconds.
+    """
+    session = pg_db
+
+    q = "electricity"
+    search_sql = text("""
+        SELECT id FROM documents
+        WHERE status = 'completed'
+          AND (
+            search_vector @@ plainto_tsquery('english', :q)
+            OR extracted_text % :q
+          )
+        ORDER BY ts_rank(search_vector, plainto_tsquery('english', :q)) DESC
+        LIMIT 20
+    """)
+
+    start = time.time()
+    session.execute(search_sql, {"q": q}).fetchall()
+    elapsed = time.time() - start
+
+    assert elapsed < 2.0, (
+        f"Search query took {elapsed:.3f}s, expected < 2.0s. "
+        "GIN index on search_vector and extracted_text may not be in place."
+    )
