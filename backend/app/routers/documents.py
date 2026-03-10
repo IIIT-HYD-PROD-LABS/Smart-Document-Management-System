@@ -146,17 +146,26 @@ def search_documents(
         Document.status == DocumentStatus.COMPLETED,
     )
 
-    # FTS using stored search_vector (short queries fall back to ILIKE)
-    use_fts = len(q) > 3
-    if use_fts:
-        search_query = func.plainto_tsquery("english", q)
-        query = query.filter(Document.search_vector.op("@@")(search_query))
-    else:
+    # Build search filter: OR-combine FTS + trigram for queries > 2 chars.
+    # Very short queries (1-2 chars) use ILIKE only — trigram requires min 3-char input.
+    # OR-combine ensures typos hit via trigram even when FTS (stemmed) misses.
+    if len(q) <= 2:
+        # Short queries: ILIKE only (trigram unreliable below 3 chars)
         search_term = f"%{q}%"
         query = query.filter(
             or_(
                 Document.extracted_text.ilike(search_term),
                 Document.original_filename.ilike(search_term),
+            )
+        )
+        rank_expr = None
+    else:
+        search_query = func.plainto_tsquery("english", q)
+        rank_expr = func.ts_rank(Document.search_vector, search_query)
+        query = query.filter(
+            or_(
+                Document.search_vector.op("@@")(search_query),    # FTS: stemmed exact match
+                Document.extracted_text.op("%")(q),               # trigram: typo tolerance
             )
         )
 
@@ -184,13 +193,11 @@ def search_documents(
 
     total = query.count()
 
-    # Order by ts_rank for FTS queries; by created_at for short fallback queries
-    if use_fts:
-        search_query = func.plainto_tsquery("english", q)
-        rank = func.ts_rank(Document.search_vector, search_query)
+    # Order by ts_rank for FTS/trigram queries; by created_at for short fallback queries
+    if rank_expr is not None:
         documents = (
             query
-            .order_by(rank.desc())
+            .order_by(rank_expr.desc())
             .offset((page - 1) * per_page)
             .limit(per_page)
             .all()
