@@ -160,9 +160,20 @@ export const documentsApi = {
     getByCategory: (category: string) =>
         api.get(`/documents/category/${category}`),
 
-    search: (query: string, category?: string) => {
+    search: (
+        query: string,
+        category?: string,
+        dateFrom?: string,
+        dateTo?: string,
+        amountMin?: number,
+        amountMax?: number,
+    ) => {
         const params = new URLSearchParams({ q: query });
         if (category) params.append("category", category);
+        if (dateFrom) params.append("date_from", dateFrom);
+        if (dateTo) params.append("date_to", dateTo);
+        if (amountMin !== undefined) params.append("amount_min", String(amountMin));
+        if (amountMax !== undefined) params.append("amount_max", String(amountMax));
         return api.get(`/documents/search?${params.toString()}`);
     },
 
