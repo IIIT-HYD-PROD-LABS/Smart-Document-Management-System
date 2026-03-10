@@ -61,9 +61,13 @@ def upgrade() -> None:
         CREATE OR REPLACE FUNCTION documents_search_vector_update()
         RETURNS TRIGGER AS $$
         BEGIN
-            NEW.search_vector := to_tsvector('english',
-                COALESCE(NEW.extracted_text, '') || ' ' ||
-                COALESCE(NEW.original_filename, ''));
+            IF TG_OP = 'INSERT' OR
+               NEW.extracted_text IS DISTINCT FROM OLD.extracted_text OR
+               NEW.original_filename IS DISTINCT FROM OLD.original_filename THEN
+                NEW.search_vector := to_tsvector('english',
+                    COALESCE(NEW.extracted_text, '') || ' ' ||
+                    COALESCE(NEW.original_filename, ''));
+            END IF;
             RETURN NEW;
         END;
         $$ LANGUAGE plpgsql;

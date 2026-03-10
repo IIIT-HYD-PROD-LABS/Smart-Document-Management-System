@@ -38,13 +38,6 @@ class DocumentUploadResponse(BaseModel):
     task_id: str | None = None
 
 
-class SearchRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=500)
-    category: str | None = None
-    page: int = 1
-    per_page: int = 20
-
-
 class DocumentStats(BaseModel):
     total_documents: int
     category_counts: dict[str, int]
