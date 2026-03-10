@@ -187,21 +187,23 @@ def search_documents(
         query = query.filter(Document.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time()))
 
     # Amount filters with NULL guard + safe numeric cast
-    # Guard: metadata not null, amount key exists, value is numeric (not "N/A", null, etc.)
-    amount_col = Document.extracted_metadata["amount"].astext
-    amount_is_numeric = func.regexp_matches(amount_col, r'^-?\d+\.?\d*$')
-    if amount_min is not None:
-        query = query.filter(
-            Document.extracted_metadata.isnot(None),
-            amount_is_numeric.isnot(None),
-            amount_col.cast(Float) >= amount_min,
-        )
-    if amount_max is not None:
-        query = query.filter(
-            Document.extracted_metadata.isnot(None),
-            amount_is_numeric.isnot(None),
-            amount_col.cast(Float) <= amount_max,
-        )
+    # Column is JSON (not JSONB), so use json_extract_path_text for ->> equivalent
+    # Use ~ regex operator (boolean) instead of regexp_matches (set-returning)
+    if amount_min is not None or amount_max is not None:
+        amount_text = func.json_extract_path_text(Document.extracted_metadata, 'amount')
+        amount_is_numeric = amount_text.op('~')(r'^-?\d+\.?\d*$')
+        if amount_min is not None:
+            query = query.filter(
+                Document.extracted_metadata.isnot(None),
+                amount_is_numeric,
+                amount_text.cast(Float) >= amount_min,
+            )
+        if amount_max is not None:
+            query = query.filter(
+                Document.extracted_metadata.isnot(None),
+                amount_is_numeric,
+                amount_text.cast(Float) <= amount_max,
+            )
 
     total = query.count()
 
