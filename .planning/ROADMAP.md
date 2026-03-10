@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation & Security Hardening** - Eliminate critical security vulnerabilities and establish migration framework before adding features
 - [x] **Phase 2: Document Processing Pipeline** - Wire async processing, add format support, and improve OCR for reliable document ingestion
-- [ ] **Phase 3: ML Classification Upgrade** - Train classifier on real datasets and establish model evaluation metrics
+- [x] **Phase 3: ML Classification Upgrade** - Train classifier on real datasets and establish model evaluation metrics (completed 2026-03-10)
 - [ ] **Phase 4: Search & Retrieval** - Replace ILIKE with PostgreSQL full-text search, filters, and fuzzy matching
 - [ ] **Phase 5: Smart Extraction (AI)** - Add LLM-powered metadata extraction, summaries, and configurable AI providers
 - [ ] **Phase 6: Access Control & SSO** - Implement role-based access, document-level permissions, and OAuth login
@@ -71,8 +71,8 @@ Plans:
 **Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 03-01-PLAN.md -- Enhance training pipeline with SVM, tune hyperparameters, and retrain on larger dataset (Wave 1)
-- [ ] 03-02-PLAN.md -- Add evaluation API endpoint, color-coded confidence badges, and model evaluation page (Wave 2)
+- [x] 03-01-PLAN.md -- Enhance training pipeline with SVM, tune hyperparameters, and retrain on larger dataset (Wave 1)
+- [x] 03-02-PLAN.md -- Add evaluation API endpoint, color-coded confidence badges, and model evaluation page (Wave 2)
 
 ### Phase 4: Search & Retrieval
 **Goal**: Users can find any document in under 2 seconds using full-text search with filters and fuzzy matching
@@ -168,7 +168,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 |-------|----------------|--------|-----------|
 | 1. Foundation & Security Hardening | 4/4 | Complete | 2026-02-25 |
 | 2. Document Processing Pipeline | 4/4 | Complete | 2026-03-01 |
-| 3. ML Classification Upgrade | 1/2 | In Progress|  |
+| 3. ML Classification Upgrade | 2/2 | Complete   | 2026-03-10 |
 | 4. Search & Retrieval | 0/3 | Not started | - |
 | 5. Smart Extraction (AI) | 0/4 | Not started | - |
 | 6. Access Control & SSO | 0/4 | Not started | - |
