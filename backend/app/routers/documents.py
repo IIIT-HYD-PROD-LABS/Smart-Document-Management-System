@@ -2,10 +2,11 @@
 
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, Query, status
-from sqlalchemy import func, or_, Float
+from sqlalchemy import func, or_, case, literal, Float
+from sqlalchemy.exc import DataError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -128,11 +129,14 @@ def get_document_status(
 
 
 @router.get("/search", response_model=DocumentListResponse)
+@limiter.limit("30/minute")
 def search_documents(
+    request: Request,
+    response: Response,
     q: str = Query(..., min_length=1, max_length=500, description="Search query"),
     category: str | None = Query(None, description="Filter by category"),
-    date_from: str | None = Query(None, description="Filter by date from (YYYY-MM-DD)"),
-    date_to: str | None = Query(None, description="Filter by date to (YYYY-MM-DD)"),
+    date_from: date | None = Query(None, description="Filter by start date (YYYY-MM-DD)"),
+    date_to: date | None = Query(None, description="Filter by end date inclusive (YYYY-MM-DD)"),
     amount_min: float | None = Query(None, description="Minimum document amount"),
     amount_max: float | None = Query(None, description="Maximum document amount"),
     page: int = Query(1, ge=1),
@@ -151,7 +155,9 @@ def search_documents(
     # OR-combine ensures typos hit via trigram even when FTS (stemmed) misses.
     if len(q) <= 2:
         # Short queries: ILIKE only (trigram unreliable below 3 chars)
-        search_term = f"%{q}%"
+        # Escape SQL LIKE wildcards to prevent pattern injection
+        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        search_term = f"%{escaped}%"
         query = query.filter(
             or_(
                 Document.extracted_text.ilike(search_term),
@@ -173,22 +179,28 @@ def search_documents(
     if category and category.lower() in {c.value for c in DocumentCategory}:
         query = query.filter(Document.category == DocumentCategory(category.lower()))
 
-    # Date filters
+    # Date filters (Pydantic auto-validates YYYY-MM-DD format, returns 422 on bad input)
     if date_from:
-        query = query.filter(Document.created_at >= datetime.fromisoformat(date_from))
+        query = query.filter(Document.created_at >= datetime.combine(date_from, datetime.min.time()))
     if date_to:
-        query = query.filter(Document.created_at <= datetime.fromisoformat(date_to))
+        # +1 day for inclusive end boundary (include all of date_to, not just midnight)
+        query = query.filter(Document.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time()))
 
-    # Amount filters with NULL guard (extracted_metadata may be NULL for many documents)
+    # Amount filters with NULL guard + safe numeric cast
+    # Guard: metadata not null, amount key exists, value is numeric (not "N/A", null, etc.)
+    amount_col = Document.extracted_metadata["amount"].astext
+    amount_is_numeric = func.regexp_matches(amount_col, r'^-?\d+\.?\d*$')
     if amount_min is not None:
         query = query.filter(
             Document.extracted_metadata.isnot(None),
-            Document.extracted_metadata["amount"].astext.cast(Float) >= amount_min,
+            amount_is_numeric.isnot(None),
+            amount_col.cast(Float) >= amount_min,
         )
     if amount_max is not None:
         query = query.filter(
             Document.extracted_metadata.isnot(None),
-            Document.extracted_metadata["amount"].astext.cast(Float) <= amount_max,
+            amount_is_numeric.isnot(None),
+            amount_col.cast(Float) <= amount_max,
         )
 
     total = query.count()
