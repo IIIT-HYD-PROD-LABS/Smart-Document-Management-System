@@ -29,9 +29,9 @@ An AI-powered document management system that automatically organizes and manage
 
 **PRD Core (from original spec):**
 - ✓ Automatic metadata extraction (date, amount, vendor) from documents — Phase 2
-- [ ] Full-text search with PostgreSQL FTS (replace ILIKE) — Phase 4
-- [ ] Filter by category, date range, amount — Phase 4
-- [ ] Fuzzy search for partial matches — Phase 4
+- ✓ Full-text search with PostgreSQL FTS (replace ILIKE) — Phase 4 (tsvector + GIN + ts_rank)
+- ✓ Filter by category, date range, amount — Phase 4 (Pydantic date validation, JSONB amount guard)
+- ✓ Fuzzy search for partial matches — Phase 4 (pg_trgm OR-combine)
 - [ ] Document preview functionality (PDF/image viewer in browser) — Phase 7
 - [ ] Analytics dashboard (documents by category, monthly trends, upload stats) — Phase 7
 - ✓ DOCX upload support — Phase 2

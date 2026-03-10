@@ -2,13 +2,13 @@
 
 **Organization:** Product Labs, IIIT Hyderabad
 **Last Updated:** 2026-03-11
-**Overall Progress:** 3 of 8 phases complete (37.5%)
+**Overall Progress:** 4 of 8 phases complete (50%)
 
 ---
 
 ## Executive Summary
 
-The Smart Document Management System (SmartDocs) is an AI-powered document management platform that automatically classifies, extracts, and searches personal and business documents. The system has completed its security hardening, full document processing pipeline, and ML classification upgrade — achieving 85.06% classification accuracy on real-world Indian financial documents, exceeding the >85% project target.
+The Smart Document Management System (SmartDocs) is an AI-powered document management platform that automatically classifies, extracts, and searches personal and business documents. The system has completed security hardening, document processing pipeline, ML classification upgrade (85.06% accuracy), and full-text search with advanced filtering — now at the halfway mark with 4 of 8 phases complete.
 
 ---
 
@@ -19,8 +19,8 @@ The Smart Document Management System (SmartDocs) is an AI-powered document manag
 | 1 | Foundation & Security Hardening | ✅ Complete | 2026-02-17 |
 | 2 | Document Processing Pipeline | ✅ Complete | 2026-03-09 |
 | 3 | ML Classification Upgrade | ✅ Complete | 2026-03-10 |
-| 4 | Search & Retrieval Engine | 🔜 Next | — |
-| 5 | LLM Smart Extraction | ⬜ Planned | — |
+| 4 | Search & Retrieval Engine | ✅ Complete | 2026-03-11 |
+| 5 | LLM Smart Extraction | 🔜 Next | — |
 | 6 | Multi-User & RBAC | ⬜ Planned | — |
 | 7 | Analytics Dashboard | ⬜ Planned | — |
 | 8 | Production Readiness | ⬜ Planned | — |
@@ -99,15 +99,47 @@ The Smart Document Management System (SmartDocs) is an AI-powered document manag
 
 ---
 
-## Next: Phase 4 — Search & Retrieval
-
+### Phase 4: Search & Retrieval Engine ✅
 **Goal:** Replace ILIKE with PostgreSQL full-text search, add filters, fuzzy matching.
 
+**What was built:**
+
+**Plan 04-01 — Full-Text Search:**
+- PostgreSQL `tsvector` column with GIN index on `documents` table
+- Trigger-based `search_vector` auto-update (fires only when text actually changes)
+- `plainto_tsquery` + `ts_rank` relevance ranking replaces naive ILIKE
+- Alembic migration `0003_add_fts_and_trgm`: creates `pg_trgm` extension, TSVECTOR column, 2 GIN indexes, trigger function, backfill
+
+**Plan 04-02 — Advanced Filters:**
+- Category filter (exact match on `category` column)
+- Date range filter with Pydantic `date` type auto-validation, inclusive end boundary (+1 day)
+- Amount range filter with regex guard for non-numeric JSONB values
+- ILIKE pattern injection protection (SQL wildcard escaping)
+- Frontend 2×2 filter panel (date range + amount range pickers)
+
+**Plan 04-03 — Fuzzy Search + Performance:**
+- `pg_trgm` trigram similarity for typo-tolerant matching
+- OR-combine pattern: FTS for stems + trigram for typos in single query
+- `gin_trgm_ops` index on `extracted_text` for sub-2s response times
+- Rate limiting (30/min) on search endpoint
+
+**Opus Code Review & Hardening:**
+- 4 critical input validation bugs fixed (ILIKE injection, date parsing crash, boundary bug, amount cast crash)
+- Trigger optimization: skip recompute when text unchanged
+- Dead code removal (`SearchRequest` schema)
+
+**Requirements completed:** SRCH-01, SRCH-02, SRCH-03, SRCH-04
+
+---
+
+## Next: Phase 5 — LLM Smart Extraction
+
+**Goal:** Integrate LLM APIs for intelligent data extraction beyond regex patterns.
+
 **Planned deliverables:**
-- PostgreSQL FTS with `tsvector`/`tsquery` on document text + metadata
-- Filter by category, date range, amount range
-- Fuzzy search for partial/misspelled queries
-- Paginated search results with relevance ranking
+- Smart data extraction (dates, deadlines, amounts, parties, clauses) via LLM APIs
+- AI-powered document summaries and insights
+- Flexible ML backend (local models + LLM APIs, user-configurable)
 
 ---
 

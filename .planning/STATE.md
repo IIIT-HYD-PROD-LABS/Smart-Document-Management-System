@@ -3,46 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-stopped_at: Completed 04-03-PLAN.md -- Phase 4 complete, human checkpoint approved
-last_updated: "2026-03-10T22:21:16.042Z"
-last_activity: "2026-03-11 -- Phase 4 Plan 3 checkpoint approved: trigram OR-combine E2E verified by human"
-progress:
-  total_phases: 8
-  completed_phases: 3
-  total_plans: 13
-  completed_plans: 9
----
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: active
 stopped_at: Completed 04-03-PLAN.md -- Phase 4 Search & Retrieval complete (human checkpoint approved)
-last_updated: "2026-03-11T00:00:00Z"
-last_activity: "2026-03-11 -- Phase 4 Plan 3 human checkpoint approved: fuzzy search E2E verified"
+last_updated: "2026-03-11"
+last_activity: "2026-03-11 -- Phase 4 complete, Opus code review fixed 6 issues"
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 13
-  completed_plans: 11
-  percent: 62
----
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: completed
-stopped_at: Completed 03-02-PLAN.md -- evaluation dashboard with confidence badges
-last_updated: "2026-03-10T11:27:06.630Z"
-last_activity: "2026-03-10 -- Phase 3 Plan 2 executed: ML evaluation API + confidence badges + evaluation page"
-progress:
-  [█████░░░░░] 54%
-  completed_phases: 2
-  total_plans: 10
-  completed_plans: 6
-  percent: 34
+  completed_plans: 13
+  percent: 45
 ---
 
 # Project State
@@ -52,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Automated classification and intelligent organization of personal and business documents -- upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
-**Current focus:** Phase 4 complete: Search & Retrieval (3/3 plans done). Next: Phase 5 (LLM extraction)
+**Current focus:** Phase 4 complete: Search & Retrieval (3/3 plans done, Opus review applied). Next: Phase 5
 
 ## Current Position
 
 Phase: 4 of 8 (Search & Retrieval) -- COMPLETE
 Plan: 3 of 3 in current phase
-Status: Phase 4 complete -- FTS ranking, filters, fuzzy matching, and sub-2s performance all human-verified
-Last activity: 2026-03-11 -- Phase 4 Plan 3 checkpoint approved: trigram OR-combine E2E verified by human
+Status: Phase 4 complete + Opus code review applied (6 fixes). FTS, filters, fuzzy, sub-2s all verified.
+Last activity: 2026-03-11 -- Opus code review fixed 6 issues (pattern injection, date validation, amount cast, trigger optimization, rate limiting)
 
-Progress: [███████████████░░░░░░░░░░░░░░] 11/29 (38%)
+Progress: [█████████████░░░░░░░░░░░░░░░░] 13/29 (45%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
+- Total plans completed: 13
 - Average duration: ~8min
-- Total execution time: ~84min
+- Total execution time: ~112min
 
 **By Phase:**
 
@@ -77,15 +46,13 @@ Progress: [███████████████░░░░░░░░
 | 01-foundation-security-hardening | 4/4 | 41min | 10min |
 | 02-document-processing-pipeline | 4/4 | ~24min | ~6min |
 | 03-ml-classification-upgrade | 2/2 | 19min | ~10min |
+| 04-search-retrieval | 3/3 | ~28min | ~9min |
 
 **Recent Trend:**
-- Last 5 plans: 02-01 (~6min), 02-02 (~6min), 02-03+04 (~6min), 03-01 (13min), 03-02 (6min)
+- Last 5 plans: 03-01 (13min), 03-02 (6min), 04-01 (15min), 04-02 (8min), 04-03 (5min)
 - Trend: Stable
 
 *Updated after each plan completion*
-| Phase 04-search-retrieval P01 | 15 | 3 tasks | 3 files |
-| Phase 04-search-retrieval P02 | 8 | 2 tasks | 4 files |
-| Phase 04-search-retrieval P03 | 5 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -142,7 +109,7 @@ None.
 
 ### Dataset Pipeline (Phase 3 Groundwork)
 
-- 7 Kaggle datasets downloaded (~19 GB raw data) inside Docker container
+- 7 Kaggle datasets downloaded (~28 GB raw data) inside Docker container
 - Dataset download script: `python -m app.ml.datasets.download`
 - Data preparation pipeline: `python -m app.ml.datasets.prepare`
 - Training supports 4 modes: auto, synthetic, real, combined

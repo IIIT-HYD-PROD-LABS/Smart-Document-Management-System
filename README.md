@@ -256,13 +256,11 @@ docker-compose.yml           # PostgreSQL, Redis, Backend, Celery, Frontend
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 1 | Foundation & Security Hardening | Done |
-| 2 | Document Processing Pipeline | Done |
 | 1 | Foundation & Security Hardening | ✅ Done |
 | 2 | Document Processing Pipeline | ✅ Done |
 | 3 | ML Classification Upgrade | ✅ Done (85.06% accuracy) |
-| 4 | Search & Retrieval Engine | Planned |
-| 5 | LLM Smart Extraction | Planned |
+| 4 | Search & Retrieval Engine | ✅ Done (FTS + fuzzy + filters) |
+| 5 | LLM Smart Extraction | Next |
 | 6 | Multi-User & RBAC | Planned |
 | 7 | Analytics Dashboard | Planned |
 | 8 | Production Deployment | Planned |
@@ -274,6 +272,8 @@ docker-compose.yml           # PostgreSQL, Redis, Backend, Celery, Frontend
 **Phase 2** — Multi-format text extraction (PDF, DOCX, images), OCR with adaptive preprocessing, async Celery processing (202 Accepted + status polling), frontend bulk upload with per-file progress, metadata extraction (dates, amounts, vendor).
 
 **Phase 3** — Upgraded classifier from Logistic Regression (76.4%) to Linear SVC (85.06%, exceeds >85% target). 7 Kaggle datasets (28 GB), TF-IDF 15K vocab + trigrams, class-balanced training with synthetic augmentation (factor=10). ML evaluation API + model evaluation dashboard page with confusion matrix and per-category P/R/F1 badges. Trained model committed to git; datasets bind-mounted in Docker for team access.
+
+**Phase 4** — PostgreSQL full-text search replacing ILIKE: stored tsvector column with GIN index, ts_rank relevance ordering, `pg_trgm` trigram fuzzy matching (OR-combine: FTS for stems + trigram for typos). Category, date range, and amount filters with JSONB NULL guards. Frontend filter UI. Rate-limited search endpoint (30/min). Opus code review applied 6 fixes (pattern injection, date validation, amount cast safety, trigger optimization).
 
 **UI Redesign** — Minimalist dark theme (Linear/Notion-inspired), Inter font, zinc/neutral palette, no glassmorphism. Clean dashboard with stats, category filters, full-text search, analytics.
 
