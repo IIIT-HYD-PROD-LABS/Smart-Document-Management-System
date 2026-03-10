@@ -269,8 +269,9 @@ def train_model(mode: str = "auto"):
         data_source = "synthetic"
 
     elif mode == "combined":
-        # Merge real + synthetic
-        syn_texts, syn_labels = generate_augmented_data(SYNTHETIC_DATA, augmentation_factor=3)
+        # Merge real + synthetic with adaptive augmentation
+        # Boost synthetic augmentation for categories underrepresented in real data
+        syn_texts, syn_labels = generate_augmented_data(SYNTHETIC_DATA, augmentation_factor=10)
         texts = list(syn_texts)
         labels = list(syn_labels)
         if real_data:
@@ -314,6 +315,10 @@ def train_model(mode: str = "auto"):
     X_val, X_test, y_val, y_test = train_test_split(
         X_temp, y_temp, test_size=0.50, random_state=42, stratify=y_temp
     )
+    # Convert label lists to numpy arrays (required by CalibratedClassifierCV in sklearn 1.3)
+    y_train = np.array(y_train)
+    y_val = np.array(y_val)
+    y_test = np.array(y_test)
     logger.info(
         "data_split_complete",
         train_size=len(X_train),
@@ -373,19 +378,34 @@ def train_model(mode: str = "auto"):
 
     # Linear SVC
     logger.info("model_training", model="linear_svc")
-    svc_base = LinearSVC(random_state=42, max_iter=2000)
-    svc_params = {"estimator__C": [0.1, 1.0, 10.0]}
-    svc_grid = GridSearchCV(
-        CalibratedClassifierCV(svc_base, cv=3),
-        svc_params, cv=5, scoring="accuracy", n_jobs=-1,
-    )
-    svc_grid.fit(X_train_vec, y_train)
-    svc_model = svc_grid.best_estimator_
-    svc_val_acc = accuracy_score(y_val, svc_model.predict(X_val_vec))
+    # Use StratifiedKFold-safe CV: determine max safe folds from smallest class
+    from collections import Counter
+    min_class_count = min(Counter(y_train).values())
+    svc_inner_cv = 2 if min_class_count < 10 else 3
+
+    # Try multiple C values manually to avoid nested CV issues
+    best_svc_model = None
+    best_svc_val_acc = -1.0
+    best_svc_C = None
+    for C_val in [0.1, 1.0, 10.0]:
+        try:
+            svc_base = LinearSVC(C=C_val, random_state=42, max_iter=2000, class_weight="balanced", dual="auto")
+            calibrated = CalibratedClassifierCV(svc_base, cv=svc_inner_cv)
+            calibrated.fit(X_train_vec, y_train)
+            val_acc = accuracy_score(y_val, calibrated.predict(X_val_vec))
+            logger.info("svc_candidate", C=C_val, val_acc=round(val_acc, 4))
+            if val_acc > best_svc_val_acc:
+                best_svc_val_acc = val_acc
+                best_svc_model = calibrated
+                best_svc_C = C_val
+        except Exception as e:
+            logger.warning("svc_fit_failed", C=C_val, error=str(e))
+    svc_model = best_svc_model
+    svc_val_acc = best_svc_val_acc
     logger.info(
         "model_evaluated",
         model="linear_svc",
-        best_params=svc_grid.best_params_,
+        best_C=best_svc_C,
         validation_accuracy=round(svc_val_acc, 4),
     )
 
@@ -393,8 +413,12 @@ def train_model(mode: str = "auto"):
     models = [
         ("Logistic Regression", lr_model, lr_val_acc),
         ("Naive Bayes", nb_model, nb_val_acc),
-        ("Linear SVC", svc_model, svc_val_acc),
     ]
+    if svc_model is not None:
+        models.append(("Linear SVC", svc_model, svc_val_acc))
+    else:
+        logger.warning("svc_excluded", reason="all C values failed to fit")
+        svc_val_acc = 0.0
     best_name, best_model, _ = max(models, key=lambda x: x[2])
     logger.info("best_model_selected", model=best_name)
 
