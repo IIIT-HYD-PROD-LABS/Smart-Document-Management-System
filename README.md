@@ -6,7 +6,7 @@
 
 ## Features
 
-- **ML Document Classification** — Automatically categorizes documents into bills, invoices, tax forms, bank statements, UPI receipts, and tickets using a trained Logistic Regression model (76.4% accuracy on real data)
+- **ML Document Classification** — Automatically categorizes documents into bills, invoices, tax forms, bank statements, UPI receipts, and tickets using a trained Linear SVC model (85.06% accuracy — exceeds 85% target)
 - **OCR Text Extraction** — Extracts text from scanned PDFs and images using Tesseract with adaptive preprocessing (grayscale, blur, thresholding, deskew, morphological ops, multi-PSM retry)
 - **Async Processing** — Upload returns immediately (HTTP 202). Celery workers handle OCR + classification in the background with real-time status polling
 - **Full-Text Search** — Search across all extracted document content with category filtering
@@ -39,7 +39,7 @@
 | Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
 | Backend | FastAPI, SQLAlchemy, Pydantic v2, Uvicorn |
 | Database | PostgreSQL 14, Alembic migrations |
-| ML | scikit-learn (LogisticRegression + TF-IDF), Tesseract OCR, pdfplumber, python-docx |
+| ML | scikit-learn (LinearSVC + CalibratedClassifierCV + TF-IDF), Tesseract OCR, pdfplumber, python-docx |
 | Async | Celery + Redis |
 | Auth | JWT (HS256) + opaque refresh tokens, bcrypt, slowapi rate limiting |
 | Infra | Docker, Docker Compose (5 services) |
@@ -77,16 +77,31 @@ This launches 5 containers:
 | PostgreSQL | localhost:5432 | Database |
 | Redis | localhost:6379 | Celery message broker |
 
-### 3. Train the ML model
+### 3. Get the trained model (automatic)
+
+The trained model (`document_classifier.pkl` + `tfidf_vectorizer.pkl`) is committed to git — you get it automatically on `git clone` / `git pull`. No training step needed.
+
+### 4. Download datasets (optional — only if you want to retrain)
+
+Datasets are 28 GB and not in git. To download them into `backend/datasets/`:
 
 ```bash
-# Synthetic data (no external deps):
+# Add to .env:  KAGGLE_USERNAME=xxx  KAGGLE_KEY=xxx
+docker compose run backend python -m app.ml.datasets.download
+docker compose run backend python -m app.ml.datasets.prepare
+```
+
+Once downloaded they are bind-mounted into the container at `/app/datasets` automatically.
+
+To retrain from scratch after downloading:
+```bash
+# Synthetic data only (no external deps):
 docker compose exec backend python -m app.ml.train --synthetic-only
 
-# Real Kaggle datasets (requires KAGGLE_USERNAME + KAGGLE_KEY in .env):
+# Real Kaggle datasets:
 docker compose exec backend python -m app.ml.train --full-pipeline
 
-# Combined (real + synthetic augmentation):
+# Combined (real + synthetic augmentation — what achieved 85%):
 docker compose exec backend python -m app.ml.train --combined
 ```
 
@@ -135,6 +150,12 @@ npm run dev
 | GET | `/api/documents/stats` | Dashboard statistics |
 | DELETE | `/api/documents/{id}` | Delete document + file |
 
+### ML (requires `Authorization: Bearer <token>`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/ml/evaluation` | Model metrics — accuracy, per-category P/R/F1, confusion matrix |
+
 ---
 
 ## Document Categories
@@ -171,7 +192,7 @@ Celery Worker picks up task
 Text Preprocessing (clean, normalize, preserve financial patterns)
   │
   ▼
-TF-IDF + Logistic Regression Classification
+TF-IDF + Linear SVC Classification
   │
   ▼
 Metadata Extraction (dates, amounts, vendor — regex + dateutil)
@@ -237,7 +258,9 @@ docker-compose.yml           # PostgreSQL, Redis, Backend, Celery, Frontend
 |-------|-------------|--------|
 | 1 | Foundation & Security Hardening | Done |
 | 2 | Document Processing Pipeline | Done |
-| 3 | ML Classification Upgrade (target >85%) | Next |
+| 1 | Foundation & Security Hardening | ✅ Done |
+| 2 | Document Processing Pipeline | ✅ Done |
+| 3 | ML Classification Upgrade | ✅ Done (85.06% accuracy) |
 | 4 | Search & Retrieval Engine | Planned |
 | 5 | LLM Smart Extraction | Planned |
 | 6 | Multi-User & RBAC | Planned |
@@ -250,7 +273,7 @@ docker-compose.yml           # PostgreSQL, Redis, Backend, Celery, Frontend
 
 **Phase 2** — Multi-format text extraction (PDF, DOCX, images), OCR with adaptive preprocessing, async Celery processing (202 Accepted + status polling), frontend bulk upload with per-file progress, metadata extraction (dates, amounts, vendor).
 
-**Dataset Pipeline** — 7 Kaggle datasets (~19 GB), automated download/prepare/train pipeline, 76.4% accuracy baseline with Logistic Regression.
+**Phase 3** — Upgraded classifier from Logistic Regression (76.4%) to Linear SVC (85.06%, exceeds >85% target). 7 Kaggle datasets (28 GB), TF-IDF 15K vocab + trigrams, class-balanced training with synthetic augmentation (factor=10). ML evaluation API + model evaluation dashboard page with confusion matrix and per-category P/R/F1 badges. Trained model committed to git; datasets bind-mounted in Docker for team access.
 
 **UI Redesign** — Minimalist dark theme (Linear/Notion-inspired), Inter font, zinc/neutral palette, no glassmorphism. Clean dashboard with stats, category filters, full-text search, analytics.
 
