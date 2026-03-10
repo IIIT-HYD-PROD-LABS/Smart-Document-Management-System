@@ -27,8 +27,9 @@ backend/datasets/raw/
 backend/datasets/processed/
 backend/datasets/training/
 
-# ML Model artifacts
-backend/models/
+# ML Model artifacts (trained models are committed; only raw Kaggle data excluded above)
+# Exclude large raw model downloads if any:
+backend/models/raw/
 
 # Playwright MCP logs
 .playwright-mcp/
