@@ -13,7 +13,7 @@ This roadmap transforms the existing working prototype (FastAPI + Next.js + ML p
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation & Security Hardening** - Eliminate critical security vulnerabilities and establish migration framework before adding features
-- [ ] **Phase 2: Document Processing Pipeline** - Wire async processing, add format support, and improve OCR for reliable document ingestion
+- [x] **Phase 2: Document Processing Pipeline** - Wire async processing, add format support, and improve OCR for reliable document ingestion
 - [ ] **Phase 3: ML Classification Upgrade** - Train classifier on real datasets and establish model evaluation metrics
 - [ ] **Phase 4: Search & Retrieval** - Replace ILIKE with PostgreSQL full-text search, filters, and fuzzy matching
 - [ ] **Phase 5: Smart Extraction (AI)** - Add LLM-powered metadata extraction, summaries, and configurable AI providers
@@ -51,13 +51,13 @@ Plans:
   3. Upload returns immediately (non-blocking) and processing status updates are visible in the UI
   4. Scanned documents with skew, noise, or poor contrast still have readable extracted text
   5. Uploaded documents have automatically extracted metadata (date, amount, vendor) visible on the document detail page
-**Plans**: TBD
+**Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] 02-01: Add DOCX support and image preprocessing pipeline (deskew, threshold, noise removal)
-- [ ] 02-02: Wire Celery async processing with Redis and configure Docker Compose workers
-- [ ] 02-03: Implement bulk upload, progress indicators, and processing status tracking
-- [ ] 02-04: Build automatic metadata extraction (date, amount, vendor) from document text
+- [x] 02-01: Add DOCX support and image preprocessing pipeline (deskew, threshold, noise removal)
+- [x] 02-02: Wire Celery async processing with Redis and configure Docker Compose workers
+- [x] 02-03: Implement bulk upload, progress indicators, and processing status tracking
+- [x] 02-04: Build automatic metadata extraction (date, amount, vendor) from document text
 
 ### Phase 3: ML Classification Upgrade
 **Goal**: Document classification achieves greater than 85% accuracy on real-world documents with transparent model performance metrics
@@ -68,12 +68,11 @@ Plans:
   2. Each classified document shows a color-coded confidence badge (green above 80%, yellow 50-80%, red below 50%)
   3. Model evaluation report with confusion matrix and per-category precision/recall/F1 is generated and accessible
   4. Classification works reliably across all 6 document categories with real Indian financial documents
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 03-01: Acquire and prepare training datasets (RVL-CDIP, Indian financial document datasets)
-- [ ] 03-02: Train improved classifier and implement evaluation pipeline (confusion matrix, precision/recall/F1)
-- [ ] 03-03: Integrate confidence score display with color-coded indicators in the frontend
+- [ ] 03-01-PLAN.md -- Enhance training pipeline with SVM, tune hyperparameters, and retrain on larger dataset (Wave 1)
+- [ ] 03-02-PLAN.md -- Add evaluation API endpoint, color-coded confidence badges, and model evaluation page (Wave 2)
 
 ### Phase 4: Search & Retrieval
 **Goal**: Users can find any document in under 2 seconds using full-text search with filters and fuzzy matching
@@ -168,8 +167,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Security Hardening | 4/4 | Complete | 2026-02-25 |
-| 2. Document Processing Pipeline | 0/4 | Not started | - |
-| 3. ML Classification Upgrade | 0/3 | Not started | - |
+| 2. Document Processing Pipeline | 4/4 | Complete | 2026-03-01 |
+| 3. ML Classification Upgrade | 0/2 | Not started | - |
 | 4. Search & Retrieval | 0/3 | Not started | - |
 | 5. Smart Extraction (AI) | 0/4 | Not started | - |
 | 6. Access Control & SSO | 0/4 | Not started | - |
@@ -178,4 +177,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 
 ---
 *Roadmap created: 2026-02-17*
-*Last updated: 2026-02-25*
+*Last updated: 2026-03-10*
