@@ -2,9 +2,10 @@
 
 import os
 from pathlib import Path
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, Query, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_, Float
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -130,38 +131,78 @@ def get_document_status(
 def search_documents(
     q: str = Query(..., min_length=1, max_length=500, description="Search query"),
     category: str | None = Query(None, description="Filter by category"),
+    date_from: str | None = Query(None, description="Filter by date from (YYYY-MM-DD)"),
+    date_to: str | None = Query(None, description="Filter by date to (YYYY-MM-DD)"),
+    amount_min: float | None = Query(None, description="Minimum document amount"),
+    amount_max: float | None = Query(None, description="Maximum document amount"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Search documents by extracted text content."""
+    """Search documents by extracted text content using PostgreSQL FTS."""
     query = db.query(Document).filter(
         Document.user_id == current_user.id,
         Document.status == DocumentStatus.COMPLETED,
     )
 
-    # Text search using ILIKE (case-insensitive)
-    search_term = f"%{q}%"
-    query = query.filter(
-        or_(
-            Document.extracted_text.ilike(search_term),
-            Document.original_filename.ilike(search_term),
+    # FTS using stored search_vector (short queries fall back to ILIKE)
+    use_fts = len(q) > 3
+    if use_fts:
+        search_query = func.plainto_tsquery("english", q)
+        query = query.filter(Document.search_vector.op("@@")(search_query))
+    else:
+        search_term = f"%{q}%"
+        query = query.filter(
+            or_(
+                Document.extracted_text.ilike(search_term),
+                Document.original_filename.ilike(search_term),
+            )
         )
-    )
 
     # Category filter (ignore invalid categories silently)
     if category and category.lower() in {c.value for c in DocumentCategory}:
         query = query.filter(Document.category == DocumentCategory(category.lower()))
 
+    # Date filters
+    if date_from:
+        query = query.filter(Document.created_at >= datetime.fromisoformat(date_from))
+    if date_to:
+        query = query.filter(Document.created_at <= datetime.fromisoformat(date_to))
+
+    # Amount filters with NULL guard (extracted_metadata may be NULL for many documents)
+    if amount_min is not None:
+        query = query.filter(
+            Document.extracted_metadata.isnot(None),
+            Document.extracted_metadata["amount"].astext.cast(Float) >= amount_min,
+        )
+    if amount_max is not None:
+        query = query.filter(
+            Document.extracted_metadata.isnot(None),
+            Document.extracted_metadata["amount"].astext.cast(Float) <= amount_max,
+        )
+
     total = query.count()
-    documents = (
-        query
-        .order_by(Document.created_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
+
+    # Order by ts_rank for FTS queries; by created_at for short fallback queries
+    if use_fts:
+        search_query = func.plainto_tsquery("english", q)
+        rank = func.ts_rank(Document.search_vector, search_query)
+        documents = (
+            query
+            .order_by(rank.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
+    else:
+        documents = (
+            query
+            .order_by(Document.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
 
     return DocumentListResponse(
         documents=[DocumentResponse.model_validate(d) for d in documents],
