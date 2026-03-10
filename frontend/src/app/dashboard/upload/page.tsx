@@ -6,6 +6,28 @@ import { AnimatePresence, motion } from "framer-motion";
 import { documentsApi } from "@/lib/api";
 import { FiUploadCloud, FiFile, FiCheckCircle, FiX, FiLoader } from "react-icons/fi";
 
+function ConfidenceBadge({ score }: { score: number }) {
+    if (score <= 0) return null;
+    const pct = Math.round(score * 100);
+    let colorClass: string;
+    let label: string;
+    if (score >= 0.8) {
+        colorClass = "bg-[#10b981]/10 text-[#10b981]";
+        label = "High";
+    } else if (score >= 0.5) {
+        colorClass = "bg-[#f59e0b]/10 text-[#f59e0b]";
+        label = "Medium";
+    } else {
+        colorClass = "bg-[#ef4444]/10 text-[#ef4444]";
+        label = "Low";
+    }
+    return (
+        <span className={`text-[11px] px-2 py-0.5 rounded ${colorClass}`} title={`${label} confidence`}>
+            {pct}%
+        </span>
+    );
+}
+
 interface UploadItem {
     file: File;
     status: "queued" | "uploading" | "uploaded" | "processing" | "completed" | "failed" | "error";
@@ -135,7 +157,12 @@ export default function UploadPage() {
                                         {item.status === "queued" && <button onClick={() => removeItem(item.file)} className="text-[#52525b] hover:text-[#a1a1aa] cursor-pointer"><FiX className="w-3.5 h-3.5" /></button>}
                                     </div>
                                     {item.status === "uploading" && <div className="w-full bg-[#27272a] rounded-full h-1 mt-2"><div className="bg-[#10b981] h-1 rounded-full transition-all" style={{ width: `${item.uploadProgress}%` }} /></div>}
-                                    {item.status === "completed" && item.result && <p className="text-xs text-[#10b981] mt-1">{item.result.category} ({(item.result.confidence_score * 100).toFixed(0)}%)</p>}
+                                    {item.status === "completed" && item.result && (
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-xs text-[#10b981]">{item.result.category}</span>
+                                            <ConfidenceBadge score={item.result.confidence_score} />
+                                        </div>
+                                    )}
                                     {["error","failed"].includes(item.status) && item.error && <p className="text-xs text-[#ef4444] mt-1">{item.error}</p>}
                                 </motion.div>
                             ))}

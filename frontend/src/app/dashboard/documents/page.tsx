@@ -6,6 +6,28 @@ import { FiFileText, FiTrash2, FiFilter } from "react-icons/fi";
 
 const categories = ["all", "bills", "upi", "tickets", "tax", "bank", "invoices", "unknown"];
 
+function ConfidenceBadge({ score }: { score: number }) {
+    if (score <= 0) return null;
+    const pct = Math.round(score * 100);
+    let colorClass: string;
+    let label: string;
+    if (score >= 0.8) {
+        colorClass = "bg-[#10b981]/10 text-[#10b981]";
+        label = "High";
+    } else if (score >= 0.5) {
+        colorClass = "bg-[#f59e0b]/10 text-[#f59e0b]";
+        label = "Medium";
+    } else {
+        colorClass = "bg-[#ef4444]/10 text-[#ef4444]";
+        label = "Low";
+    }
+    return (
+        <span className={`text-[11px] px-2 py-0.5 rounded ${colorClass}`} title={`${label} confidence`}>
+            {pct}%
+        </span>
+    );
+}
+
 export default function DocumentsPage() {
     const [docs, setDocs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -91,11 +113,7 @@ export default function DocumentsPage() {
                                         unknown
                                     </span>
                                 )}
-                                {doc.confidence_score > 0 && (
-                                    <span className="text-[11px] text-[#52525b]">
-                                        {(doc.confidence_score * 100).toFixed(0)}%
-                                    </span>
-                                )}
+                                <ConfidenceBadge score={doc.confidence_score} />
                                 <span className={`text-[11px] px-2 py-0.5 rounded ${
                                     doc.status === "completed" ? "bg-[#10b981]/10 text-[#10b981]" :
                                     doc.status === "processing" ? "bg-[#f59e0b]/10 text-[#f59e0b]" :
