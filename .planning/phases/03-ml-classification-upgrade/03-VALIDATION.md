@@ -38,18 +38,19 @@ created: 2026-03-10
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 03-01-01 | 01 | 1 | AIML-01, AIML-02 | integration | `python -m app.ml.train --real-only` | ✅ existing | ⬜ pending |
-| 03-02-01 | 02 | 2 | AIML-01 | integration | `python -m app.ml.train --mode combined --max-per-category 1000` | ✅ existing | ⬜ pending |
-| 03-02-02 | 02 | 2 | AIML-04 | unit | `pytest tests/test_ml_evaluation.py -x` | ❌ W0 | ⬜ pending |
-| 03-03-01 | 03 | 3 | AIML-03 | manual-only | Visual check in browser | N/A | ⬜ pending |
+| 03-01-01 | 01 | 1 | AIML-01, AIML-02 | integration | `python -m app.ml.train --real-only` | existing | pending |
+| 03-01-02 | 01 | 1 | AIML-01 | integration | `python -m app.ml.train --mode combined --max-per-category 1000` | existing | pending |
+| 03-02-00 | 02 | 2 | AIML-04 | unit | `pytest tests/test_ml_evaluation.py --collect-only` | W0 (created by task) | pending |
+| 03-02-01 | 02 | 2 | AIML-04 | unit | `pytest tests/test_ml_evaluation.py -x` | created by 03-02-00 | pending |
+| 03-02-02 | 02 | 2 | AIML-03 | manual + automated | `npx tsc --noEmit && grep -l ConfidenceBadge src/app/dashboard/documents/page.tsx src/app/dashboard/search/page.tsx src/app/dashboard/upload/page.tsx` | existing | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `backend/tests/test_ml_evaluation.py` — test evaluation API endpoint returns valid JSON with confusion matrix, per-category metrics
+- [ ] `backend/tests/test_ml_evaluation.py` — test evaluation API endpoint returns valid JSON with confusion matrix, per-category metrics (created by Plan 03-02, Task 0)
 - [ ] `backend/tests/conftest.py` — shared fixtures (verify existing or create)
 - [ ] Verify pytest is configured to find tests in `backend/tests/`
 
