@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation & Security Hardening** - Eliminate critical security vulnerabilities and establish migration framework before adding features
 - [x] **Phase 2: Document Processing Pipeline** - Wire async processing, add format support, and improve OCR for reliable document ingestion
-- [x] **Phase 3: ML Classification Upgrade** - Train classifier on real datasets and establish model evaluation metrics (completed 2026-03-10)
+- [x] **Phase 3: ML Classification Upgrade** - Train classifier on real datasets and establish model evaluation metrics (completed 2026-03-10)
 - [ ] **Phase 4: Search & Retrieval** - Replace ILIKE with PostgreSQL full-text search, filters, and fuzzy matching
 - [ ] **Phase 5: Smart Extraction (AI)** - Add LLM-powered metadata extraction, summaries, and configurable AI providers
 - [ ] **Phase 6: Access Control & SSO** - Implement role-based access, document-level permissions, and OAuth login
@@ -83,12 +83,12 @@ Plans:
   2. User can filter search results by category, date range, and amount range -- filters combine with text search
   3. Searching for "electrcity" (typo) still returns electricity bill documents
   4. Search results return in under 2 seconds even with thousands of documents in the database
-**Plans**: TBD
+**Plans**: 3 plans in 3 waves
 
 Plans:
-- [ ] 04-01: Implement PostgreSQL FTS with tsvector columns, GIN indexes, and relevance ranking
-- [ ] 04-02: Add category, date range, and amount filters to search API and frontend
-- [ ] 04-03: Implement fuzzy matching with pg_trgm and verify sub-2-second response times
+- [ ] 04-01-PLAN.md -- Add tsvector column, GIN indexes, pg_trgm extension, and test scaffold (Wave 1)
+- [ ] 04-02-PLAN.md -- Replace ILIKE with FTS + ts_rank; add category/date/amount filters and frontend filter UI (Wave 2)
+- [ ] 04-03-PLAN.md -- Add trigram fuzzy OR-combine and verify sub-2-second performance (Wave 3)
 
 ### Phase 5: Smart Extraction (AI)
 **Goal**: Documents are automatically enriched with LLM-extracted structured data, summaries, and confidence-scored fields
@@ -177,4 +177,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 
 ---
 *Roadmap created: 2026-02-17*
-*Last updated: 2026-03-10*
+*Last updated: 2026-03-11*
