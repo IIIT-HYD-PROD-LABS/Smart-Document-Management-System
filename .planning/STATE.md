@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 04-02-PLAN.md -- FTS search endpoint with ts_rank ordering, date/amount filters, frontend filter UI
-last_updated: "2026-03-10T21:55:57.334Z"
+stopped_at: Completed 04-03-PLAN.md Task 1 -- trigram OR-combine fuzzy search; awaiting Task 2 human-verify checkpoint
+last_updated: "2026-03-10T22:03:58.122Z"
 last_activity: "2026-03-10 -- Phase 3 Plan 2 executed: ML evaluation API + confidence badges + evaluation page"
 progress:
   total_phases: 8
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 13
-  completed_plans: 8
+  completed_plans: 9
   percent: 54
 ---
 
@@ -70,6 +70,7 @@ Progress: [██████████░░░░░░░░░░░░░
 *Updated after each plan completion*
 | Phase 04-search-retrieval P01 | 15 | 3 tasks | 3 files |
 | Phase 04-search-retrieval P02 | 8 | 2 tasks | 4 files |
+| Phase 04-search-retrieval P03 | 5 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,8 @@ Recent decisions affecting current work:
 - [Phase 04-search-retrieval]: GIN index for search_vector created via op.execute() only (not SQLAlchemy Index in __table_args__) to prevent Alembic false diffs
 - [Phase 04-search-retrieval]: FTS with q > 3 char threshold: ILIKE fallback for 1-3 char queries; trigram handles typo tolerance in 04-03
 - [Phase 04-search-retrieval]: NULL guard on extracted_metadata: isnot(None) before astext.cast(Float) prevents 500 on docs without amount metadata
+- [Phase 04-search-retrieval]: OR-combine (not trigram-only): FTS handles exact/stemmed matches; trigram adds typo tolerance as supplemental path via or_(search_vector @@, extracted_text %)
+- [Phase 04-search-retrieval]: pg_trgm threshold 0.3 preserved globally; threshold change from >3 to >2 chars corrects ILIKE fallback boundary so 3-char tokens (UPI, GST) get trigram path
 
 ### Pending Todos
 
@@ -144,6 +147,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10T21:55:57.330Z
-Stopped at: Completed 04-02-PLAN.md -- FTS search endpoint with ts_rank ordering, date/amount filters, frontend filter UI
+Last session: 2026-03-10T22:03:58.117Z
+Stopped at: Completed 04-03-PLAN.md Task 1 -- trigram OR-combine fuzzy search; awaiting Task 2 human-verify checkpoint
 Resume file: None

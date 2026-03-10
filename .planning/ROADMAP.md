@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation & Security Hardening** - Eliminate critical security vulnerabilities and establish migration framework before adding features
 - [x] **Phase 2: Document Processing Pipeline** - Wire async processing, add format support, and improve OCR for reliable document ingestion
 - [x] **Phase 3: ML Classification Upgrade** - Train classifier on real datasets and establish model evaluation metrics (completed 2026-03-10)
-- [ ] **Phase 4: Search & Retrieval** - Replace ILIKE with PostgreSQL full-text search, filters, and fuzzy matching
+- [x] **Phase 4: Search & Retrieval** - Replace ILIKE with PostgreSQL full-text search, filters, and fuzzy matching (completed 2026-03-10)
 - [ ] **Phase 5: Smart Extraction (AI)** - Add LLM-powered metadata extraction, summaries, and configurable AI providers
 - [ ] **Phase 6: Access Control & SSO** - Implement role-based access, document-level permissions, and OAuth login
 - [ ] **Phase 7: UI & Analytics** - Build analytics dashboard, document preview, version control, and responsive design
@@ -169,7 +169,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 1. Foundation & Security Hardening | 4/4 | Complete | 2026-02-25 |
 | 2. Document Processing Pipeline | 4/4 | Complete | 2026-03-01 |
 | 3. ML Classification Upgrade | 2/2 | Complete   | 2026-03-10 |
-| 4. Search & Retrieval | 2/3 | In Progress|  |
+| 4. Search & Retrieval | 3/3 | Complete   | 2026-03-10 |
 | 5. Smart Extraction (AI) | 0/4 | Not started | - |
 | 6. Access Control & SSO | 0/4 | Not started | - |
 | 7. UI & Analytics | 0/4 | Not started | - |
