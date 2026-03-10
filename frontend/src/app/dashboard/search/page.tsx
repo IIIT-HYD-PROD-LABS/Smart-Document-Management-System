@@ -31,6 +31,10 @@ function ConfidenceBadge({ score }: { score: number }) {
 export default function SearchPage() {
     const [query, setQuery] = useState("");
     const [category, setCategory] = useState("");
+    const [dateFrom, setDateFrom] = useState("");
+    const [dateTo, setDateTo] = useState("");
+    const [amountMin, setAmountMin] = useState("");
+    const [amountMax, setAmountMax] = useState("");
     const [results, setResults] = useState<any[]>([]);
     const [searched, setSearched] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -40,7 +44,14 @@ export default function SearchPage() {
         if (!query.trim()) return;
         setLoading(true);
         try {
-            const res = await documentsApi.search(query, category || undefined);
+            const res = await documentsApi.search(
+                query,
+                category || undefined,
+                dateFrom || undefined,
+                dateTo || undefined,
+                amountMin !== "" ? Number(amountMin) : undefined,
+                amountMax !== "" ? Number(amountMax) : undefined,
+            );
             setResults(res.data.documents || []);
             setSearched(true);
         } catch {
@@ -51,6 +62,10 @@ export default function SearchPage() {
         }
     };
 
+    const inputClass =
+        "w-full px-3 py-2 bg-[#111113] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors";
+    const labelClass = "block text-xs text-[#71717a] mb-1";
+
     return (
         <div>
             <div className="mb-8">
@@ -58,34 +73,83 @@ export default function SearchPage() {
                 <p className="text-sm text-[#52525b] mt-1">Find documents by content or keywords</p>
             </div>
 
-            <form onSubmit={handleSearch} className="flex gap-2 mb-8">
-                <div className="relative flex-1">
-                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#52525b] w-4 h-4" />
-                    <input
-                        type="text"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 bg-[#111113] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors"
-                        placeholder="Search by content, keywords..."
-                    />
+            <form onSubmit={handleSearch} className="mb-8 space-y-4">
+                {/* Main search bar */}
+                <div className="flex gap-2">
+                    <div className="relative flex-1">
+                        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#52525b] w-4 h-4" />
+                        <input
+                            type="text"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            className="w-full pl-9 pr-3 py-2 bg-[#111113] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors"
+                            placeholder="Search by content, keywords..."
+                        />
+                    </div>
+                    <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="px-3 py-2 bg-[#111113] border border-[#27272a] rounded-md text-sm text-[#a1a1aa] focus:outline-none focus:border-[#3f3f46] transition-colors cursor-pointer"
+                    >
+                        <option value="">All</option>
+                        {categories.filter(Boolean).map((c) => (
+                            <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                        ))}
+                    </select>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="px-4 py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] disabled:opacity-50 transition-colors cursor-pointer"
+                    >
+                        {loading ? "..." : "Search"}
+                    </button>
                 </div>
-                <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="px-3 py-2 bg-[#111113] border border-[#27272a] rounded-md text-sm text-[#a1a1aa] focus:outline-none focus:border-[#3f3f46] transition-colors cursor-pointer"
-                >
-                    <option value="">All</option>
-                    {categories.filter(Boolean).map((c) => (
-                        <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                    ))}
-                </select>
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] disabled:opacity-50 transition-colors cursor-pointer"
-                >
-                    {loading ? "..." : "Search"}
-                </button>
+
+                {/* Filter panel */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-[#0d0d0f] border border-[#27272a] rounded-lg">
+                    <div>
+                        <label className={labelClass}>Date from</label>
+                        <input
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                            className={inputClass}
+                        />
+                    </div>
+                    <div>
+                        <label className={labelClass}>Date to</label>
+                        <input
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                            className={inputClass}
+                        />
+                    </div>
+                    <div>
+                        <label className={labelClass}>Min amount</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={amountMin}
+                            onChange={(e) => setAmountMin(e.target.value)}
+                            placeholder="0.00"
+                            className={inputClass}
+                        />
+                    </div>
+                    <div>
+                        <label className={labelClass}>Max amount</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={amountMax}
+                            onChange={(e) => setAmountMax(e.target.value)}
+                            placeholder="Any"
+                            className={inputClass}
+                        />
+                    </div>
+                </div>
             </form>
 
             {searched && (
