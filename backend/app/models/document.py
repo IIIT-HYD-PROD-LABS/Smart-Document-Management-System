@@ -6,6 +6,7 @@ from sqlalchemy import (
     Column, Integer, String, Float, Text, DateTime, Enum,
     ForeignKey, Index, JSON,
 )
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -62,6 +63,11 @@ class Document(Base):
     # Async processing
     celery_task_id = Column(String(255), nullable=True, index=True)
     extracted_metadata = Column(JSON, nullable=True)
+
+    # Full-text search vector (populated by trigger on INSERT/UPDATE; managed by migration 0003)
+    # CRITICAL: No Index(...) here -- GIN index is created via op.execute() in migration to avoid
+    # Alembic autogenerate false-diff bug (issue #1390)
+    search_vector = Column(TSVECTOR, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
