@@ -73,13 +73,13 @@ class TestGetEvaluationReport:
         assert "evaluation report" in response.json()["detail"].lower()
 
     def test_requires_authentication(self, unauthenticated_client, evaluation_report_file):
-        """Endpoint rejects unauthenticated requests (403 due to missing Bearer)."""
+        """Endpoint rejects unauthenticated requests without Bearer token."""
         with patch("app.routers.ml.settings") as mock_settings:
             mock_settings.MODEL_DIR = str(evaluation_report_file)
             response = unauthenticated_client.get("/api/ml/evaluation")
 
-        # FastAPI's HTTPBearer returns 403 when no credentials are provided
-        assert response.status_code == 403
+        # HTTPBearer rejects missing credentials with 401 or 403
+        assert response.status_code in (401, 403)
 
     def test_classification_report_structure(self, client, evaluation_report_file):
         """Each category in classification_report has precision, recall, f1-score, support."""
