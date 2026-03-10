@@ -1,0 +1,124 @@
+{
+  "data_source": "combined",
+  "total_samples": 2050,
+  "train_size": 1435,
+  "val_size": 307,
+  "test_size": 308,
+  "best_model": "Linear SVC",
+  "test_accuracy": 0.8506,
+  "cv_mean": 0.8697,
+  "cv_std": 0.0185,
+  "vocabulary_size": 15000,
+  "lr_validation_accuracy": 0.8599,
+  "nb_validation_accuracy": 0.8697,
+  "svc_validation_accuracy": 0.8827,
+  "classification_report": {
+    "bank": {
+      "precision": 0.7087378640776699,
+      "recall": 0.8902439024390244,
+      "f1-score": 0.7891891891891892,
+      "support": 82.0
+    },
+    "bills": {
+      "precision": 0.9666666666666667,
+      "recall": 0.6444444444444445,
+      "f1-score": 0.7733333333333334,
+      "support": 45.0
+    },
+    "invoices": {
+      "precision": 0.7543859649122807,
+      "recall": 0.6935483870967742,
+      "f1-score": 0.7226890756302521,
+      "support": 62.0
+    },
+    "tax": {
+      "precision": 0.972972972972973,
+      "recall": 0.9473684210526315,
+      "f1-score": 0.9599999999999999,
+      "support": 38.0
+    },
+    "tickets": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 33.0
+    },
+    "upi": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 48.0
+    },
+    "accuracy": 0.8506493506493507,
+    "macro avg": {
+      "precision": 0.9004605781049317,
+      "recall": 0.8626008591721458,
+      "f1-score": 0.8742019330254625,
+      "support": 308.0
+    },
+    "weighted avg": {
+      "precision": 0.8648097651035821,
+      "recall": 0.8506493506493507,
+      "f1-score": 0.8500007668915232,
+      "support": 308.0
+    }
+  },
+  "confusion_matrix": [
+    [
+      73,
+      0,
+      9,
+      0,
+      0,
+      0
+    ],
+    [
+      11,
+      29,
+      5,
+      0,
+      0,
+      0
+    ],
+    [
+      17,
+      1,
+      43,
+      1,
+      0,
+      0
+    ],
+    [
+      2,
+      0,
+      0,
+      36,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      33,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      48
+    ]
+  ],
+  "categories": [
+    "bank",
+    "bills",
+    "invoices",
+    "tax",
+    "tickets",
+    "upi"
+  ]
+}
