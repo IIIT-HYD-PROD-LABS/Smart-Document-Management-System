@@ -5,8 +5,7 @@ from pathlib import Path
 from datetime import datetime, date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, Query, status
-from sqlalchemy import func, or_, case, literal, Float
-from sqlalchemy.exc import DataError
+from sqlalchemy import func, or_, Float
 from sqlalchemy.orm import Session
 
 from app.config import settings
