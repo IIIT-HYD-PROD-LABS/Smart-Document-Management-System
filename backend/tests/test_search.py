@@ -63,12 +63,10 @@ def test_fts_returns_ranked_results(monkeypatch):
     fake_doc = _make_doc()
 
     # Patch get_current_user dependency
-    from app.utils.security import get_current_user
-    from app.routers import documents as doc_router
-    fake_user = MagicMock()
-    fake_user.id = 1
+    test_user = MagicMock()
+    test_user.id = 1
 
-    with patch("app.utils.security.get_current_user", return_value=fake_user):
+    with patch("app.utils.security.get_current_user", return_value=test_user):
         # Patch the DB session
         mock_db = MagicMock()
         mock_query = MagicMock()
@@ -172,17 +170,15 @@ def pg_db():
     db_url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
     if not db_url or "sqlite" in db_url:
         pytest.skip("Real PostgreSQL required for FTS/trigram tests")
+    engine = create_engine(db_url)
     try:
-        engine = create_engine(db_url)
-        # Verify connection is reachable
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        Session = sessionmaker(bind=engine)
-        session = Session()
-        yield session
-        session.close()
     except Exception as exc:
         pytest.skip(f"PostgreSQL not reachable: {exc}")
+    session = sessionmaker(bind=engine)()
+    yield session
+    session.close()
 
 
 def test_fuzzy_typo_matching(pg_db):
