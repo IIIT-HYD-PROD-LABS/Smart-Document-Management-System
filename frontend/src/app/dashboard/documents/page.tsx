@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
 import { FiFileText, FiTrash2, FiFilter } from "react-icons/fi";
 
@@ -29,6 +30,7 @@ function ConfidenceBadge({ score }: { score: number }) {
 }
 
 export default function DocumentsPage() {
+    const router = useRouter();
     const [docs, setDocs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState("all");
@@ -94,7 +96,11 @@ export default function DocumentsPage() {
             {filtered.length > 0 ? (
                 <div className="bg-[#111113] border border-[#27272a] rounded-lg divide-y divide-[#1f1f23]">
                     {filtered.map((doc) => (
-                        <div key={doc.id} className="flex items-center gap-4 px-5 py-4 hover:bg-[#18181b] transition-colors group">
+                        <div
+                            key={doc.id}
+                            onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
+                            className="flex items-center gap-4 px-5 py-4 hover:bg-[#18181b] transition-colors group cursor-pointer"
+                        >
                             <FiFileText className="w-4 h-4 text-[#52525b] shrink-0" />
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm text-white truncate">{doc.original_filename}</p>
