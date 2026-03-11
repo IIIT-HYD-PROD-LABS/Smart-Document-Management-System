@@ -167,10 +167,14 @@ def search_documents(
     else:
         search_query = func.plainto_tsquery("english", q)
         rank_expr = func.ts_rank(Document.search_vector, search_query)
+        # Escape LIKE wildcards for filename search
+        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        filename_term = f"%{escaped}%"
         query = query.filter(
             or_(
                 Document.search_vector.op("@@")(search_query),    # FTS: stemmed exact match
                 Document.extracted_text.op("%")(q),               # trigram: typo tolerance
+                Document.original_filename.ilike(filename_term),  # filename match
             )
         )
 
