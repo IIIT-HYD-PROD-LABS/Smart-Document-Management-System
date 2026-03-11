@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
-import { FiFileText, FiTrash2, FiFilter } from "react-icons/fi";
+import { FiFileText, FiTrash2, FiFilter, FiCheckSquare, FiSquare, FiX } from "react-icons/fi";
 
 const categories = ["all", "bills", "upi", "tickets", "tax", "bank", "invoices", "unknown"];
 
@@ -34,6 +34,8 @@ export default function DocumentsPage() {
     const [docs, setDocs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState("all");
+    const [selected, setSelected] = useState<Set<number>>(new Set());
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
         loadDocs();
@@ -54,10 +56,43 @@ export default function DocumentsPage() {
         try {
             await documentsApi.delete(id);
             setDocs((prev) => prev.filter((d) => d.id !== id));
+            setSelected((prev) => { const next = new Set(prev); next.delete(id); return next; });
         } catch {}
     };
 
+    const handleBatchDelete = async () => {
+        if (selected.size === 0) return;
+        setDeleting(true);
+        try {
+            const ids = Array.from(selected);
+            await documentsApi.batchDelete(ids);
+            setDocs((prev) => prev.filter((d) => !selected.has(d.id)));
+            setSelected(new Set());
+        } catch {}
+        setDeleting(false);
+    };
+
+    const toggleSelect = (id: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
     const filtered = filter === "all" ? docs : docs.filter((d) => d.category === filter);
+
+    const toggleSelectAll = () => {
+        if (selected.size === filtered.length) {
+            setSelected(new Set());
+        } else {
+            setSelected(new Set(filtered.map((d) => d.id)));
+        }
+    };
+
+    const isSelectMode = selected.size > 0;
 
     if (loading) {
         return (
@@ -75,6 +110,38 @@ export default function DocumentsPage() {
                     <p className="text-sm text-[#52525b] mt-1">{docs.length} document{docs.length !== 1 ? "s" : ""} in your library</p>
                 </div>
             </div>
+
+            {/* Bulk action bar */}
+            {isSelectMode && (
+                <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-[#18181b] border border-[#3f3f46] rounded-lg">
+                    <button
+                        onClick={toggleSelectAll}
+                        className="flex items-center gap-2 text-xs text-[#a1a1aa] hover:text-white transition-colors cursor-pointer"
+                    >
+                        {selected.size === filtered.length
+                            ? <FiCheckSquare className="w-4 h-4 text-[#3b82f6]" />
+                            : <FiSquare className="w-4 h-4" />}
+                        {selected.size === filtered.length ? "Deselect all" : "Select all"}
+                    </button>
+                    <span className="text-xs text-[#52525b]">|</span>
+                    <span className="text-xs text-white">{selected.size} selected</span>
+                    <div className="flex-1" />
+                    <button
+                        onClick={handleBatchDelete}
+                        disabled={deleting}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#ef4444]/10 text-[#ef4444] rounded-md hover:bg-[#ef4444]/20 disabled:opacity-50 transition-colors cursor-pointer"
+                    >
+                        <FiTrash2 className="w-3.5 h-3.5" />
+                        {deleting ? "Deleting..." : `Delete ${selected.size}`}
+                    </button>
+                    <button
+                        onClick={() => setSelected(new Set())}
+                        className="text-[#52525b] hover:text-white transition-colors cursor-pointer"
+                    >
+                        <FiX className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
 
             <div className="flex items-center gap-1.5 mb-6">
                 <FiFilter className="w-3.5 h-3.5 text-[#52525b] mr-1" />
@@ -98,9 +165,21 @@ export default function DocumentsPage() {
                     {filtered.map((doc) => (
                         <div
                             key={doc.id}
-                            onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
-                            className="flex items-center gap-4 px-5 py-4 hover:bg-[#18181b] transition-colors group cursor-pointer"
+                            onClick={() => isSelectMode ? toggleSelect(doc.id, { stopPropagation: () => {} } as React.MouseEvent) : router.push(`/dashboard/documents/${doc.id}`)}
+                            className={`flex items-center gap-4 px-5 py-4 hover:bg-[#18181b] transition-colors group cursor-pointer ${
+                                selected.has(doc.id) ? "bg-[#3b82f6]/5" : ""
+                            }`}
                         >
+                            {/* Checkbox */}
+                            <div
+                                onClick={(e) => toggleSelect(doc.id, e)}
+                                className="shrink-0"
+                            >
+                                {selected.has(doc.id)
+                                    ? <FiCheckSquare className="w-4 h-4 text-[#3b82f6]" />
+                                    : <FiSquare className={`w-4 h-4 ${isSelectMode ? "text-[#52525b]" : "text-[#27272a] group-hover:text-[#52525b]"} transition-colors`} />}
+                            </div>
+
                             <FiFileText className="w-4 h-4 text-[#52525b] shrink-0" />
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm text-white truncate">{doc.original_filename}</p>
@@ -128,7 +207,7 @@ export default function DocumentsPage() {
                                     {doc.status}
                                 </span>
                                 <button
-                                    onClick={() => handleDelete(doc.id)}
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
                                     className="opacity-0 group-hover:opacity-100 text-[#52525b] hover:text-[#ef4444] transition-all cursor-pointer"
                                 >
                                     <FiTrash2 className="w-3.5 h-3.5" />

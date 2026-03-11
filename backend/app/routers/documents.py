@@ -363,6 +363,31 @@ def get_document(
     return DocumentResponse.model_validate(doc)
 
 
+@router.post("/batch-delete", status_code=status.HTTP_200_OK)
+def batch_delete_documents(
+    ids: list[int],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete multiple documents at once."""
+    if not ids or len(ids) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide 1-100 document IDs.",
+        )
+    docs = db.query(Document).filter(
+        Document.id.in_(ids),
+        Document.user_id == current_user.id,
+    ).all()
+    deleted = []
+    for doc in docs:
+        delete_file(doc.file_path, doc.s3_url)
+        db.delete(doc)
+        deleted.append(doc.id)
+    db.commit()
+    return {"deleted": deleted, "count": len(deleted)}
+
+
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(
     document_id: int,

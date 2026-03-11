@@ -182,6 +182,9 @@ export const documentsApi = {
 
     delete: (id: number) =>
         api.delete(`/documents/${id}`),
+
+    batchDelete: (ids: number[]) =>
+        api.post("/documents/batch-delete", ids),
 };
 
 // ──── ML API ────
