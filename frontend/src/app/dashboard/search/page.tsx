@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
 import { FiSearch, FiFileText } from "react-icons/fi";
 
@@ -29,6 +30,7 @@ function ConfidenceBadge({ score }: { score: number }) {
 }
 
 export default function SearchPage() {
+    const router = useRouter();
     const [query, setQuery] = useState("");
     const [category, setCategory] = useState("");
     const [dateFrom, setDateFrom] = useState("");
@@ -160,7 +162,11 @@ export default function SearchPage() {
                     {results.length > 0 ? (
                         <div className="bg-[#111113] border border-[#27272a] rounded-lg divide-y divide-[#1f1f23]">
                             {results.map((doc) => (
-                                <div key={doc.id} className="px-5 py-4">
+                                <div
+                                    key={doc.id}
+                                    onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
+                                    className="px-5 py-4 hover:bg-[#18181b] transition-colors cursor-pointer"
+                                >
                                     <div className="flex items-center gap-3 mb-2">
                                         <FiFileText className="w-4 h-4 text-[#52525b]" />
                                         <span className="text-sm text-white">{doc.original_filename}</span>
