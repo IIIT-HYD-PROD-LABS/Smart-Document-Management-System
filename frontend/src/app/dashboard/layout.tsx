@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
-import { FiHome, FiUpload, FiSearch, FiBarChart2, FiLogOut, FiFileText } from "react-icons/fi";
+import { FiHome, FiUpload, FiSearch, FiBarChart2, FiLogOut, FiFileText, FiSettings } from "react-icons/fi";
 
 const navItems = [
     { href: "/dashboard", icon: FiHome, label: "Overview" },
@@ -12,6 +12,7 @@ const navItems = [
     { href: "/dashboard/documents", icon: FiFileText, label: "Documents" },
     { href: "/dashboard/search", icon: FiSearch, label: "Search" },
     { href: "/dashboard/analytics", icon: FiBarChart2, label: "Analytics" },
+    { href: "/dashboard/settings", icon: FiSettings, label: "Settings" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
