@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation & Security Hardening** - Eliminate critical security vulnerabilities and establish migration framework before adding features
 - [x] **Phase 2: Document Processing Pipeline** - Wire async processing, add format support, and improve OCR for reliable document ingestion
 - [x] **Phase 3: ML Classification Upgrade** - Train classifier on real datasets and establish model evaluation metrics (completed 2026-03-10)
-- [x] **Phase 4: Search & Retrieval** - Replace ILIKE with PostgreSQL full-text search, filters, and fuzzy matching (completed 2026-03-10)
+- [x] **Phase 4: Search & Retrieval** - Replace ILIKE with PostgreSQL full-text search, filters, and fuzzy matching (completed 2026-03-10)
 - [ ] **Phase 5: Smart Extraction (AI)** - Add LLM-powered metadata extraction, summaries, and configurable AI providers
 - [ ] **Phase 6: Access Control & SSO** - Implement role-based access, document-level permissions, and OAuth login
 - [ ] **Phase 7: UI & Analytics** - Build analytics dashboard, document preview, version control, and responsive design
@@ -100,13 +100,13 @@ Plans:
   3. Each document has an AI-generated one-paragraph summary visible on the document detail view
   4. Each extracted field shows a confidence score so users know which extractions to trust vs. verify
   5. Extraction works asynchronously -- users are not blocked waiting for LLM responses
-**Plans**: TBD
+**Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] 05-01: Build LLM extraction service with provider abstraction (OpenAI, Anthropic, local fallback)
-- [ ] 05-02: Implement document-type-specific extraction prompts and structured JSON output
-- [ ] 05-03: Add AI summarization, confidence scoring, and extraction results UI
-- [ ] 05-04: Build provider configuration settings page and integrate with async pipeline
+- [ ] 05-01-PLAN.md -- LLM service foundation: models, migration, provider factory, extraction schemas, extraction service (Wave 1)
+- [ ] 05-02-PLAN.md -- Document-type-specific extraction prompts and Celery pipeline integration (Wave 2)
+- [ ] 05-03-PLAN.md -- Settings API and frontend settings page for LLM provider configuration (Wave 2, parallel with 05-02)
+- [ ] 05-04-PLAN.md -- Document detail page with AI summary, extracted fields, and confidence badges (Wave 3)
 
 ### Phase 6: Access Control & SSO
 **Goal**: Multiple users can share a system with role-based permissions, document-level sharing, and enterprise login options
@@ -177,4 +177,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 
 ---
 *Roadmap created: 2026-02-17*
-*Last updated: 2026-03-11*
+*Last updated: 2026-03-17*
