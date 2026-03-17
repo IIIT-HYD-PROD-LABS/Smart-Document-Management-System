@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-stopped_at: Completed 05-02-PLAN.md -- LLM pipeline integration (prompts + Celery wiring)
+stopped_at: Completed 05-03-PLAN.md -- LLM settings API and settings page
 last_updated: "2026-03-17"
-last_activity: "2026-03-17 -- Phase 5 plan 02 complete (LLM pipeline integration)"
+last_activity: "2026-03-17 -- Phase 5 plan 03 complete (settings API + UI)"
 progress:
   total_phases: 8
   completed_phases: 4
-  total_plans: 15
-  completed_plans: 15
-  percent: 52
+  total_plans: 16
+  completed_plans: 16
+  percent: 55
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Automated classification and intelligent organization of personal and business documents -- upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
-**Current focus:** Phase 5 Smart Extraction (AI) -- plan 02 complete (pipeline integration), next: 05-03 (API endpoints)
+**Current focus:** Phase 5 Smart Extraction (AI) -- plan 03 complete (settings API + UI), next: 05-04 (extraction endpoint)
 
 ## Current Position
 
 Phase: 5 of 8 (Smart Extraction AI) -- In progress
-Plan: 2 of 4 in current phase
-Status: Plan 05-02 complete. Category-specific prompts for 6 doc types wired into Celery pipeline with non-fatal AI extraction stage.
-Last activity: 2026-03-17 -- Completed 05-02-PLAN.md (LLM pipeline integration)
+Plan: 3 of 4 in current phase
+Status: Plan 05-03 complete. Settings API (GET/PUT) with encrypted key storage and 4-provider settings page.
+Last activity: 2026-03-17 -- Completed 05-03-PLAN.md (settings API + settings page)
 
-Progress: [███████████████░░░░░░░░░░░░░░] 15/29 (52%)
+Progress: [████████████████░░░░░░░░░░░░░] 16/29 (55%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
+- Total plans completed: 16
 - Average duration: ~8min
-- Total execution time: ~118min
+- Total execution time: ~122min
 
 **By Phase:**
 
@@ -47,11 +47,11 @@ Progress: [███████████████░░░░░░░░
 | 02-document-processing-pipeline | 4/4 | ~24min | ~6min |
 | 03-ml-classification-upgrade | 2/2 | 19min | ~10min |
 | 04-search-retrieval | 3/3 | ~28min | ~9min |
-| 05-smart-extraction-ai | 2/4 | 6min | 3min |
+| 05-smart-extraction-ai | 3/4 | 10min | ~3min |
 
 **Recent Trend:**
-- Last 5 plans: 04-01 (15min), 04-02 (8min), 04-03 (5min), 05-01 (4min), 05-02 (2min)
-- Trend: Fast (backend-only plans without UI are quick)
+- Last 5 plans: 04-02 (8min), 04-03 (5min), 05-01 (4min), 05-02 (2min), 05-03 (4min)
+- Trend: Fast execution continues; full-stack plans (backend+frontend) still under 5min
 
 *Updated after each plan completion*
 
@@ -112,6 +112,10 @@ Recent decisions affecting current work:
 - [05-02]: LLM extraction stage is entirely non-fatal in Celery pipeline (broad except catches all)
 - [05-02]: 50-char minimum text threshold before attempting LLM extraction
 - [05-02]: Celery progress stages now: reading(10%) > extracting(30%) > metadata(50%) > ai(70%) > saving(85%)
+- [05-03]: Settings router at /api/settings prefix, separate from /api/documents and /api/ml
+- [05-03]: Provider validation via Pydantic regex pattern (gemini|openai|anthropic|local)
+- [05-03]: API key only sent to backend when user types new value; blank preserves existing encrypted key
+- [05-03]: Decryption failure non-fatal in GET: logged as warning, api_key_set=true, last4=null
 
 ### Pending Todos
 
@@ -140,6 +144,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T11:50:08Z
-Stopped at: Completed 05-02-PLAN.md -- LLM pipeline integration
+Last session: 2026-03-17T11:56:55Z
+Stopped at: Completed 05-03-PLAN.md -- LLM settings API and settings page
 Resume file: None
