@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-stopped_at: Completed 05-01-PLAN.md -- LLM extraction foundation (models, provider factory, extraction service)
+stopped_at: Completed 05-02-PLAN.md -- LLM pipeline integration (prompts + Celery wiring)
 last_updated: "2026-03-17"
-last_activity: "2026-03-17 -- Phase 5 plan 01 complete (LLM extraction foundation)"
+last_activity: "2026-03-17 -- Phase 5 plan 02 complete (LLM pipeline integration)"
 progress:
   total_phases: 8
   completed_phases: 4
-  total_plans: 14
-  completed_plans: 14
-  percent: 48
+  total_plans: 15
+  completed_plans: 15
+  percent: 52
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Automated classification and intelligent organization of personal and business documents -- upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
-**Current focus:** Phase 5 Smart Extraction (AI) -- plan 01 complete (foundation), next: 05-02 (API endpoints)
+**Current focus:** Phase 5 Smart Extraction (AI) -- plan 02 complete (pipeline integration), next: 05-03 (API endpoints)
 
 ## Current Position
 
 Phase: 5 of 8 (Smart Extraction AI) -- In progress
-Plan: 1 of 4 in current phase
-Status: Plan 05-01 complete. Foundation laid: UserLLMSettings model, Document AI columns, migration 0004, LLM provider factory, extraction service.
-Last activity: 2026-03-17 -- Completed 05-01-PLAN.md (LLM extraction foundation)
+Plan: 2 of 4 in current phase
+Status: Plan 05-02 complete. Category-specific prompts for 6 doc types wired into Celery pipeline with non-fatal AI extraction stage.
+Last activity: 2026-03-17 -- Completed 05-02-PLAN.md (LLM pipeline integration)
 
-Progress: [██████████████░░░░░░░░░░░░░░░] 14/29 (48%)
+Progress: [███████████████░░░░░░░░░░░░░░] 15/29 (52%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
+- Total plans completed: 15
 - Average duration: ~8min
-- Total execution time: ~116min
+- Total execution time: ~118min
 
 **By Phase:**
 
@@ -47,11 +47,11 @@ Progress: [██████████████░░░░░░░░░
 | 02-document-processing-pipeline | 4/4 | ~24min | ~6min |
 | 03-ml-classification-upgrade | 2/2 | 19min | ~10min |
 | 04-search-retrieval | 3/3 | ~28min | ~9min |
-| 05-smart-extraction-ai | 1/4 | 4min | 4min |
+| 05-smart-extraction-ai | 2/4 | 6min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 03-02 (6min), 04-01 (15min), 04-02 (8min), 04-03 (5min), 05-01 (4min)
-- Trend: Fast (foundation plans without UI are quick)
+- Last 5 plans: 04-01 (15min), 04-02 (8min), 04-03 (5min), 05-01 (4min), 05-02 (2min)
+- Trend: Fast (backend-only plans without UI are quick)
 
 *Updated after each plan completion*
 
@@ -108,6 +108,10 @@ Recent decisions affecting current work:
 - [05-01]: Regex fallback with confidence=0.3 when LLM call fails for graceful degradation
 - [05-01]: MAX_CHARS=50000 silent truncation to fit within LLM context windows
 - [05-01]: Migration 0004 uses op.execute() for index creation consistent with project Alembic pattern
+- [05-02]: Composable prompt pattern: BASE_SYSTEM_PROMPT + CATEGORY_HINTS[category] for 6 doc types
+- [05-02]: LLM extraction stage is entirely non-fatal in Celery pipeline (broad except catches all)
+- [05-02]: 50-char minimum text threshold before attempting LLM extraction
+- [05-02]: Celery progress stages now: reading(10%) > extracting(30%) > metadata(50%) > ai(70%) > saving(85%)
 
 ### Pending Todos
 
@@ -132,10 +136,10 @@ None.
 - ~~New models in future phases must be imported in backend/alembic/env.py for autogenerate to work~~ UserLLMSettings registered in 05-01
 - ~~Metadata extraction is regex-based v1~~ Phase 5 LLM extraction service now provides structured extraction with fallback
 - ~~ML classifier trained on synthetic data only~~ RESOLVED: real dataset pipeline operational
-- Migration 0004 must be applied to database before AI extraction endpoints are used (05-02)
+- Migration 0004 must be applied to database before AI extraction endpoints are used (05-03)
 
 ## Session Continuity
 
-Last session: 2026-03-17T11:45:03Z
-Stopped at: Completed 05-01-PLAN.md -- LLM extraction foundation
+Last session: 2026-03-17T11:50:08Z
+Stopped at: Completed 05-02-PLAN.md -- LLM pipeline integration
 Resume file: None
