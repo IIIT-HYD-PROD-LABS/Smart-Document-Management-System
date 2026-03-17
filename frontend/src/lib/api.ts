@@ -192,4 +192,15 @@ export const mlApi = {
     getEvaluation: () => api.get("/ml/evaluation"),
 };
 
+// ──── Settings API ────
+export const settingsApi = {
+    getLLMSettings: () => api.get("/settings/llm"),
+    updateLLMSettings: (data: {
+        llm_provider: string;
+        model_name?: string | null;
+        api_key?: string | null;
+        ollama_base_url?: string | null;
+    }) => api.put("/settings/llm", data),
+};
+
 export default api;
