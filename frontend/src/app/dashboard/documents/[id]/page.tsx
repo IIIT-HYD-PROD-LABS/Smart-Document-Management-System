@@ -5,6 +5,19 @@ import { useParams, useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
 import { FiArrowLeft, FiFile, FiCalendar, FiTag, FiHash, FiCopy, FiCheck } from "react-icons/fi";
 
+interface ExtractedFieldItem {
+    value: string;
+    confidence: number;
+}
+
+interface AIExtractedData {
+    dates?: ExtractedFieldItem[];
+    amounts?: ExtractedFieldItem[];
+    parties?: ExtractedFieldItem[];
+    key_terms?: ExtractedFieldItem[];
+    [key: string]: ExtractedFieldItem[] | undefined;
+}
+
 interface DocumentDetail {
     id: number;
     filename: string;
@@ -15,6 +28,9 @@ interface DocumentDetail {
     confidence_score: number;
     extracted_text: string | null;
     extracted_metadata: Record<string, unknown> | null;
+    ai_summary: string | null;
+    ai_extracted_data: AIExtractedData | null;
+    extraction_status: string | null;
     status: string;
     s3_url: string | null;
     created_at: string;
@@ -35,6 +51,36 @@ function StatusBadge({ status }: { status: string }) {
     );
 }
 
+function ExtractionStatusBadge({ status }: { status: string | null }) {
+    if (!status) return null;
+    const config: Record<string, { bg: string; text: string; label: string }> = {
+        completed: { bg: "bg-[#10b981]/10", text: "text-[#10b981]", label: "AI Extracted" },
+        processing: { bg: "bg-[#f59e0b]/10", text: "text-[#f59e0b]", label: "AI Processing" },
+        pending: { bg: "bg-[#3b82f6]/10", text: "text-[#3b82f6]", label: "AI Pending" },
+        failed: { bg: "bg-[#ef4444]/10", text: "text-[#ef4444]", label: "AI Failed" },
+    };
+    const c = config[status];
+    if (!c) return null;
+    return (
+        <span className={`text-xs px-2.5 py-1 rounded-md ${c.bg} ${c.text}`}>
+            {c.label}
+        </span>
+    );
+}
+
+function ExtractionConfidenceBadge({ confidence }: { confidence: number }) {
+    const pct = Math.round(confidence * 100);
+    let color: string;
+    if (confidence >= 0.8) color = "bg-[#10b981]/10 text-[#10b981]";
+    else if (confidence >= 0.5) color = "bg-[#f59e0b]/10 text-[#f59e0b]";
+    else color = "bg-[#ef4444]/10 text-[#ef4444]";
+    return (
+        <span className={`text-[10px] px-1.5 py-0.5 rounded ${color} font-medium`}>
+            {pct}%
+        </span>
+    );
+}
+
 function ConfidenceBadge({ score }: { score: number }) {
     if (score <= 0) return null;
     const pct = Math.round(score * 100);
@@ -50,6 +96,34 @@ function MetadataItem({ label, value }: { label: string; value: string }) {
         <div>
             <p className="text-[11px] text-[#52525b] uppercase tracking-wider mb-1">{label}</p>
             <p className="text-sm text-white">{value}</p>
+        </div>
+    );
+}
+
+const FIELD_GROUP_LABELS: Record<string, string> = {
+    dates: "Dates",
+    amounts: "Amounts",
+    parties: "Parties",
+    key_terms: "Key Terms",
+};
+
+function renderFieldGroup(groupKey: string, items: ExtractedFieldItem[]) {
+    if (!items || items.length === 0) return null;
+    const label = FIELD_GROUP_LABELS[groupKey] || groupKey;
+    return (
+        <div key={groupKey}>
+            <p className="text-[11px] text-[#52525b] uppercase tracking-wider mb-2">{label}</p>
+            <div className="flex flex-wrap gap-2">
+                {items.map((item, idx) => (
+                    <span
+                        key={`${groupKey}-${idx}`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-[#18181b] border border-[#27272a] rounded-md text-sm text-white"
+                    >
+                        {item.value}
+                        <ExtractionConfidenceBadge confidence={item.confidence} />
+                    </span>
+                ))}
+            </div>
         </div>
     );
 }
@@ -101,6 +175,8 @@ export default function DocumentDetailPage() {
         ? `${(doc.file_size / (1024 * 1024)).toFixed(1)} MB`
         : `${(doc.file_size / 1024).toFixed(1)} KB`;
 
+    const hasAIData = doc.ai_summary || (doc.ai_extracted_data && Object.keys(doc.ai_extracted_data).length > 0);
+
     return (
         <div className="max-w-4xl">
             {/* Back button */}
@@ -123,7 +199,10 @@ export default function DocumentDetailPage() {
                         <p className="text-xs text-[#52525b] mt-1">{fileSize} &middot; {doc.file_type.toUpperCase()}</p>
                     </div>
                 </div>
-                <StatusBadge status={doc.status} />
+                <div className="flex items-center gap-2">
+                    <ExtractionStatusBadge status={doc.extraction_status} />
+                    <StatusBadge status={doc.status} />
+                </div>
             </div>
 
             {/* Info grid */}
@@ -148,6 +227,38 @@ export default function DocumentDetailPage() {
                     <MetadataItem label="File ID" value={`#${doc.id}`} />
                 </div>
             </div>
+
+            {/* AI Summary section -- only if ai_summary exists */}
+            {doc.ai_summary && (
+                <div className="p-5 bg-[#111113] border border-[#27272a] rounded-lg mb-6">
+                    <h2 className="text-sm font-medium text-white mb-3">AI Summary</h2>
+                    <p className="text-sm text-[#a1a1aa] leading-relaxed whitespace-pre-wrap">
+                        {doc.ai_summary}
+                    </p>
+                </div>
+            )}
+
+            {/* AI Extracted Fields section -- only if ai_extracted_data has content */}
+            {doc.ai_extracted_data && Object.keys(doc.ai_extracted_data).length > 0 && (
+                <div className="p-5 bg-[#111113] border border-[#27272a] rounded-lg mb-6">
+                    <h2 className="text-sm font-medium text-white mb-4">AI Extracted Fields</h2>
+                    <div className="space-y-4">
+                        {(["dates", "amounts", "parties", "key_terms"] as const).map((groupKey) => {
+                            const items = doc.ai_extracted_data?.[groupKey];
+                            if (!items || items.length === 0) return null;
+                            return renderFieldGroup(groupKey, items);
+                        })}
+                        {/* Render any additional field groups not in the standard set */}
+                        {Object.keys(doc.ai_extracted_data)
+                            .filter((k) => !["dates", "amounts", "parties", "key_terms"].includes(k))
+                            .map((groupKey) => {
+                                const items = doc.ai_extracted_data?.[groupKey];
+                                if (!items || items.length === 0) return null;
+                                return renderFieldGroup(groupKey, items);
+                            })}
+                    </div>
+                </div>
+            )}
 
             {/* Extracted metadata */}
             {doc.extracted_metadata && Object.keys(doc.extracted_metadata).length > 0 && (
