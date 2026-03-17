@@ -64,6 +64,11 @@ class Document(Base):
     celery_task_id = Column(String(255), nullable=True, index=True)
     extracted_metadata = Column(JSON, nullable=True)
 
+    # AI extraction (Phase 5) -- populated by LLM extraction service
+    ai_summary = Column(Text, nullable=True)
+    ai_extracted_data = Column(JSON, nullable=True)
+    extraction_status = Column(String(50), nullable=True, default=None)
+
     # Full-text search vector (populated by trigger on INSERT/UPDATE; managed by migration 0003)
     # CRITICAL: No Index(...) here -- GIN index is created via op.execute() in migration to avoid
     # Alembic autogenerate false-diff bug (issue #1390)

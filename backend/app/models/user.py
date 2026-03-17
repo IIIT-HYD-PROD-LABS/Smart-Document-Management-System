@@ -22,8 +22,9 @@ class User(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    # Relationship
+    # Relationships
     documents = relationship("Document", back_populates="owner", cascade="all, delete-orphan")
+    llm_settings = relationship("UserLLMSettings", back_populates="owner", uselist=False)
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
