@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import structlog
 
+from app.services.llm.prompts import get_extraction_prompt
 from app.services.llm.schemas import DocumentExtraction, ExtractedField
 
 logger = structlog.stdlib.get_logger()
@@ -52,20 +53,13 @@ def extract_with_llm(
 
         client, model = get_llm_client(provider, api_key, model_name)
 
-        system_prompt = (
-            f"You are a document data extraction assistant. "
-            f"The document is categorized as '{category}'. "
-            f"Extract all dates, monetary amounts, party/entity names, and key terms. "
-            f"Provide a one-paragraph summary. "
-            f"For each extracted field, estimate a confidence score between 0.0 and 1.0. "
-            f"If a field type has no matches, return an empty list for it."
-        )
+        system_prompt = get_extraction_prompt(category)
 
         result = client.chat.completions.create(
             response_model=DocumentExtraction,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text},
+                {"role": "user", "content": f"Document text:\n\n{text}"},
             ],
             model=model,
         )
