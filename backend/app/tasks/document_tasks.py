@@ -55,12 +55,70 @@ def process_document_task(self, document_id: int):
         category: str = result[1]
         confidence: float = result[2]
 
-        # Stage 3: Metadata extraction
-        self.update_state(state="PROGRESS", meta={"stage": "extracting_metadata", "progress": 60})
+        # Stage 3: Metadata extraction (regex-based)
+        self.update_state(state="PROGRESS", meta={"stage": "extracting_metadata", "progress": 50})
         metadata = extract_metadata(extracted_text) if extracted_text else {"dates": [], "amounts": [], "vendor": None}
 
-        # Stage 4: Saving results
-        self.update_state(state="PROGRESS", meta={"stage": "saving_results", "progress": 80})
+        # Stage 4: LLM extraction (if user has provider configured)
+        self.update_state(state="PROGRESS", meta={"stage": "ai_extraction", "progress": 70})
+        ai_summary = None
+        ai_extracted_data = None
+        extraction_status = None
+
+        if extracted_text and len(extracted_text.strip()) > 50:
+            try:
+                from app.models.user_settings import UserLLMSettings
+
+                user_settings = db.query(UserLLMSettings).filter(
+                    UserLLMSettings.user_id == doc.user_id
+                ).first()
+
+                if user_settings and user_settings.api_key_encrypted:
+                    extraction_status = "processing"
+                    api_key = user_settings.decrypt_api_key()
+                    if api_key:
+                        from app.services.llm import extract_with_llm
+
+                        result = extract_with_llm(
+                            text=extracted_text,
+                            category=category,
+                            provider=user_settings.llm_provider,
+                            api_key=api_key,
+                            model_name=user_settings.model_name,
+                        )
+                        ai_summary = result.summary if result.summary else None
+                        ai_extracted_data = result.model_dump(mode="json")
+                        extraction_status = "completed"
+                        logger.info(
+                            "llm_extraction_completed",
+                            document_id=document_id,
+                            provider=user_settings.llm_provider,
+                            overall_confidence=result.overall_confidence,
+                        )
+                    else:
+                        extraction_status = "failed"
+                        logger.warning(
+                            "llm_extraction_failed",
+                            document_id=document_id,
+                            reason="api_key_decrypt_failed",
+                        )
+                else:
+                    logger.info(
+                        "llm_extraction_skipped",
+                        document_id=document_id,
+                        reason="no_settings",
+                    )
+            except Exception as llm_err:
+                extraction_status = "failed"
+                logger.warning(
+                    "llm_extraction_failed",
+                    document_id=document_id,
+                    error=str(llm_err),
+                    error_type=type(llm_err).__name__,
+                )
+
+        # Stage 5: Saving results
+        self.update_state(state="PROGRESS", meta={"stage": "saving_results", "progress": 85})
 
         doc.extracted_text = extracted_text
         doc.category = (
@@ -70,6 +128,9 @@ def process_document_task(self, document_id: int):
         )
         doc.confidence_score = confidence
         doc.extracted_metadata = metadata
+        doc.ai_summary = ai_summary
+        doc.ai_extracted_data = ai_extracted_data
+        doc.extraction_status = extraction_status
         doc.status = DocumentStatus.COMPLETED
         db.commit()
 
