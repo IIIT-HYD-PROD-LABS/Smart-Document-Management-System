@@ -36,7 +36,7 @@ class User(Base):
     # Relationships
     documents = relationship("Document", back_populates="owner", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="owner", cascade="all, delete-orphan")
-    shared_documents = relationship("DocumentPermission", back_populates="user")
+    shared_documents = relationship("DocumentPermission", back_populates="user", foreign_keys="[DocumentPermission.user_id]")
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
