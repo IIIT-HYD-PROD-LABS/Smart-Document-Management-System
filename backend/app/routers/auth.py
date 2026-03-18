@@ -129,7 +129,7 @@ def login(request: Request, response: Response, payload: UserLogin, db: Session 
 
 @router.post("/refresh", response_model=TokenPairResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def refresh(request: Request, payload: RefreshTokenRequest, db: Session = Depends(get_db)):
+def refresh(request: Request, response: Response, payload: RefreshTokenRequest, db: Session = Depends(get_db)):
     """Exchange a valid refresh token for a new access + refresh token pair.
 
     Implements token rotation with reuse detection:
@@ -211,7 +211,7 @@ def refresh(request: Request, payload: RefreshTokenRequest, db: Session = Depend
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def logout(request: Request, payload: RefreshTokenRequest, db: Session = Depends(get_db)):
+def logout(request: Request, response: Response, payload: RefreshTokenRequest, db: Session = Depends(get_db)):
     """Revoke the provided refresh token (server-side logout)."""
     db_token = (
         db.query(RefreshToken)
@@ -246,7 +246,7 @@ def get_auth_providers():
 
 @router.get("/oauth/google")
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def google_auth_url(request: Request):
+def google_auth_url(request: Request, response: Response):
     """Return the Google OAuth authorization URL."""
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Google OAuth not configured")
@@ -329,7 +329,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
 
 @router.get("/oauth/microsoft")
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def microsoft_auth_url(request: Request):
+def microsoft_auth_url(request: Request, response: Response):
     """Return the Microsoft OAuth authorization URL."""
     if not settings.MICROSOFT_CLIENT_ID:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Microsoft OAuth not configured")
@@ -408,7 +408,7 @@ async def microsoft_callback(code: str, db: Session = Depends(get_db)):
 
 @router.post("/oauth/exchange", response_model=TokenPairResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def exchange_oauth_code(request: Request, payload: OAuthExchangeRequest, db: Session = Depends(get_db)):
+def exchange_oauth_code(request: Request, response: Response, payload: OAuthExchangeRequest, db: Session = Depends(get_db)):
     """Exchange a one-time OAuth code for a token pair."""
     try:
         token_payload = jwt.decode(payload.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
