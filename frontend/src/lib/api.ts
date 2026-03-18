@@ -183,6 +183,9 @@ export const documentsApi = {
     delete: (id: number) =>
         api.delete(`/documents/${id}`),
 
+    saveHighlights: (id: number, highlights: Array<{ text: string; start: number; end: number }>) =>
+        api.put(`/documents/${id}/highlights`, highlights),
+
     batchDelete: (ids: number[]) =>
         api.post("/documents/batch-delete", ids),
 };

@@ -34,7 +34,7 @@ class RefreshToken(Base):
     replaced_by = Column(String(500), nullable=True)
 
     # Relationship
-    user = relationship("User")
+    owner = relationship("User", back_populates="refresh_tokens")
 
     __table_args__ = (
         Index("idx_refresh_tokens_user_id", "user_id"),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { AnimatePresence, motion } from "framer-motion";
 import { documentsApi } from "@/lib/api";
@@ -49,7 +49,15 @@ export default function UploadPage() {
     }, []);
 
     const pollProcessingStatus = useCallback((file: File, documentId: number) => {
+        let attempts = 0;
+        const MAX_ATTEMPTS = 120;
         const poll = async () => {
+            attempts++;
+            if (attempts > MAX_ATTEMPTS) {
+                updateItem(file, { status: "failed", error: "Processing timed out" });
+                pollTimers.current.delete(file.name);
+                return;
+            }
             try {
                 const { data } = await documentsApi.getStatus(documentId);
                 if (data.status === "completed") {
@@ -64,6 +72,13 @@ export default function UploadPage() {
         };
         poll();
     }, [updateItem]);
+
+    useEffect(() => {
+        return () => {
+            pollTimers.current.forEach((t) => clearTimeout(t));
+            pollTimers.current.clear();
+        };
+    }, []);
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
         setUploads((prev) => [...prev, ...acceptedFiles.map((f) => ({ file: f, status: "queued" as const, uploadProgress: 0 }))]);

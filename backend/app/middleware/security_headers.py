@@ -34,12 +34,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self'; "
-            "style-src 'self' 'unsafe-inline'; "
+            "style-src 'self'; "
             "img-src 'self' data: blob:; "
             "font-src 'self'; "
             "connect-src 'self'; "
             "frame-ancestors 'none'"
         )
+
+        # Cross-origin isolation headers
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+
+        # Restrict cross-domain policy files
+        response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
 
         # HSTS -- only in production (DEBUG=False)
         if not settings.DEBUG:

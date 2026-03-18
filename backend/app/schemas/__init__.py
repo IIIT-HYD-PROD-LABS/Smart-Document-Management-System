@@ -1,7 +1,7 @@
 """Pydantic schemas for User request/response models."""
 
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- Request Schemas ---
@@ -12,10 +12,17 @@ class UserRegister(BaseModel):
     password: str = Field(..., min_length=6, max_length=128)
     full_name: str | None = Field(None, max_length=200, examples=["John Doe"])
 
+    @field_validator("email")
+    @classmethod
+    def validate_email_format(cls, v: str) -> str:
+        if "@" not in v or "." not in v:
+            raise ValueError("Invalid email format")
+        return v
+
 
 class UserLogin(BaseModel):
-    email: str = Field(..., examples=["user@example.com"])
-    password: str = Field(...)
+    email: str = Field(..., min_length=1, examples=["user@example.com"])
+    password: str = Field(..., min_length=1)
 
 
 # --- Response Schemas ---

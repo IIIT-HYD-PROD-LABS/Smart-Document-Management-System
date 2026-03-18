@@ -5,6 +5,7 @@ import { documentsApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { FiFileText, FiCheckCircle, FiClock, FiArrowRight } from "react-icons/fi";
 import Link from "next/link";
+import toast from "react-hot-toast";
 
 const categoryLabels: Record<string, string> = {
     bills: "Bills", upi: "UPI", tickets: "Tickets",
@@ -19,7 +20,7 @@ export default function DashboardPage() {
     useEffect(() => {
         documentsApi.getStats()
             .then((res) => setStats(res.data))
-            .catch(() => setStats(null))
+            .catch(() => { setStats(null); toast.error("Failed to load stats"); })
             .finally(() => setLoading(false));
     }, []);
 

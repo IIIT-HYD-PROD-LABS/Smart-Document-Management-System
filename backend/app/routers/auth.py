@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
@@ -24,6 +25,8 @@ from app.utils.security import (
     create_refresh_token,
 )
 from app.utils.rate_limiter import limiter
+
+logger = structlog.stdlib.get_logger()
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -95,6 +98,7 @@ def login(request: Request, response: Response, payload: UserLogin, db: Session 
     """Authenticate user and return a token pair."""
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
+        logger.warning("login_failed", email=payload.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",

@@ -14,6 +14,9 @@ def extract_metadata(text: str) -> dict:
     if not text or len(text.strip()) < 10:
         return {"dates": [], "amounts": [], "vendor": None}
 
+    if len(text) > 100_000:
+        text = text[:100_000]
+
     metadata = {
         "dates": extract_dates(text),
         "amounts": extract_amounts(text),
@@ -59,9 +62,9 @@ def extract_amounts(text: str) -> list[dict]:
     Filters amounts between 0.01 and 10,000,000 to avoid false positives.
     """
     patterns = [
-        (r'(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)', 'INR'),
-        (r'\$\s*([\d,]+\.?\d*)', 'USD'),
-        (r'(?:Total|Amount|Grand Total|Net Amount|Net Payable)[:\s]*(?:Rs\.?|INR|₹|\$)?\s*([\d,]+\.?\d*)', 'INR'),
+        (r'(?:Rs\.?|INR|₹)\s*([\d,]{1,20}\.?\d*)', 'INR'),
+        (r'\$\s*([\d,]{1,20}\.?\d*)', 'USD'),
+        (r'(?:Total|Amount|Grand Total|Net Amount|Net Payable)[:\s]*(?:Rs\.?|INR|₹|\$)?\s*([\d,]{1,20}\.?\d*)', 'INR'),
     ]
     amounts = []
     seen = set()
