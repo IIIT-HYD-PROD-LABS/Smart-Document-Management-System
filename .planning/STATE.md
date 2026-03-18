@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-stopped_at: Completed 04-03-PLAN.md -- Phase 4 Search & Retrieval complete (human checkpoint approved)
-last_updated: "2026-03-11"
-last_activity: "2026-03-11 -- Phase 4 complete, Opus code review fixed 6 issues"
+stopped_at: Completed 05-03-PLAN.md -- LLM settings API and settings page
+last_updated: "2026-03-17"
+last_activity: "2026-03-17 -- Phase 5 plan 03 complete (settings API + UI)"
 progress:
   total_phases: 8
   completed_phases: 4
-  total_plans: 13
-  completed_plans: 13
-  percent: 45
+  total_plans: 16
+  completed_plans: 16
+  percent: 55
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Automated classification and intelligent organization of personal and business documents -- upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
-**Current focus:** Phase 4 complete: Search & Retrieval (3/3 plans done, Opus review applied). Next: Phase 5
+**Current focus:** Phase 5 Smart Extraction (AI) -- plan 03 complete (settings API + UI), next: 05-04 (extraction endpoint)
 
 ## Current Position
 
-Phase: 4 of 8 (Search & Retrieval) -- COMPLETE
-Plan: 3 of 3 in current phase
-Status: Phase 4 complete + Opus code review applied (6 fixes). FTS, filters, fuzzy, sub-2s all verified.
-Last activity: 2026-03-11 -- Opus code review fixed 6 issues (pattern injection, date validation, amount cast, trigger optimization, rate limiting)
+Phase: 5 of 8 (Smart Extraction AI) -- In progress
+Plan: 3 of 4 in current phase
+Status: Plan 05-03 complete. Settings API (GET/PUT) with encrypted key storage and 4-provider settings page.
+Last activity: 2026-03-17 -- Completed 05-03-PLAN.md (settings API + settings page)
 
-Progress: [█████████████░░░░░░░░░░░░░░░░] 13/29 (45%)
+Progress: [████████████████░░░░░░░░░░░░░] 16/29 (55%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
+- Total plans completed: 16
 - Average duration: ~8min
-- Total execution time: ~112min
+- Total execution time: ~122min
 
 **By Phase:**
 
@@ -47,10 +47,11 @@ Progress: [█████████████░░░░░░░░░░
 | 02-document-processing-pipeline | 4/4 | ~24min | ~6min |
 | 03-ml-classification-upgrade | 2/2 | 19min | ~10min |
 | 04-search-retrieval | 3/3 | ~28min | ~9min |
+| 05-smart-extraction-ai | 3/4 | 10min | ~3min |
 
 **Recent Trend:**
-- Last 5 plans: 03-01 (13min), 03-02 (6min), 04-01 (15min), 04-02 (8min), 04-03 (5min)
-- Trend: Stable
+- Last 5 plans: 04-02 (8min), 04-03 (5min), 05-01 (4min), 05-02 (2min), 05-03 (4min)
+- Trend: Fast execution continues; full-stack plans (backend+frontend) still under 5min
 
 *Updated after each plan completion*
 
@@ -102,6 +103,19 @@ Recent decisions affecting current work:
 - [Phase 04-search-retrieval]: NULL guard on extracted_metadata: isnot(None) before astext.cast(Float) prevents 500 on docs without amount metadata
 - [Phase 04-search-retrieval]: OR-combine (not trigram-only): FTS handles exact/stemmed matches; trigram adds typo tolerance as supplemental path via or_(search_vector @@, extracted_text %)
 - [Phase 04-search-retrieval]: pg_trgm threshold 0.3 preserved globally; threshold change from >3 to >2 chars corrects ILIKE fallback boundary so 3-char tokens (UPI, GST) get trigram path
+- [05-01]: Fernet key derived from SECRET_KEY via SHA-256 hash (no separate FERNET_KEY env var)
+- [05-01]: Lazy SDK imports in provider.py to avoid ImportError when optional SDKs not installed
+- [05-01]: Regex fallback with confidence=0.3 when LLM call fails for graceful degradation
+- [05-01]: MAX_CHARS=50000 silent truncation to fit within LLM context windows
+- [05-01]: Migration 0004 uses op.execute() for index creation consistent with project Alembic pattern
+- [05-02]: Composable prompt pattern: BASE_SYSTEM_PROMPT + CATEGORY_HINTS[category] for 6 doc types
+- [05-02]: LLM extraction stage is entirely non-fatal in Celery pipeline (broad except catches all)
+- [05-02]: 50-char minimum text threshold before attempting LLM extraction
+- [05-02]: Celery progress stages now: reading(10%) > extracting(30%) > metadata(50%) > ai(70%) > saving(85%)
+- [05-03]: Settings router at /api/settings prefix, separate from /api/documents and /api/ml
+- [05-03]: Provider validation via Pydantic regex pattern (gemini|openai|anthropic|local)
+- [05-03]: API key only sent to backend when user types new value; blank preserves existing encrypted key
+- [05-03]: Decryption failure non-fatal in GET: logged as warning, api_key_set=true, last4=null
 
 ### Pending Todos
 
@@ -123,12 +137,13 @@ None.
 - ~~Hardcoded SECRET_KEY is a critical security issue to resolve immediately in Phase 1~~ RESOLVED in 01-01
 - Rate limiter requires Redis to be running; without Redis, rate limits won't persist across restarts
 - ~~No Alembic migrations yet; table creation relies on SQLAlchemy auto-create~~ RESOLVED in 01-04
-- New models in future phases must be imported in backend/alembic/env.py for autogenerate to work
-- Metadata extraction is regex-based v1 -- Phase 5 LLM will improve accuracy significantly
+- ~~New models in future phases must be imported in backend/alembic/env.py for autogenerate to work~~ UserLLMSettings registered in 05-01
+- ~~Metadata extraction is regex-based v1~~ Phase 5 LLM extraction service now provides structured extraction with fallback
 - ~~ML classifier trained on synthetic data only~~ RESOLVED: real dataset pipeline operational
+- Migration 0004 must be applied to database before AI extraction endpoints are used (05-03)
 
 ## Session Continuity
 
-Last session: 2026-03-11T00:00:00Z
-Stopped at: Completed 04-03-PLAN.md -- Phase 4 complete, human checkpoint approved
+Last session: 2026-03-17T11:56:55Z
+Stopped at: Completed 05-03-PLAN.md -- LLM settings API and settings page
 Resume file: None

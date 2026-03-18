@@ -13,7 +13,8 @@ from app.database import Base
 from app.models.user import User
 from app.models.document import Document
 from app.models.refresh_token import RefreshToken
-_models = (User, Document, RefreshToken)
+from app.models.user_settings import UserLLMSettings
+_models = (User, Document, RefreshToken, UserLLMSettings)
 
 config = context.config
 

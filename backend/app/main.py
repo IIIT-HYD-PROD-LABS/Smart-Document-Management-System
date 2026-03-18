@@ -11,6 +11,7 @@ from app.config import settings
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.routers import auth, documents, ml
+from app.routers import settings as settings_router
 from app.utils.logging import setup_logging
 from app.utils.rate_limiter import limiter
 
@@ -69,6 +70,7 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(ml.router)
+app.include_router(settings_router.router)
 
 
 @app.get("/", tags=["Root"])
