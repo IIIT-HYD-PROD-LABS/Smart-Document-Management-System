@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
 import { FiFileText, FiTrash2, FiFilter, FiCheckSquare, FiSquare, FiX } from "react-icons/fi";
+import toast from "react-hot-toast";
 
 const categories = ["all", "bills", "upi", "tickets", "tax", "bank", "invoices", "unknown"];
 
@@ -47,6 +48,7 @@ export default function DocumentsPage() {
             setDocs(res.data.documents || []);
         } catch {
             setDocs([]);
+            toast.error("Something went wrong");
         } finally {
             setLoading(false);
         }
@@ -57,7 +59,7 @@ export default function DocumentsPage() {
             await documentsApi.delete(id);
             setDocs((prev) => prev.filter((d) => d.id !== id));
             setSelected((prev) => { const next = new Set(prev); next.delete(id); return next; });
-        } catch {}
+        } catch { toast.error("Something went wrong"); }
     };
 
     const handleBatchDelete = async () => {
@@ -68,7 +70,7 @@ export default function DocumentsPage() {
             await documentsApi.batchDelete(ids);
             setDocs((prev) => prev.filter((d) => !selected.has(d.id)));
             setSelected(new Set());
-        } catch {}
+        } catch { toast.error("Something went wrong"); }
         setDeleting(false);
     };
 

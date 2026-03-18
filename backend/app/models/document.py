@@ -69,6 +69,9 @@ class Document(Base):
     # Alembic autogenerate false-diff bug (issue #1390)
     search_vector = Column(TSVECTOR, nullable=True)
 
+    # User-highlighted text (refined extraction)
+    highlighted_text = Column(JSON, nullable=True)  # list of {text, start, end} selections
+
     # AI / LLM extraction (Phase 5)
     ai_summary = Column(Text, nullable=True)
     ai_extracted_fields = Column(JSON, nullable=True)

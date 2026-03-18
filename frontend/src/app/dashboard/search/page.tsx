@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
 import { FiSearch, FiFileText } from "react-icons/fi";
+import toast from "react-hot-toast";
 
 const categories = ["", "bills", "upi", "tickets", "tax", "bank", "invoices"];
 
@@ -59,6 +60,7 @@ export default function SearchPage() {
         } catch {
             setResults([]);
             setSearched(true);
+            toast.error("Search failed");
         } finally {
             setLoading(false);
         }

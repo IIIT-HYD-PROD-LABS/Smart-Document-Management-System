@@ -1,6 +1,7 @@
 """ML classifier - Load trained model and predict document category."""
 
 import os
+import threading
 
 import joblib
 import structlog
@@ -16,15 +17,26 @@ VECTORIZER_PATH = os.path.join(settings.MODEL_DIR, "tfidf_vectorizer.pkl")
 
 _model = None
 _vectorizer = None
+_model_lock = threading.Lock()
 
 
 def _load_model():
     """Lazy-load the trained model and vectorizer."""
     global _model, _vectorizer
-    if _model is None or _vectorizer is None:
+    if _model is not None and _vectorizer is not None:
+        return True
+    with _model_lock:
+        # Double-check after acquiring lock
+        if _model is not None and _vectorizer is not None:
+            return True
         if os.path.exists(MODEL_PATH) and os.path.exists(VECTORIZER_PATH):
-            _model = joblib.load(MODEL_PATH)
-            _vectorizer = joblib.load(VECTORIZER_PATH)
+            try:
+                _model = joblib.load(MODEL_PATH)
+                _vectorizer = joblib.load(VECTORIZER_PATH)
+                logger.info("model_loaded_successfully", model_path=MODEL_PATH, vectorizer_path=VECTORIZER_PATH)
+            except Exception as exc:
+                logger.error("model_load_failed", error=str(exc), model_path=MODEL_PATH, vectorizer_path=VECTORIZER_PATH)
+                return False
         else:
             logger.warning("model_files_not_found", model_dir=settings.MODEL_DIR)
             return False
@@ -36,7 +48,7 @@ def classify_document(text: str) -> tuple[str, float]:
     Classify document text into one of the 6 categories.
     Returns (category, confidence_score).
     """
-    if not text or len(text.strip()) < 5:
+    if not text or len(text.strip()) < 50:
         return "unknown", 0.0
 
     if not _load_model():

@@ -3,7 +3,7 @@
 import mimetypes
 import os
 from pathlib import Path
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, Query, status
@@ -116,7 +116,9 @@ async def upload_document(
 
 
 @router.get("/{document_id}/status")
+@limiter.limit("30/minute")
 def get_document_status(
+    request: Request,
     document_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -207,10 +209,10 @@ def search_documents(
 
     # Date filters (Pydantic auto-validates YYYY-MM-DD format, returns 422 on bad input)
     if date_from:
-        query = query.filter(Document.created_at >= datetime.combine(date_from, datetime.min.time()))
+        query = query.filter(Document.created_at >= datetime.combine(date_from, datetime.min.time()).replace(tzinfo=timezone.utc))
     if date_to:
         # +1 day for inclusive end boundary (include all of date_to, not just midnight)
-        query = query.filter(Document.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time()))
+        query = query.filter(Document.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time()).replace(tzinfo=timezone.utc))
 
     # Amount filters with NULL guard + safe numeric cast
     # Column is JSON (not JSONB), so use json_extract_path_text for ->> equivalent
@@ -260,7 +262,10 @@ def search_documents(
 
 
 @router.get("/category/{category}", response_model=DocumentListResponse)
+@limiter.limit("30/minute")
 def get_documents_by_category(
+    request: Request,
+    response: Response,
     category: str,
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -299,7 +304,10 @@ def get_documents_by_category(
 
 
 @router.get("/stats", response_model=DocumentStats)
+@limiter.limit("20/minute")
 def get_document_stats(
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -339,7 +347,10 @@ def get_document_stats(
 
 
 @router.get("/all", response_model=DocumentListResponse)
+@limiter.limit("30/minute")
 def get_all_documents(
+    request: Request,
+    response: Response,
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -401,6 +412,31 @@ def download_document(
     return FileResponse(path=real_path, filename=doc.original_filename, media_type=media_type)
 
 
+@router.put("/{document_id}/highlights")
+def save_highlights(
+    document_id: int,
+    highlights: list[dict],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Save user-highlighted text selections for a document."""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.user_id == current_user.id,
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    doc.highlighted_text = highlights
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to save highlights")
+
+    return {"detail": "Highlights saved", "count": len(highlights)}
+
+
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: int,
@@ -423,7 +459,10 @@ def get_document(
 
 
 @router.post("/batch-delete", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 def batch_delete_documents(
+    request: Request,
+    response: Response,
     ids: list[int],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -448,7 +487,10 @@ def batch_delete_documents(
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
 def delete_document(
+    request: Request,
+    response: Response,
     document_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

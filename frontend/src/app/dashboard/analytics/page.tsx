@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { documentsApi } from "@/lib/api";
 
 const categoryColors: Record<string, string> = {
@@ -15,7 +16,7 @@ export default function AnalyticsPage() {
     useEffect(() => {
         documentsApi.getStats()
             .then((res) => setStats(res.data))
-            .catch(() => setStats(null))
+            .catch(() => { setStats(null); toast.error("Failed to load analytics"); })
             .finally(() => setLoading(false));
     }, []);
 

@@ -26,6 +26,18 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             client_ip=request.client.host if request.client else "unknown",
         )
 
+        # Try to extract user from Authorization header for logging context
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            try:
+                import jwt
+                from app.config import settings
+                token = auth_header.split(" ")[1]
+                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+                structlog.contextvars.bind_contextvars(user_id=payload.get("sub"))
+            except Exception:
+                pass
+
         start = time.perf_counter()
 
         try:

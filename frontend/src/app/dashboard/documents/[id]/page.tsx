@@ -1,13 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
-import { FiArrowLeft, FiFile, FiCalendar, FiTag, FiHash, FiCopy, FiCheck } from "react-icons/fi";
+import toast from "react-hot-toast";
+import { FiArrowLeft, FiFile, FiCalendar, FiTag, FiHash, FiCopy, FiCheck, FiEdit3, FiX, FiSave } from "react-icons/fi";
 
 interface AIField {
     value: unknown;
     confidence: number;
+}
+
+interface Highlight {
+    text: string;
+    start: number;
+    end: number;
 }
 
 interface DocumentDetail {
@@ -25,6 +32,7 @@ interface DocumentDetail {
     ai_extraction_status: string | null;
     ai_provider: string | null;
     ai_error: string | null;
+    highlighted_text: Highlight[] | null;
     status: string;
     s3_url: string | null;
     created_at: string;
@@ -64,6 +72,33 @@ function MetadataItem({ label, value }: { label: string; value: string }) {
     );
 }
 
+/** Render text with highlighted portions shown in yellow */
+function HighlightedText({ text, highlights }: { text: string; highlights: Highlight[] }) {
+    if (!highlights.length) return <>{text}</>;
+
+    const sorted = [...highlights].sort((a, b) => a.start - b.start);
+    const parts: React.ReactNode[] = [];
+    let lastEnd = 0;
+
+    sorted.forEach((h, i) => {
+        if (h.start > lastEnd) {
+            parts.push(<span key={`t-${i}`}>{text.slice(lastEnd, h.start)}</span>);
+        }
+        parts.push(
+            <mark key={`h-${i}`} className="bg-[#f59e0b]/20 text-[#f59e0b] rounded-sm px-0.5">
+                {text.slice(h.start, h.end)}
+            </mark>
+        );
+        lastEnd = h.end;
+    });
+
+    if (lastEnd < text.length) {
+        parts.push(<span key="tail">{text.slice(lastEnd)}</span>);
+    }
+
+    return <>{parts}</>;
+}
+
 export default function DocumentDetailPage() {
     const params = useParams();
     const router = useRouter();
@@ -72,20 +107,108 @@ export default function DocumentDetailPage() {
     const [error, setError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
 
+    // Highlighting state
+    const [highlightMode, setHighlightMode] = useState(false);
+    const [highlights, setHighlights] = useState<Highlight[]>([]);
+    const [saving, setSaving] = useState(false);
+    const [hasChanges, setHasChanges] = useState(false);
+
     useEffect(() => {
         const id = Number(params.id);
         if (!id) return;
         documentsApi.getById(id)
-            .then((res) => setDoc(res.data))
-            .catch(() => setError("Document not found"))
+            .then((res) => {
+                setDoc(res.data);
+                setHighlights(res.data.highlighted_text || []);
+            })
+            .catch((err) => {
+                if (err?.response?.status === 404) {
+                    setError("Document not found");
+                } else if (err?.response?.status === 403) {
+                    setError("Access denied");
+                } else {
+                    setError("Failed to load document");
+                }
+            })
             .finally(() => setLoading(false));
     }, [params.id]);
 
     const copyText = () => {
         if (!doc?.extracted_text) return;
-        navigator.clipboard.writeText(doc.extracted_text);
+        // If highlights exist, copy only highlighted text
+        if (highlights.length > 0) {
+            const sorted = [...highlights].sort((a, b) => a.start - b.start);
+            const text = sorted.map(h => h.text).join("\n\n");
+            navigator.clipboard.writeText(text);
+        } else {
+            navigator.clipboard.writeText(doc.extracted_text);
+        }
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleTextSelect = useCallback(() => {
+        if (!highlightMode || !doc?.extracted_text) return;
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed) return;
+
+        const selectedText = selection.toString().trim();
+        if (!selectedText) return;
+
+        // Find the position in the extracted text
+        const fullText = doc.extracted_text;
+        const range = selection.getRangeAt(0);
+        const container = range.startContainer;
+
+        // Walk up to find the pre element
+        let preEl = container instanceof HTMLElement ? container : container.parentElement;
+        while (preEl && preEl.tagName !== "PRE") preEl = preEl.parentElement;
+        if (!preEl) return;
+
+        // Get text offset within the pre element
+        const preText = preEl.textContent || "";
+        const beforeRange = document.createRange();
+        beforeRange.setStart(preEl, 0);
+        beforeRange.setEnd(range.startContainer, range.startOffset);
+        const start = beforeRange.toString().length;
+        const end = start + selectedText.length;
+
+        // Validate bounds
+        if (start < 0 || end > fullText.length) return;
+
+        // Check for overlaps with existing highlights
+        const overlaps = highlights.some(h =>
+            (start < h.end && end > h.start)
+        );
+        if (overlaps) {
+            toast.error("Selection overlaps an existing highlight");
+            selection.removeAllRanges();
+            return;
+        }
+
+        setHighlights(prev => [...prev, { text: selectedText, start, end }]);
+        setHasChanges(true);
+        selection.removeAllRanges();
+        toast.success("Text highlighted");
+    }, [highlightMode, doc, highlights]);
+
+    const removeHighlight = (index: number) => {
+        setHighlights(prev => prev.filter((_, i) => i !== index));
+        setHasChanges(true);
+    };
+
+    const saveHighlights = async () => {
+        if (!doc) return;
+        setSaving(true);
+        try {
+            await documentsApi.saveHighlights(doc.id, highlights);
+            setHasChanges(false);
+            toast.success("Highlights saved");
+        } catch {
+            toast.error("Failed to save highlights");
+        } finally {
+            setSaving(false);
+        }
     };
 
     if (loading) {
@@ -230,24 +353,101 @@ export default function DocumentDetailPage() {
                 </div>
             )}
 
-            {/* Extracted text */}
-            <div className="bg-[#111113] border border-[#27272a] rounded-lg">
-                <div className="flex items-center justify-between px-5 py-3 border-b border-[#27272a]">
-                    <h2 className="text-sm font-medium text-white">Extracted Text</h2>
-                    {doc.extracted_text && (
+            {/* Saved highlights summary */}
+            {highlights.length > 0 && !highlightMode && (
+                <div className="p-5 bg-[#111113] border border-[#f59e0b]/20 rounded-lg mb-6">
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-sm font-medium text-white">Highlighted Text ({highlights.length} selections)</h2>
                         <button
                             onClick={copyText}
                             className="flex items-center gap-1.5 text-xs text-[#71717a] hover:text-white transition-colors cursor-pointer"
                         >
-                            {copied ? <FiCheck className="w-3.5 h-3.5 text-[#10b981]" /> : <FiCopy className="w-3.5 h-3.5" />}
-                            {copied ? "Copied" : "Copy"}
+                            <FiCopy className="w-3.5 h-3.5" />
+                            Copy highlights
                         </button>
-                    )}
+                    </div>
+                    <div className="space-y-2">
+                        {highlights.sort((a, b) => a.start - b.start).map((h, i) => (
+                            <div key={i} className="p-2.5 bg-[#f59e0b]/5 border border-[#f59e0b]/10 rounded text-sm text-[#a1a1aa]">
+                                {h.text.length > 150 ? h.text.slice(0, 150) + "..." : h.text}
+                            </div>
+                        ))}
+                    </div>
                 </div>
+            )}
+
+            {/* Extracted text with highlighting */}
+            <div className={`bg-[#111113] border rounded-lg mb-6 ${highlightMode ? "border-[#f59e0b]/40" : "border-[#27272a]"}`}>
+                <div className="flex items-center justify-between px-5 py-3 border-b border-[#27272a]">
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-sm font-medium text-white">Extracted Text</h2>
+                        {highlightMode && (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-[#f59e0b]/10 text-[#f59e0b] uppercase tracking-wider animate-pulse">
+                                Select text to highlight
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {doc.extracted_text && (
+                            <>
+                                <button
+                                    onClick={() => setHighlightMode(!highlightMode)}
+                                    className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                                        highlightMode
+                                            ? "bg-[#f59e0b]/10 text-[#f59e0b]"
+                                            : "text-[#71717a] hover:text-white"
+                                    }`}
+                                >
+                                    <FiEdit3 className="w-3.5 h-3.5" />
+                                    {highlightMode ? "Done" : "Highlight"}
+                                </button>
+                                {hasChanges && (
+                                    <button
+                                        onClick={saveHighlights}
+                                        disabled={saving}
+                                        className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded bg-[#10b981]/10 text-[#10b981] hover:bg-[#10b981]/20 transition-colors cursor-pointer disabled:opacity-50"
+                                    >
+                                        <FiSave className="w-3.5 h-3.5" />
+                                        {saving ? "Saving..." : "Save"}
+                                    </button>
+                                )}
+                                {!highlightMode && (
+                                    <button
+                                        onClick={copyText}
+                                        className="flex items-center gap-1.5 text-xs text-[#71717a] hover:text-white transition-colors cursor-pointer"
+                                    >
+                                        {copied ? <FiCheck className="w-3.5 h-3.5 text-[#10b981]" /> : <FiCopy className="w-3.5 h-3.5" />}
+                                        {copied ? "Copied" : "Copy"}
+                                    </button>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {/* Highlight chips in edit mode */}
+                {highlightMode && highlights.length > 0 && (
+                    <div className="px-5 py-3 border-b border-[#27272a] flex flex-wrap gap-2">
+                        {highlights.sort((a, b) => a.start - b.start).map((h, i) => (
+                            <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#f59e0b]/10 text-[#f59e0b] text-xs">
+                                {h.text.length > 30 ? h.text.slice(0, 30) + "..." : h.text}
+                                <button onClick={() => removeHighlight(i)} className="hover:text-white cursor-pointer">
+                                    <FiX className="w-3 h-3" />
+                                </button>
+                            </span>
+                        ))}
+                    </div>
+                )}
+
                 <div className="p-5">
                     {doc.extracted_text ? (
-                        <pre className="text-sm text-[#a1a1aa] leading-relaxed whitespace-pre-wrap font-mono break-words max-h-[500px] overflow-y-auto">
-                            {doc.extracted_text}
+                        <pre
+                            className={`text-sm text-[#a1a1aa] leading-relaxed whitespace-pre-wrap font-mono break-words max-h-[500px] overflow-y-auto ${
+                                highlightMode ? "cursor-text select-text" : ""
+                            }`}
+                            onMouseUp={handleTextSelect}
+                        >
+                            <HighlightedText text={doc.extracted_text} highlights={highlights} />
                         </pre>
                     ) : (
                         <p className="text-sm text-[#52525b] italic">No text extracted from this document.</p>

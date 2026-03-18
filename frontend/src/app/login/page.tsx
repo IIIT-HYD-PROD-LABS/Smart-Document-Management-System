@@ -20,8 +20,9 @@ export default function LoginPage() {
             await login(email, password);
             toast.success("Welcome back");
             router.push("/dashboard");
-        } catch (err: any) {
-            toast.error(err.response?.data?.detail || "Login failed");
+        } catch (err: unknown) {
+            const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+            toast.error(message || "Login failed");
         } finally {
             setLoading(false);
         }

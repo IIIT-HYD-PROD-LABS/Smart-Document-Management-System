@@ -2,6 +2,10 @@
 
 import re
 
+import structlog
+
+logger = structlog.stdlib.get_logger()
+
 
 # Common stop words
 STOP_WORDS = {
@@ -28,14 +32,18 @@ def clean_text(text: str) -> str:
     if not text:
         return ""
 
+    if len(text) > 500_000:
+        logger.warning("clean_text input too long, truncating", original_length=len(text))
+        text = text[:500_000]
+
     # Lowercase
     text = text.lower()
 
     # Remove URLs
-    text = re.sub(r"https?://\S+|www\.\S+", " ", text)
+    text = re.sub(r"https?://[^\s]{1,2000}|www\.[^\s]{1,2000}", " ", text)
 
     # Remove email addresses
-    text = re.sub(r"\S+@\S+\.\S+", " email ", text)
+    text = re.sub(r"[^\s]{1,200}@[^\s]{1,200}\.[^\s]{1,200}", " email ", text)
 
     # Preserve currency and numeric patterns (important for financial docs)
     text = re.sub(r"₹\s?[\d,]+\.?\d*", " rupees_amount ", text)

@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 import pytesseract
 import structlog
+from pytesseract import TesseractNotFoundError
 from PIL import Image
 
 from app.config import settings
@@ -17,11 +18,15 @@ if settings.TESSERACT_CMD:
     pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
 
 
-def _upscale_if_small(image: np.ndarray, min_height: int = 800) -> np.ndarray:
+def _upscale_if_small(image: np.ndarray, min_height: int = 800, max_height: int = 4000) -> np.ndarray:
     """Upscale small images so Tesseract has enough pixels to work with."""
     h, w = image.shape[:2]
     if h < min_height:
-        scale = min_height / h
+        scale = min(min_height / h, max_height / h)
+        new_h = int(h * scale)
+        new_w = int(w * scale)
+        if new_h * new_w > 4_000_000:
+            return image
         image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
     return image
 
@@ -108,6 +113,9 @@ def extract_text_from_image(image_bytes: bytes) -> str:
 
         return best_text
 
+    except TesseractNotFoundError as e:
+        logger.critical("tesseract_not_found", error=str(e))
+        return ""
     except Exception as e:
         logger.error("ocr_extraction_failed", error=str(e))
         return ""
