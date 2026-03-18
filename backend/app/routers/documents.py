@@ -1,11 +1,15 @@
 """Document API routes - Upload, search, filter, detail, delete."""
 
+import mimetypes
 import os
 from pathlib import Path
 from datetime import datetime, date, timedelta
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, Query, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, Float
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -19,6 +23,8 @@ from app.schemas.document import (
 )
 from app.utils.security import get_current_user
 from app.services.storage_service import save_file, delete_file
+
+logger = structlog.stdlib.get_logger()
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
@@ -75,13 +81,30 @@ async def upload_document(
         status=DocumentStatus.PENDING,
     )
     db.add(doc)
-    db.commit()
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to save document record")
     db.refresh(doc)
 
     # Dispatch async processing
-    task = process_document_task.delay(doc.id)
-    doc.celery_task_id = task.id
-    db.commit()
+    try:
+        task = process_document_task.delay(doc.id)
+        doc.celery_task_id = task.id
+        db.commit()
+    except Exception as e:
+        logger.error("celery_dispatch_failed", document_id=doc.id, error=str(e))
+        doc.status = DocumentStatus.FAILED
+        doc.extracted_text = "Processing queue unavailable. Please retry later."
+        try:
+            db.commit()
+        except (IntegrityError, OperationalError):
+            db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document saved but processing queue is unavailable. Please retry later.",
+        )
 
     return DocumentUploadResponse(
         id=doc.id,
@@ -340,6 +363,42 @@ def get_all_documents(
         page=page,
         per_page=per_page,
     )
+
+
+@router.get("/{document_id}/download")
+def download_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download the file for a specific document (authenticated)."""
+    from app.services.storage_service import get_presigned_url, _validate_path_inside_upload_dir
+
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.user_id == current_user.id,
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    if doc.s3_url and settings.USE_S3:
+        s3_key = doc.s3_url.split(".amazonaws.com/")[-1]
+        url = get_presigned_url(s3_key)
+        if not url:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate download URL")
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=url)
+
+    if not doc.file_path or not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found in storage")
+
+    try:
+        real_path = _validate_path_inside_upload_dir(doc.file_path)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    media_type = mimetypes.guess_type(doc.original_filename)[0] or "application/octet-stream"
+    return FileResponse(path=real_path, filename=doc.original_filename, media_type=media_type)
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)

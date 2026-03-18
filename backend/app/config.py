@@ -70,6 +70,15 @@ class Settings(BaseSettings):
     # Tesseract OCR
     TESSERACT_CMD: str = ""  # Leave empty for default path
 
+    # LLM Extraction (Phase 5)
+    LLM_PROVIDER: str = "local"  # "ollama", "gemini", "anthropic", "openai", or "local"
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    GEMINI_API_KEY: str = ""
+    ANTHROPIC_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""
+    LLM_MODEL: str = ""  # e.g. "llama3.2", "claude-sonnet-4-20250514", "gpt-4o-mini"
+    LLM_TIMEOUT_SECONDS: int = 60
+
     @field_validator("SECRET_KEY")
     @classmethod
     def secret_key_must_be_strong(cls, v: str) -> str:

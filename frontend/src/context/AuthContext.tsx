@@ -47,9 +47,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 .refresh(savedRefreshToken)
                 .then((response) => {
                     const { access_token, refresh_token, user: userData } = response.data;
-                    Cookies.set("token", access_token, { sameSite: "Strict" });
-                    Cookies.set("refresh_token", refresh_token, { sameSite: "Strict" });
-                    Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict" });
+                    Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+                    Cookies.set("refresh_token", refresh_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+                    Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
                     setToken(access_token);
                     setUser(userData);
                 })
@@ -70,9 +70,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const login = useCallback(async (email: string, password: string) => {
         const response = await authApi.login({ email, password });
         const { access_token, refresh_token, user: userData } = response.data;
-        Cookies.set("token", access_token, { sameSite: "Strict" });
-        Cookies.set("refresh_token", refresh_token, { sameSite: "Strict" });
-        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict" });
+        Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+        Cookies.set("refresh_token", refresh_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
         setToken(access_token);
         setUser(userData);
     }, []);
@@ -80,9 +80,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const register = useCallback(async (data: { email: string; username: string; password: string; full_name?: string }) => {
         const response = await authApi.register(data);
         const { access_token, refresh_token, user: userData } = response.data;
-        Cookies.set("token", access_token, { sameSite: "Strict" });
-        Cookies.set("refresh_token", refresh_token, { sameSite: "Strict" });
-        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict" });
+        Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+        Cookies.set("refresh_token", refresh_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
         setToken(access_token);
         setUser(userData);
     }, []);
