@@ -433,6 +433,7 @@ def batch_delete_documents(
 @limiter.limit("30/minute")
 def get_document_status(
     request: Request,
+    response: Response,
     document_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

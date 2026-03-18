@@ -81,6 +81,7 @@ def list_users(
 @limiter.limit("30/minute")
 def get_user_detail(
     request: Request,
+    response: Response,
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
