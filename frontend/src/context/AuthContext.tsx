@@ -9,6 +9,7 @@ interface User {
     email: string;
     username: string;
     full_name?: string;
+    role: string;
 }
 
 interface AuthContextType {
@@ -18,6 +19,7 @@ interface AuthContextType {
     login: (email: string, password: string) => Promise<void>;
     register: (data: { email: string; username: string; password: string; full_name?: string }) => Promise<void>;
     logout: () => Promise<void>;
+    setTokensFromOAuth: (accessToken: string, refreshToken: string, userData: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -87,6 +89,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(userData);
     }, []);
 
+    const setTokensFromOAuth = useCallback((accessToken: string, refreshToken: string, userData: User) => {
+        Cookies.set("token", accessToken, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+        Cookies.set("refresh_token", refreshToken, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+        setToken(accessToken);
+        setUser(userData);
+    }, []);
+
     const logout = useCallback(async () => {
         const refreshToken = Cookies.get("refresh_token");
         if (refreshToken) {
@@ -104,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
+        <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, setTokensFromOAuth }}>
             {children}
         </AuthContext.Provider>
     );

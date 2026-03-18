@@ -17,16 +17,47 @@ from app.utils.rate_limiter import limiter
 from app.database import get_db
 from app.models.user import User
 from app.models.document import Document, DocumentCategory, DocumentStatus
+from app.models.document_permission import DocumentPermission
 from app.schemas.document import (
     DocumentResponse, DocumentListResponse, DocumentUploadResponse,
     DocumentStats,
 )
-from app.utils.security import get_current_user
+from app.schemas.sharing import ShareDocumentRequest, DocumentPermissionResponse
+from app.utils.security import get_current_user, require_editor
 from app.services.storage_service import save_file, delete_file
 
 logger = structlog.stdlib.get_logger()
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
+
+
+def _get_accessible_document(document_id: int, user: User, db: Session, require_edit: bool = False) -> Document:
+    """Get a document if the user is owner, admin, or has shared access."""
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    # Owner always has access
+    if doc.user_id == user.id:
+        return doc
+
+    # Admin has access to all documents
+    if user.role == "admin":
+        return doc
+
+    # Check shared permissions
+    perm = db.query(DocumentPermission).filter(
+        DocumentPermission.document_id == document_id,
+        DocumentPermission.user_id == user.id,
+    ).first()
+
+    if not perm:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    if require_edit and perm.permission != "edit":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Edit permission required")
+
+    return doc
 
 
 @router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -36,7 +67,7 @@ async def upload_document(
     response: Response,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     """Upload a document file for async OCR + ML classification."""
     from app.tasks.document_tasks import process_document_task
@@ -115,41 +146,35 @@ async def upload_document(
     )
 
 
-@router.get("/{document_id}/status")
+@router.get("/shared-with-me", response_model=DocumentListResponse)
 @limiter.limit("30/minute")
-def get_document_status(
+def get_shared_documents(
     request: Request,
-    document_id: int,
+    response: Response,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get processing status of a document."""
-    from celery.result import AsyncResult
-    from app.tasks import celery_app
-
-    doc = db.query(Document).filter(
-        Document.id == document_id,
-        Document.user_id == current_user.id,
-    ).first()
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    result = {
-        "document_id": doc.id,
-        "status": doc.status.value,
-        "category": doc.category.value if doc.category else None,
-        "confidence_score": doc.confidence_score,
-    }
-
-    # If still processing, check Celery task for progress
-    if doc.celery_task_id and doc.status in (DocumentStatus.PENDING, DocumentStatus.PROCESSING):
-        task_result = AsyncResult(doc.celery_task_id, app=celery_app)
-        if task_result.state == "PROGRESS":
-            result["progress"] = task_result.info
-        elif task_result.state == "PENDING":
-            result["progress"] = {"stage": "queued", "progress": 0}
-
-    return result
+    """Get documents shared with the current user."""
+    query = (
+        db.query(Document)
+        .join(DocumentPermission, DocumentPermission.document_id == Document.id)
+        .filter(DocumentPermission.user_id == current_user.id)
+    )
+    total = query.count()
+    documents = (
+        query.order_by(Document.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    return DocumentListResponse(
+        documents=[DocumentResponse.model_validate(d) for d in documents],
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
 
 
 @router.get("/search", response_model=DocumentListResponse)
@@ -376,6 +401,71 @@ def get_all_documents(
     )
 
 
+@router.post("/batch-delete", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
+def batch_delete_documents(
+    request: Request,
+    response: Response,
+    ids: list[int],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """Delete multiple documents at once."""
+    if not ids or len(ids) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide 1-100 document IDs.",
+        )
+    docs = db.query(Document).filter(
+        Document.id.in_(ids),
+        Document.user_id == current_user.id,
+    ).all()
+    deleted = []
+    for doc in docs:
+        delete_file(doc.file_path, doc.s3_url)
+        db.delete(doc)
+        deleted.append(doc.id)
+    db.commit()
+    return {"deleted": deleted, "count": len(deleted)}
+
+
+@router.get("/{document_id}/status")
+@limiter.limit("30/minute")
+def get_document_status(
+    request: Request,
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get processing status of a document."""
+    from celery.result import AsyncResult
+    from app.tasks import celery_app
+
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.user_id == current_user.id,
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    result = {
+        "document_id": doc.id,
+        "status": doc.status.value,
+        "category": doc.category.value if doc.category else None,
+        "confidence_score": doc.confidence_score,
+    }
+
+    # If still processing, check Celery task for progress
+    if doc.celery_task_id and doc.status in (DocumentStatus.PENDING, DocumentStatus.PROCESSING):
+        task_result = AsyncResult(doc.celery_task_id, app=celery_app)
+        if task_result.state == "PROGRESS":
+            result["progress"] = task_result.info
+        elif task_result.state == "PENDING":
+            result["progress"] = {"stage": "queued", "progress": 0}
+
+    return result
+
+
 @router.get("/{document_id}/download")
 def download_document(
     document_id: int,
@@ -385,12 +475,7 @@ def download_document(
     """Download the file for a specific document (authenticated)."""
     from app.services.storage_service import get_presigned_url, _validate_path_inside_upload_dir
 
-    doc = db.query(Document).filter(
-        Document.id == document_id,
-        Document.user_id == current_user.id,
-    ).first()
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    doc = _get_accessible_document(document_id, current_user, db)
 
     if doc.s3_url and settings.USE_S3:
         s3_key = doc.s3_url.split(".amazonaws.com/")[-1]
@@ -417,7 +502,7 @@ def save_highlights(
     document_id: int,
     highlights: list[dict],
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     """Save user-highlighted text selections for a document."""
     doc = db.query(Document).filter(
@@ -444,46 +529,124 @@ def get_document(
     current_user: User = Depends(get_current_user),
 ):
     """Get a single document by ID."""
+    doc = _get_accessible_document(document_id, current_user, db)
+    return DocumentResponse.model_validate(doc)
+
+
+@router.post("/{document_id}/share")
+def share_document(
+    document_id: int,
+    payload: ShareDocumentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """Share a document with another user by email."""
     doc = db.query(Document).filter(
         Document.id == document_id,
         Document.user_id == current_user.id,
     ).first()
-
+    if not doc and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found",
-        )
+        doc = db.query(Document).filter(Document.id == document_id).first()
+        if not doc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-    return DocumentResponse.model_validate(doc)
+    target_user = db.query(User).filter(User.email == payload.email).first()
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if target_user.id == doc.user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot share with document owner")
+
+    existing = db.query(DocumentPermission).filter(
+        DocumentPermission.document_id == document_id,
+        DocumentPermission.user_id == target_user.id,
+    ).first()
+
+    if existing:
+        existing.permission = payload.permission
+        db.commit()
+        return {"detail": "Permission updated", "permission_id": existing.id}
+
+    perm = DocumentPermission(
+        document_id=document_id,
+        user_id=target_user.id,
+        permission=payload.permission,
+        granted_by=current_user.id,
+    )
+    db.add(perm)
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Permission already exists")
+    db.refresh(perm)
+    return {"detail": "Document shared", "permission_id": perm.id}
 
 
-@router.post("/batch-delete", status_code=status.HTTP_200_OK)
-@limiter.limit("5/minute")
-def batch_delete_documents(
-    request: Request,
-    response: Response,
-    ids: list[int],
+@router.get("/{document_id}/permissions", response_model=list[DocumentPermissionResponse])
+def get_document_permissions(
+    document_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete multiple documents at once."""
-    if not ids or len(ids) > 100:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Provide 1-100 document IDs.",
-        )
-    docs = db.query(Document).filter(
-        Document.id.in_(ids),
+    """List who has access to a document."""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
         Document.user_id == current_user.id,
+    ).first()
+    if not doc and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    perms = db.query(DocumentPermission).filter(
+        DocumentPermission.document_id == document_id,
     ).all()
-    deleted = []
-    for doc in docs:
-        delete_file(doc.file_path, doc.s3_url)
-        db.delete(doc)
-        deleted.append(doc.id)
-    db.commit()
-    return {"deleted": deleted, "count": len(deleted)}
+
+    result = []
+    for p in perms:
+        user = db.query(User).filter(User.id == p.user_id).first()
+        result.append(DocumentPermissionResponse(
+            id=p.id,
+            document_id=p.document_id,
+            user_id=p.user_id,
+            user_email=user.email if user else "",
+            user_name=user.full_name or user.username if user else "",
+            permission=p.permission,
+            granted_by=p.granted_by,
+            created_at=p.created_at,
+        ))
+    return result
+
+
+@router.delete("/{document_id}/share/{permission_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_share(
+    document_id: int,
+    permission_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """Revoke a document share."""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.user_id == current_user.id,
+    ).first()
+    if not doc and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    perm = db.query(DocumentPermission).filter(
+        DocumentPermission.id == permission_id,
+        DocumentPermission.document_id == document_id,
+    ).first()
+    if not perm:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found")
+
+    db.delete(perm)
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to revoke permission")
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -493,7 +656,7 @@ def delete_document(
     response: Response,
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     """Delete a document and its associated file."""
     doc = db.query(Document).filter(

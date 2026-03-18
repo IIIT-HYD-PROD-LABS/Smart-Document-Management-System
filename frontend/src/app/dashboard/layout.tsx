@@ -4,14 +4,16 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
-import { FiHome, FiUpload, FiSearch, FiBarChart2, FiLogOut, FiFileText } from "react-icons/fi";
+import { FiHome, FiUpload, FiSearch, FiBarChart2, FiLogOut, FiFileText, FiShield, FiShare2 } from "react-icons/fi";
 
-const navItems = [
-    { href: "/dashboard", icon: FiHome, label: "Overview" },
-    { href: "/dashboard/upload", icon: FiUpload, label: "Upload" },
-    { href: "/dashboard/documents", icon: FiFileText, label: "Documents" },
-    { href: "/dashboard/search", icon: FiSearch, label: "Search" },
-    { href: "/dashboard/analytics", icon: FiBarChart2, label: "Analytics" },
+const allNavItems = [
+    { href: "/dashboard", icon: FiHome, label: "Overview", roles: ["admin", "editor", "viewer"] },
+    { href: "/dashboard/upload", icon: FiUpload, label: "Upload", roles: ["admin", "editor"] },
+    { href: "/dashboard/documents", icon: FiFileText, label: "Documents", roles: ["admin", "editor", "viewer"] },
+    { href: "/dashboard/shared", icon: FiShare2, label: "Shared with me", roles: ["admin", "editor", "viewer"] },
+    { href: "/dashboard/search", icon: FiSearch, label: "Search", roles: ["admin", "editor", "viewer"] },
+    { href: "/dashboard/analytics", icon: FiBarChart2, label: "Analytics", roles: ["admin", "editor", "viewer"] },
+    { href: "/dashboard/admin", icon: FiShield, label: "Admin", roles: ["admin"] },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -30,6 +32,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
         );
     }
+
+    const navItems = allNavItems.filter(item => item.roles.includes(user.role || "viewer"));
 
     return (
         <div className="min-h-screen bg-[#09090b] flex">
@@ -67,7 +71,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-[13px] font-medium text-white truncate">{user.username}</p>
-                            <p className="text-[11px] text-[#52525b] truncate">{user.email}</p>
+                            <p className="text-[11px] text-[#52525b] truncate">
+                                {user.email}
+                                {user.role && (
+                                    <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-[#27272a] text-[#71717a] uppercase">
+                                        {user.role}
+                                    </span>
+                                )}
+                            </p>
                         </div>
                     </div>
                     <button

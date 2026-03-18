@@ -33,6 +33,7 @@ class UserResponse(BaseModel):
     username: str
     full_name: str | None
     is_active: bool
+    role: str
     created_at: datetime
 
     class Config:
@@ -54,3 +55,8 @@ class TokenPairResponse(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str = Field(..., min_length=1)
+
+
+class OAuthExchangeRequest(BaseModel):
+    code: str = Field(..., min_length=1)
+    token: str = Field(..., min_length=1)

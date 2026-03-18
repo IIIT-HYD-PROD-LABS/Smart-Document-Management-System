@@ -128,6 +128,9 @@ export const authApi = {
 
     logout: (refreshToken: string) =>
         api.post("/auth/logout", { refresh_token: refreshToken }),
+
+    getProviders: () =>
+        api.get("/auth/providers"),
 };
 
 // ──── Documents API ────
@@ -193,6 +196,57 @@ export const documentsApi = {
 // ──── ML API ────
 export const mlApi = {
     getEvaluation: () => api.get("/ml/evaluation"),
+};
+
+// ──── Admin API ────
+export const adminApi = {
+    getUsers: (page = 1, perPage = 20, search?: string) => {
+        const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+        if (search) params.append("search", search);
+        return api.get(`/admin/users?${params.toString()}`);
+    },
+
+    getUser: (id: number) =>
+        api.get(`/admin/users/${id}`),
+
+    updateRole: (id: number, role: string) =>
+        api.patch(`/admin/users/${id}/role`, { role }),
+
+    updateStatus: (id: number, isActive: boolean) =>
+        api.patch(`/admin/users/${id}/status`, { is_active: isActive }),
+
+    getStats: () =>
+        api.get("/admin/stats"),
+};
+
+// ──── Sharing API ────
+export const sharingApi = {
+    share: (documentId: number, email: string, permission: string = "view") =>
+        api.post(`/documents/${documentId}/share`, { email, permission }),
+
+    getPermissions: (documentId: number) =>
+        api.get(`/documents/${documentId}/permissions`),
+
+    revoke: (documentId: number, permissionId: number) =>
+        api.delete(`/documents/${documentId}/share/${permissionId}`),
+
+    getSharedWithMe: (page = 1, perPage = 20) =>
+        api.get(`/documents/shared-with-me?page=${page}&per_page=${perPage}`),
+};
+
+// ──── OAuth API ────
+export const oauthApi = {
+    getProviders: () =>
+        api.get("/auth/providers"),
+
+    getGoogleUrl: () =>
+        api.get("/auth/oauth/google"),
+
+    getMicrosoftUrl: () =>
+        api.get("/auth/oauth/microsoft"),
+
+    exchangeCode: (code: string, token: string) =>
+        api.post("/auth/oauth/exchange", { code, token }),
 };
 
 export default api;
