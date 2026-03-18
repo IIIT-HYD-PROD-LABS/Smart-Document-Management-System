@@ -110,6 +110,7 @@ def get_user_detail(
 @limiter.limit("10/minute")
 def update_user_role(
     request: Request,
+    response: Response,
     user_id: int,
     payload: RoleUpdateRequest,
     db: Session = Depends(get_db),
@@ -139,6 +140,7 @@ def update_user_role(
 @limiter.limit("10/minute")
 def update_user_status(
     request: Request,
+    response: Response,
     user_id: int,
     payload: StatusUpdateRequest,
     db: Session = Depends(get_db),
