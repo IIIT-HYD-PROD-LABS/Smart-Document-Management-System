@@ -13,6 +13,15 @@ from app.config import settings
 logger = structlog.stdlib.get_logger()
 
 
+def _validate_path_inside_upload_dir(file_path: str) -> str:
+    """Resolve the path and ensure it is inside UPLOAD_DIR. Returns the resolved path."""
+    real_path = os.path.realpath(file_path)
+    real_upload_dir = os.path.realpath(settings.UPLOAD_DIR)
+    if not real_path.startswith(real_upload_dir + os.sep) and real_path != real_upload_dir:
+        raise ValueError(f"Path traversal detected: '{real_path}' escapes '{real_upload_dir}'")
+    return real_path
+
+
 def _get_s3_client():
     """Create a configured boto3 S3 client."""
     return boto3.client(
@@ -32,6 +41,7 @@ def generate_filename(original_filename: str) -> str:
 def save_file_local(file_bytes: bytes, filename: str) -> str:
     """Save file to local upload directory. Returns the file path."""
     file_path = os.path.join(settings.UPLOAD_DIR, filename)
+    file_path = _validate_path_inside_upload_dir(file_path)
     with open(file_path, "wb") as f:
         f.write(file_bytes)
     return file_path
@@ -81,8 +91,13 @@ def save_file(file_bytes: bytes, original_filename: str) -> tuple[str, str | Non
 
 def delete_file(file_path: str | None, s3_url: str | None) -> None:
     """Delete a file from storage."""
-    if file_path and os.path.exists(file_path):
-        os.remove(file_path)
+    if file_path:
+        try:
+            real_path = _validate_path_inside_upload_dir(file_path)
+            if os.path.exists(real_path):
+                os.remove(real_path)
+        except ValueError:
+            logger.warning("path_traversal_blocked_on_delete", file_path=file_path)
     if s3_url and settings.USE_S3:
         s3_key = s3_url.split(".amazonaws.com/")[-1]
         s3_client = _get_s3_client()

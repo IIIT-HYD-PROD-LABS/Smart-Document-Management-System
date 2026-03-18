@@ -14,6 +14,11 @@ class DocumentResponse(BaseModel):
     confidence_score: float
     extracted_text: str | None
     extracted_metadata: dict | None = None
+    ai_summary: str | None = None
+    ai_extracted_fields: dict | None = None
+    ai_extraction_status: str | None = None
+    ai_provider: str | None = None
+    ai_error: str | None = None
     status: str
     s3_url: str | None
     created_at: datetime

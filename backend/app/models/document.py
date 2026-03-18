@@ -69,6 +69,13 @@ class Document(Base):
     # Alembic autogenerate false-diff bug (issue #1390)
     search_vector = Column(TSVECTOR, nullable=True)
 
+    # AI / LLM extraction (Phase 5)
+    ai_summary = Column(Text, nullable=True)
+    ai_extracted_fields = Column(JSON, nullable=True)
+    ai_extraction_status = Column(String(20), nullable=True)  # pending, completed, failed, skipped
+    ai_provider = Column(String(50), nullable=True)
+    ai_error = Column(Text, nullable=True)
+
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(

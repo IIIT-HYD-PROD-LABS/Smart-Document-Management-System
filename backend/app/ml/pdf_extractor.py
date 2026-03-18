@@ -9,6 +9,8 @@ from app.ml.ocr import extract_text_from_pil_image
 
 logger = structlog.stdlib.get_logger()
 
+MAX_PDF_PAGES = 200
+
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     """
@@ -19,7 +21,9 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 
     try:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            for page in pdf.pages:
+            if len(pdf.pages) > MAX_PDF_PAGES:
+                logger.warning("pdf_page_limit_exceeded", total_pages=len(pdf.pages), max_pages=MAX_PDF_PAGES)
+            for page in pdf.pages[:MAX_PDF_PAGES]:
                 # Try direct text extraction first
                 page_text = page.extract_text()
 

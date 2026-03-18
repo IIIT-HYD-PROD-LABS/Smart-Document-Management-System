@@ -89,9 +89,9 @@ api.interceptors.response.use(
             const { access_token, refresh_token: newRefreshToken, user } = response.data;
 
             // Update cookies with new tokens
-            Cookies.set("token", access_token, { sameSite: "Strict" });
-            Cookies.set("refresh_token", newRefreshToken, { sameSite: "Strict" });
-            Cookies.set("user", JSON.stringify(user), { sameSite: "Strict" });
+            Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+            Cookies.set("refresh_token", newRefreshToken, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+            Cookies.set("user", JSON.stringify(user), { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
 
             // Retry all queued requests with the new token
             processQueue(null, access_token);
@@ -151,8 +151,8 @@ export const documentsApi = {
     getStatus: (documentId: number) =>
         api.get(`/documents/${documentId}/status`),
 
-    getAll: (skip = 0, limit = 50) =>
-        api.get(`/documents/all?skip=${skip}&limit=${limit}`),
+    getAll: (page = 1, perPage = 50) =>
+        api.get(`/documents/all?page=${page}&per_page=${perPage}`),
 
     getById: (id: number) =>
         api.get(`/documents/${id}`),

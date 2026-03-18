@@ -2,6 +2,7 @@
 
 import os
 import structlog
+from celery.exceptions import SoftTimeLimitExceeded
 from app.tasks import celery_app
 from app.database import SessionLocal
 from app.models.document import Document, DocumentStatus, DocumentCategory
@@ -11,7 +12,7 @@ from app.ml.metadata_extractor import extract_metadata
 logger = structlog.stdlib.get_logger()
 
 
-@celery_app.task(bind=True, max_retries=3)
+@celery_app.task(bind=True, max_retries=3, time_limit=600, soft_time_limit=540)
 def process_document_task(self, document_id: int):
     """
     Async task to process a document:
@@ -56,11 +57,22 @@ def process_document_task(self, document_id: int):
         confidence: float = result[2]
 
         # Stage 3: Metadata extraction
-        self.update_state(state="PROGRESS", meta={"stage": "extracting_metadata", "progress": 60})
+        self.update_state(state="PROGRESS", meta={"stage": "extracting_metadata", "progress": 50})
         metadata = extract_metadata(extracted_text) if extracted_text else {"dates": [], "amounts": [], "vendor": None}
 
-        # Stage 4: Saving results
-        self.update_state(state="PROGRESS", meta={"stage": "saving_results", "progress": 80})
+        # Stage 4: LLM smart extraction
+        self.update_state(state="PROGRESS", meta={"stage": "ai_extraction", "progress": 65})
+        ai_result = None
+        if extracted_text and len(extracted_text.strip()) > 20:
+            try:
+                from app.services.llm_service import extract_with_llm
+                ai_result = extract_with_llm(extracted_text, category)
+                logger.info("ai_extraction_completed", document_id=document_id, provider=ai_result.get("provider"))
+            except Exception as ai_err:
+                logger.warning("ai_extraction_failed", document_id=document_id, error=str(ai_err))
+
+        # Stage 5: Saving results
+        self.update_state(state="PROGRESS", meta={"stage": "saving_results", "progress": 85})
 
         doc.extracted_text = extracted_text
         doc.category = (
@@ -70,6 +82,15 @@ def process_document_task(self, document_id: int):
         )
         doc.confidence_score = confidence
         doc.extracted_metadata = metadata
+
+        if ai_result:
+            doc.ai_summary = ai_result.get("summary")
+            doc.ai_extracted_fields = ai_result.get("fields")
+            doc.ai_provider = ai_result.get("provider")
+            doc.ai_extraction_status = "completed"
+        else:
+            doc.ai_extraction_status = "skipped"
+
         doc.status = DocumentStatus.COMPLETED
         db.commit()
 
@@ -88,6 +109,17 @@ def process_document_task(self, document_id: int):
             "status": "completed",
         }
 
+    except SoftTimeLimitExceeded:
+        logger.error("document_processing_timeout", document_id=document_id)
+        if doc is not None:
+            try:
+                doc.status = DocumentStatus.FAILED
+                doc.extracted_text = "Processing timed out."
+                db.commit()
+            except Exception:
+                db.rollback()
+        raise
+
     except Exception as e:
         logger.error("document_processing_failed", document_id=document_id, error=str(e))
         if doc is not None:
@@ -105,4 +137,5 @@ def process_document_task(self, document_id: int):
             raise
 
     finally:
+        db.rollback()
         db.close()

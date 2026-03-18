@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -38,7 +39,11 @@ def _create_token_pair(user: User, db: Session) -> TokenPairResponse:
         expires_at=expires_at,
     )
     db.add(db_refresh_token)
-    db.commit()
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to create session")
 
     return TokenPairResponse(
         access_token=access_token,
@@ -71,7 +76,14 @@ def register(request: Request, response: Response, payload: UserRegister, db: Se
         full_name=payload.full_name,
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email or username already registered")
+    except OperationalError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database temporarily unavailable")
     db.refresh(user)
 
     return _create_token_pair(user, db)
@@ -92,7 +104,8 @@ def login(request: Request, response: Response, payload: UserLogin, db: Session 
 
 
 @router.post("/refresh", response_model=TokenPairResponse)
-def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+def refresh(request: Request, payload: RefreshTokenRequest, db: Session = Depends(get_db)):
     """Exchange a valid refresh token for a new access + refresh token pair.
 
     Implements token rotation with reuse detection:
@@ -173,7 +186,8 @@ def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
-def logout(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+def logout(request: Request, payload: RefreshTokenRequest, db: Session = Depends(get_db)):
     """Revoke the provided refresh token (server-side logout)."""
     db_token = (
         db.query(RefreshToken)

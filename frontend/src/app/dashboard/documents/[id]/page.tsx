@@ -5,6 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
 import { FiArrowLeft, FiFile, FiCalendar, FiTag, FiHash, FiCopy, FiCheck } from "react-icons/fi";
 
+interface AIField {
+    value: unknown;
+    confidence: number;
+}
+
 interface DocumentDetail {
     id: number;
     filename: string;
@@ -15,6 +20,11 @@ interface DocumentDetail {
     confidence_score: number;
     extracted_text: string | null;
     extracted_metadata: Record<string, unknown> | null;
+    ai_summary: string | null;
+    ai_extracted_fields: Record<string, AIField> | null;
+    ai_extraction_status: string | null;
+    ai_provider: string | null;
+    ai_error: string | null;
     status: string;
     s3_url: string | null;
     created_at: string;
@@ -158,6 +168,65 @@ export default function DocumentDetailPage() {
                             <MetadataItem key={key} label={key} value={String(value ?? "-")} />
                         ))}
                     </div>
+                </div>
+            )}
+
+            {/* AI Summary */}
+            {doc.ai_summary && (
+                <div className="p-5 bg-[#111113] border border-[#27272a] rounded-lg mb-6">
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-sm font-medium text-white">AI Summary</h2>
+                        {doc.ai_provider && (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-[#27272a] text-[#71717a] uppercase tracking-wider">
+                                {doc.ai_provider}
+                            </span>
+                        )}
+                    </div>
+                    <p className="text-sm text-[#a1a1aa] leading-relaxed">{doc.ai_summary}</p>
+                </div>
+            )}
+
+            {/* AI Extracted Fields */}
+            {doc.ai_extracted_fields && Object.keys(doc.ai_extracted_fields).length > 0 && (
+                <div className="p-5 bg-[#111113] border border-[#27272a] rounded-lg mb-6">
+                    <h2 className="text-sm font-medium text-white mb-4">AI Extracted Fields</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {Object.entries(doc.ai_extracted_fields).map(([key, field]) => {
+                            const conf = typeof field === "object" && field && "confidence" in field
+                                ? (field as AIField).confidence
+                                : null;
+                            const val = typeof field === "object" && field && "value" in field
+                                ? (field as AIField).value
+                                : field;
+                            const displayVal = Array.isArray(val) ? val.join(", ") : String(val ?? "-");
+                            const confPct = conf !== null ? Math.round(conf * 100) : null;
+                            const confColor = conf !== null
+                                ? conf >= 0.8 ? "text-[#10b981]" : conf >= 0.5 ? "text-[#f59e0b]" : "text-[#ef4444]"
+                                : "";
+                            return (
+                                <div key={key} className="flex items-start justify-between p-3 bg-[#09090b] rounded-md border border-[#1e1e21]">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[11px] text-[#52525b] uppercase tracking-wider mb-1">
+                                            {key.replace(/_/g, " ")}
+                                        </p>
+                                        <p className="text-sm text-white break-words">{displayVal}</p>
+                                    </div>
+                                    {confPct !== null && (
+                                        <span className={`text-xs font-medium ml-3 shrink-0 ${confColor}`}>
+                                            {confPct}%
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* AI Error */}
+            {doc.ai_error && (
+                <div className="p-4 bg-[#ef4444]/5 border border-[#ef4444]/20 rounded-lg mb-6">
+                    <p className="text-xs text-[#ef4444]">AI extraction failed: {doc.ai_error}</p>
                 </div>
             )}
 
