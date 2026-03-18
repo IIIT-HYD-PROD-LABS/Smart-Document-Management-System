@@ -9,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
-from app.routers import auth, documents, ml
+from app.routers import auth, documents, ml, admin
 from app.utils.logging import setup_logging
 from app.utils.rate_limiter import limiter
 
@@ -65,6 +65,7 @@ app.add_middleware(CorrelationIdMiddleware)
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(ml.router)
+app.include_router(admin.router)
 
 
 @app.get("/", tags=["Root"])

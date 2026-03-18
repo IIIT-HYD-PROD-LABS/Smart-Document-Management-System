@@ -87,8 +87,9 @@ class Document(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    # Relationship
+    # Relationships
     owner = relationship("User", back_populates="documents")
+    permissions = relationship("DocumentPermission", back_populates="document", cascade="all, delete-orphan")
 
     # Indexes for search performance
     __table_args__ = (

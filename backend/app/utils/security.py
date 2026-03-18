@@ -34,7 +34,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    to_encode.update({"exp": expire, "type": "access"})
+    to_encode["exp"] = expire
+    if "type" not in to_encode:
+        to_encode["type"] = "access"
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
@@ -100,3 +102,28 @@ def get_current_user(
             detail="User account is deactivated",
         )
     return user
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """FastAPI dependency that restricts access to admin users only."""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return current_user
+
+
+def require_editor(current_user: User = Depends(get_current_user)) -> User:
+    """FastAPI dependency that restricts access to admin and editor users."""
+    if current_user.role not in ("admin", "editor"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Editor access required",
+        )
+    return current_user
+
+
+def require_viewer(current_user: User = Depends(get_current_user)) -> User:
+    """FastAPI dependency for viewer access. All authenticated users can view."""
+    return current_user

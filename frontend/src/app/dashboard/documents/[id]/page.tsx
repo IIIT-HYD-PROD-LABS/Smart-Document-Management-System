@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { documentsApi } from "@/lib/api";
+import { documentsApi, sharingApi } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import toast from "react-hot-toast";
-import { FiArrowLeft, FiFile, FiCalendar, FiTag, FiHash, FiCopy, FiCheck, FiEdit3, FiX, FiSave } from "react-icons/fi";
+import { FiArrowLeft, FiFile, FiCalendar, FiTag, FiHash, FiCopy, FiCheck, FiEdit3, FiX, FiSave, FiShare2, FiTrash2 } from "react-icons/fi";
 
 interface AIField {
     value: unknown;
@@ -37,6 +38,17 @@ interface DocumentDetail {
     s3_url: string | null;
     created_at: string;
     updated_at: string | null;
+}
+
+interface SharePermission {
+    id: number;
+    document_id: number;
+    user_id: number;
+    user_email: string;
+    user_name: string;
+    permission: string;
+    granted_by: number;
+    created_at: string;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -102,6 +114,7 @@ function HighlightedText({ text, highlights }: { text: string; highlights: Highl
 export default function DocumentDetailPage() {
     const params = useParams();
     const router = useRouter();
+    const { user } = useAuth();
     const [doc, setDoc] = useState<DocumentDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -112,6 +125,15 @@ export default function DocumentDetailPage() {
     const [highlights, setHighlights] = useState<Highlight[]>([]);
     const [saving, setSaving] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
+
+    // Sharing state
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [shareEmail, setShareEmail] = useState("");
+    const [sharePermission, setSharePermission] = useState("view");
+    const [permissions, setPermissions] = useState<SharePermission[]>([]);
+    const [sharingLoading, setSharingLoading] = useState(false);
+
+    const canShare = user?.role === "admin" || user?.role === "editor";
 
     useEffect(() => {
         const id = Number(params.id);
@@ -132,6 +154,49 @@ export default function DocumentDetailPage() {
             })
             .finally(() => setLoading(false));
     }, [params.id]);
+
+    const docId = doc?.id;
+
+    const loadPermissions = useCallback(async () => {
+        if (!docId) return;
+        try {
+            const res = await sharingApi.getPermissions(docId);
+            setPermissions(res.data);
+        } catch {
+            // Silently fail if not owner
+        }
+    }, [docId]);
+
+    useEffect(() => {
+        if (doc && canShare) loadPermissions();
+    }, [doc, canShare, loadPermissions]);
+
+    const handleShare = async () => {
+        if (!doc || !shareEmail) return;
+        setSharingLoading(true);
+        try {
+            await sharingApi.share(doc.id, shareEmail, sharePermission);
+            toast.success("Document shared");
+            setShareEmail("");
+            loadPermissions();
+        } catch (err: unknown) {
+            const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+            toast.error(message || "Failed to share");
+        } finally {
+            setSharingLoading(false);
+        }
+    };
+
+    const handleRevoke = async (permId: number) => {
+        if (!doc) return;
+        try {
+            await sharingApi.revoke(doc.id, permId);
+            toast.success("Access revoked");
+            loadPermissions();
+        } catch {
+            toast.error("Failed to revoke");
+        }
+    };
 
     const copyText = () => {
         if (!doc?.extracted_text) return;
@@ -190,7 +255,7 @@ export default function DocumentDetailPage() {
         setHasChanges(true);
         selection.removeAllRanges();
         toast.success("Text highlighted");
-    }, [highlightMode, doc, highlights]);
+    }, [highlightMode, doc?.id, doc?.extracted_text, highlights]);
 
     const removeHighlight = (index: number) => {
         setHighlights(prev => prev.filter((_, i) => i !== index));
@@ -256,7 +321,18 @@ export default function DocumentDetailPage() {
                         <p className="text-xs text-[#52525b] mt-1">{fileSize} &middot; {doc.file_type.toUpperCase()}</p>
                     </div>
                 </div>
-                <StatusBadge status={doc.status} />
+                <div className="flex items-center gap-3">
+                    {canShare && (
+                        <button
+                            onClick={() => setShowShareModal(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#71717a] hover:text-white border border-[#27272a] rounded-md hover:border-[#3f3f46] transition-colors cursor-pointer"
+                        >
+                            <FiShare2 className="w-3.5 h-3.5" />
+                            Share
+                        </button>
+                    )}
+                    <StatusBadge status={doc.status} />
+                </div>
             </div>
 
             {/* Info grid */}
@@ -367,7 +443,7 @@ export default function DocumentDetailPage() {
                         </button>
                     </div>
                     <div className="space-y-2">
-                        {highlights.sort((a, b) => a.start - b.start).map((h, i) => (
+                        {[...highlights].sort((a, b) => a.start - b.start).map((h, i) => (
                             <div key={i} className="p-2.5 bg-[#f59e0b]/5 border border-[#f59e0b]/10 rounded text-sm text-[#a1a1aa]">
                                 {h.text.length > 150 ? h.text.slice(0, 150) + "..." : h.text}
                             </div>
@@ -428,7 +504,7 @@ export default function DocumentDetailPage() {
                 {/* Highlight chips in edit mode */}
                 {highlightMode && highlights.length > 0 && (
                     <div className="px-5 py-3 border-b border-[#27272a] flex flex-wrap gap-2">
-                        {highlights.sort((a, b) => a.start - b.start).map((h, i) => (
+                        {[...highlights].sort((a, b) => a.start - b.start).map((h, i) => (
                             <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#f59e0b]/10 text-[#f59e0b] text-xs">
                                 {h.text.length > 30 ? h.text.slice(0, 30) + "..." : h.text}
                                 <button onClick={() => removeHighlight(i)} className="hover:text-white cursor-pointer">
@@ -454,6 +530,70 @@ export default function DocumentDetailPage() {
                     )}
                 </div>
             </div>
+
+            {/* Share Modal */}
+            {showShareModal && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowShareModal(false)}>
+                    <div className="bg-[#111113] border border-[#27272a] rounded-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-medium text-white">Share document</h3>
+                            <button onClick={() => setShowShareModal(false)} className="text-[#52525b] hover:text-white cursor-pointer">
+                                <FiX className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="flex gap-2 mb-4">
+                            <input
+                                type="email"
+                                value={shareEmail}
+                                onChange={(e) => setShareEmail(e.target.value)}
+                                placeholder="Enter email address"
+                                className="flex-1 px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors"
+                            />
+                            <select
+                                value={sharePermission}
+                                onChange={(e) => setSharePermission(e.target.value)}
+                                className="px-2 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white focus:outline-none cursor-pointer"
+                            >
+                                <option value="view">View</option>
+                                <option value="edit">Edit</option>
+                            </select>
+                            <button
+                                onClick={handleShare}
+                                disabled={sharingLoading || !shareEmail}
+                                className="px-4 py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors disabled:opacity-50 cursor-pointer"
+                            >
+                                {sharingLoading ? "..." : "Share"}
+                            </button>
+                        </div>
+
+                        {permissions.length > 0 && (
+                            <div>
+                                <p className="text-[11px] text-[#52525b] uppercase tracking-wider mb-2">People with access</p>
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                    {permissions.map((p) => (
+                                        <div key={p.id} className="flex items-center justify-between p-2.5 bg-[#09090b] rounded-md border border-[#1e1e21]">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm text-white truncate">{p.user_name || p.user_email}</p>
+                                                <p className="text-xs text-[#52525b] truncate">{p.user_email}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2 ml-3">
+                                                <span className="text-xs text-[#71717a] px-2 py-0.5 bg-[#27272a] rounded">{p.permission}</span>
+                                                <button
+                                                    onClick={() => handleRevoke(p.id)}
+                                                    className="text-[#52525b] hover:text-[#ef4444] transition-colors cursor-pointer"
+                                                >
+                                                    <FiTrash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -79,6 +79,15 @@ class Settings(BaseSettings):
     LLM_MODEL: str = ""  # e.g. "llama3.2", "claude-sonnet-4-20250514", "gpt-4o-mini"
     LLM_TIMEOUT_SECONDS: int = 60
 
+    # OAuth (Phase 6 - optional)
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    MICROSOFT_CLIENT_ID: str = ""
+    MICROSOFT_CLIENT_SECRET: str = ""
+    MICROSOFT_TENANT_ID: str = "common"
+    FRONTEND_URL: str = "http://localhost:3000"
+    BACKEND_URL: str = ""  # e.g. "http://localhost:8000" - used for OAuth redirects
+
     @field_validator("SECRET_KEY")
     @classmethod
     def secret_key_must_be_strong(cls, v: str) -> str:

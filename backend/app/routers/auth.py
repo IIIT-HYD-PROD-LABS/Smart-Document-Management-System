@@ -1,9 +1,12 @@
 """Authentication API routes - Register, Login, Refresh, Logout."""
 
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timedelta, timezone
 
+import jwt
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+from fastapi.responses import RedirectResponse
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
@@ -17,6 +20,7 @@ from app.schemas import (
     UserResponse,
     TokenPairResponse,
     RefreshTokenRequest,
+    OAuthExchangeRequest,
 )
 from app.utils.security import (
     hash_password,
@@ -33,7 +37,7 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 def _create_token_pair(user: User, db: Session) -> TokenPairResponse:
     """Create an access + refresh token pair for a user and persist the refresh token."""
-    access_token = create_access_token(data={"sub": str(user.id)})
+    access_token = create_access_token(data={"sub": str(user.id), "role": user.role})
     refresh_token_value, expires_at = create_refresh_token()
 
     db_refresh_token = RefreshToken(
@@ -72,11 +76,14 @@ def register(request: Request, response: Response, payload: UserRegister, db: Se
             detail="Username already taken",
         )
 
+    # First user becomes admin automatically
+    is_first_user = db.query(User).count() == 0
     user = User(
         email=payload.email,
         username=payload.username,
         hashed_password=hash_password(payload.password),
         full_name=payload.full_name,
+        role="admin" if is_first_user else "editor",
     )
     db.add(user)
     try:
@@ -97,7 +104,20 @@ def register(request: Request, response: Response, payload: UserRegister, db: Se
 def login(request: Request, response: Response, payload: UserLogin, db: Session = Depends(get_db)):
     """Authenticate user and return a token pair."""
     user = db.query(User).filter(User.email == payload.email).first()
-    if not user or not verify_password(payload.password, user.hashed_password):
+    if not user:
+        logger.warning("login_failed", email=payload.email)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+
+    if user.auth_provider != "local":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"This account uses {user.auth_provider} login. Please use the {user.auth_provider} button to sign in.",
+        )
+
+    if not user.hashed_password or not verify_password(payload.password, user.hashed_password):
         logger.warning("login_failed", email=payload.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -180,7 +200,7 @@ def refresh(request: Request, payload: RefreshTokenRequest, db: Session = Depend
             detail="User not found",
         )
 
-    access_token = create_access_token(data={"sub": str(user.id)})
+    access_token = create_access_token(data={"sub": str(user.id), "role": user.role})
 
     return TokenPairResponse(
         access_token=access_token,
@@ -211,3 +231,204 @@ def logout(request: Request, payload: RefreshTokenRequest, db: Session = Depends
         db.commit()
 
     return {"detail": "Successfully logged out"}
+
+
+@router.get("/providers")
+def get_auth_providers():
+    """Return which OAuth providers are configured."""
+    providers = ["local"]
+    if settings.GOOGLE_CLIENT_ID:
+        providers.append("google")
+    if settings.MICROSOFT_CLIENT_ID:
+        providers.append("microsoft")
+    return {"providers": providers}
+
+
+@router.get("/oauth/google")
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+def google_auth_url(request: Request):
+    """Return the Google OAuth authorization URL."""
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Google OAuth not configured")
+    from app.services.oauth_service import GoogleOAuth
+    url = GoogleOAuth.get_auth_url()
+    return {"url": url}
+
+
+@router.get("/callback/google")
+async def google_callback(code: str, db: Session = Depends(get_db)):
+    """Handle Google OAuth callback."""
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Google OAuth not configured")
+    from app.services.oauth_service import GoogleOAuth
+
+    try:
+        token_data = await GoogleOAuth.exchange_code(code)
+        user_info = await GoogleOAuth.get_user_info(token_data["access_token"])
+    except Exception as e:
+        logger.error("google_oauth_failed", error=str(e))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to authenticate with Google")
+
+    email = user_info.get("email")
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email not provided by Google")
+
+    oauth_id = f"google_{user_info['id']}"
+    user = db.query(User).filter(User.oauth_id == oauth_id).first()
+    if not user:
+        user = db.query(User).filter(User.email == email).first()
+        if user:
+            # Link OAuth to existing account but keep original auth_provider
+            # so password login still works
+            if not user.oauth_id:
+                user.oauth_id = oauth_id
+            db.commit()
+        else:
+            # Create new user
+            is_first_user = db.query(User).count() == 0
+            username = email.split("@")[0]
+            # Ensure unique username
+            base_username = username
+            counter = 1
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}{counter}"
+                counter += 1
+            user = User(
+                email=email,
+                username=username,
+                full_name=user_info.get("name"),
+                auth_provider="google",
+                oauth_id=oauth_id,
+                role="admin" if is_first_user else "editor",
+            )
+            try:
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+            except IntegrityError:
+                db.rollback()
+                # User was created by a concurrent request, re-fetch
+                user = db.query(User).filter(User.email == email).first()
+                if not user:
+                    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Account creation failed")
+
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
+
+    # Generate a one-time exchange code
+    exchange_code = secrets.token_urlsafe(32)
+    # Store in a short-lived token
+    exchange_token = create_access_token(
+        data={"sub": str(user.id), "role": user.role, "type": "oauth_exchange", "code": exchange_code},
+        expires_delta=timedelta(minutes=2),
+    )
+
+    frontend_url = settings.FRONTEND_URL
+    return RedirectResponse(url=f"{frontend_url}/oauth/callback?code={exchange_code}&token={exchange_token}")
+
+
+@router.get("/oauth/microsoft")
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+def microsoft_auth_url(request: Request):
+    """Return the Microsoft OAuth authorization URL."""
+    if not settings.MICROSOFT_CLIENT_ID:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Microsoft OAuth not configured")
+    from app.services.oauth_service import MicrosoftOAuth
+    url = MicrosoftOAuth.get_auth_url()
+    return {"url": url}
+
+
+@router.get("/callback/microsoft")
+async def microsoft_callback(code: str, db: Session = Depends(get_db)):
+    """Handle Microsoft OAuth callback."""
+    if not settings.MICROSOFT_CLIENT_ID:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Microsoft OAuth not configured")
+    from app.services.oauth_service import MicrosoftOAuth
+
+    try:
+        token_data = await MicrosoftOAuth.exchange_code(code)
+        user_info = await MicrosoftOAuth.get_user_info(token_data["access_token"])
+    except Exception as e:
+        logger.error("microsoft_oauth_failed", error=str(e))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to authenticate with Microsoft")
+
+    email = user_info.get("mail") or user_info.get("userPrincipalName")
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email not provided by Microsoft")
+
+    oauth_id = f"microsoft_{user_info['id']}"
+    user = db.query(User).filter(User.oauth_id == oauth_id).first()
+    if not user:
+        user = db.query(User).filter(User.email == email).first()
+        if user:
+            # Link OAuth to existing account but keep original auth_provider
+            # so password login still works
+            if not user.oauth_id:
+                user.oauth_id = oauth_id
+            db.commit()
+        else:
+            is_first_user = db.query(User).count() == 0
+            username = email.split("@")[0]
+            base_username = username
+            counter = 1
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}{counter}"
+                counter += 1
+            user = User(
+                email=email,
+                username=username,
+                full_name=user_info.get("displayName"),
+                auth_provider="microsoft",
+                oauth_id=oauth_id,
+                role="admin" if is_first_user else "editor",
+            )
+            try:
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+            except IntegrityError:
+                db.rollback()
+                # User was created by a concurrent request, re-fetch
+                user = db.query(User).filter(User.email == email).first()
+                if not user:
+                    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Account creation failed")
+
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
+
+    exchange_code = secrets.token_urlsafe(32)
+    exchange_token = create_access_token(
+        data={"sub": str(user.id), "role": user.role, "type": "oauth_exchange", "code": exchange_code},
+        expires_delta=timedelta(minutes=2),
+    )
+
+    frontend_url = settings.FRONTEND_URL
+    return RedirectResponse(url=f"{frontend_url}/oauth/callback?code={exchange_code}&token={exchange_token}")
+
+
+@router.post("/oauth/exchange", response_model=TokenPairResponse)
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+def exchange_oauth_code(request: Request, payload: OAuthExchangeRequest, db: Session = Depends(get_db)):
+    """Exchange a one-time OAuth code for a token pair."""
+    try:
+        token_payload = jwt.decode(payload.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired exchange token")
+
+    if token_payload.get("type") != "oauth_exchange":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+
+    if token_payload.get("code") != payload.code:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid exchange code")
+
+    user_id = token_payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
+
+    return _create_token_pair(user, db)
