@@ -23,6 +23,10 @@ def process_document_task(self, document_id: int):
 
     Reports progress stages via self.update_state for frontend polling.
     """
+    if not isinstance(document_id, int) or document_id <= 0:
+        logger.error("invalid_document_id", document_id=document_id)
+        return {"error": "Invalid document_id"}
+
     db = SessionLocal()
     doc = None
     try:
@@ -125,7 +129,7 @@ def process_document_task(self, document_id: int):
         if doc is not None:
             try:
                 doc.status = DocumentStatus.FAILED
-                doc.extracted_text = f"Processing error: {e}"
+                doc.extracted_text = "Processing failed. Please retry or contact support."
                 db.commit()
             except Exception as rollback_err:
                 logger.error("status_update_failed", error=str(rollback_err))

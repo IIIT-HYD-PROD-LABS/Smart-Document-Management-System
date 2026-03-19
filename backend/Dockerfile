@@ -16,8 +16,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p uploads models
+# Create non-root user
+RUN adduser --disabled-password --gecos '' appuser
+
+# Create necessary directories with correct ownership
+RUN mkdir -p uploads models && chown -R appuser:appuser /app
+
+USER appuser
 
 # Expose port
 EXPOSE 8000

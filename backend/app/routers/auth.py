@@ -124,6 +124,12 @@ def login(request: Request, response: Response, payload: UserLogin, db: Session 
             detail="Invalid email or password",
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is deactivated",
+        )
+
     return _create_token_pair(user, db)
 
 

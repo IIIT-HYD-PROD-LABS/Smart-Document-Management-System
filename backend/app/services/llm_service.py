@@ -148,7 +148,7 @@ class GeminiProvider(LLMProvider):
         prompt = SYSTEM_PROMPT + "\n\n" + _build_extraction_prompt(text, category)
         response = httpx.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent",
-            params={"key": self.api_key},
+            headers={"x-goog-api-key": self.api_key},
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1024},
