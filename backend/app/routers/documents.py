@@ -7,6 +7,7 @@ from datetime import datetime, date, timedelta, timezone
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, Query, status
+from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, Float
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -442,12 +443,7 @@ def get_document_status(
     from celery.result import AsyncResult
     from app.tasks import celery_app
 
-    doc = db.query(Document).filter(
-        Document.id == document_id,
-        Document.user_id == current_user.id,
-    ).first()
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    doc = _get_accessible_document(document_id, current_user, db)
 
     result = {
         "document_id": doc.id,
@@ -498,22 +494,26 @@ def download_document(
     return FileResponse(path=real_path, filename=doc.original_filename, media_type=media_type)
 
 
+class HighlightItem(BaseModel):
+    """Schema for a text highlight selection."""
+    text: str = Field(..., max_length=5000)
+    start: int = Field(..., ge=0)
+    end: int = Field(..., ge=0)
+
+
 @router.put("/{document_id}/highlights")
 def save_highlights(
     document_id: int,
-    highlights: list[dict],
+    highlights: list[HighlightItem],
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
     """Save user-highlighted text selections for a document."""
-    doc = db.query(Document).filter(
-        Document.id == document_id,
-        Document.user_id == current_user.id,
-    ).first()
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if len(highlights) > 500:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Too many highlights (max 500)")
+    doc = _get_accessible_document(document_id, current_user, db, require_edit=True)
 
-    doc.highlighted_text = highlights
+    doc.highlighted_text = [h.model_dump() for h in highlights]
     try:
         db.commit()
     except (IntegrityError, OperationalError):
@@ -660,16 +660,7 @@ def delete_document(
     current_user: User = Depends(require_editor),
 ):
     """Delete a document and its associated file."""
-    doc = db.query(Document).filter(
-        Document.id == document_id,
-        Document.user_id == current_user.id,
-    ).first()
-
-    if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found",
-        )
+    doc = _get_accessible_document(document_id, current_user, db, require_edit=True)
 
     # Delete from storage
     delete_file(doc.file_path, doc.s3_url)

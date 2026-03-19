@@ -18,10 +18,8 @@ class DocumentResponse(BaseModel):
     ai_extracted_fields: dict | None = None
     ai_extraction_status: str | None = None
     ai_provider: str | None = None
-    ai_error: str | None = None
     highlighted_text: list | None = None
     status: str
-    s3_url: str | None
     created_at: datetime
     updated_at: datetime | None
 

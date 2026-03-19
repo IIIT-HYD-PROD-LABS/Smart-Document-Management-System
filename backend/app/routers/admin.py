@@ -38,7 +38,8 @@ def list_users(
     query = db.query(User)
 
     if search:
-        search_term = f"%{search}%"
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        search_term = f"%{escaped}%"
         query = query.filter(
             (User.email.ilike(search_term)) |
             (User.username.ilike(search_term)) |
