@@ -51,7 +51,7 @@ export default function AdminPage() {
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
     const perPage = 20;
-    const debounceTimer = useRef<ReturnType<typeof setTimeout>>();
+    const debounceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
     // Role guard: redirect non-admins
     useEffect(() => {
