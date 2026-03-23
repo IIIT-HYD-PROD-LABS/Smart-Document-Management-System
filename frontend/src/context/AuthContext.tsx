@@ -49,9 +49,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 .refresh(savedRefreshToken)
                 .then((response) => {
                     const { access_token, refresh_token, user: userData } = response.data;
-                    Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
-                    Cookies.set("refresh_token", refresh_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
-                    Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+                    Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 1 / 48 });
+                    Cookies.set("refresh_token", refresh_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 7 });
+                    Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 7 });
                     setToken(access_token);
                     setUser(userData);
                 })
@@ -90,9 +90,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const setTokensFromOAuth = useCallback((accessToken: string, refreshToken: string, userData: User) => {
-        Cookies.set("token", accessToken, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
-        Cookies.set("refresh_token", refreshToken, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
-        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+        Cookies.set("token", accessToken, { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 1 / 48 });
+        Cookies.set("refresh_token", refreshToken, { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 7 });
+        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 7 });
         setToken(accessToken);
         setUser(userData);
     }, []);

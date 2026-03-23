@@ -2,7 +2,7 @@
 
 **Organization:** Product Labs, IIIT Hyderabad
 **Last Updated:** 2026-03-23
-**Overall Progress:** 6 of 8 phases complete (76%)
+**Overall Progress:** 6 of 8 phases complete (76%) — auth & login bugs fully resolved (12 fixes across frontend and backend)
 
 ---
 
@@ -181,6 +181,36 @@ The Smart Document Management System (SmartDocs) is an AI-powered document manag
 | Error Handling | Normalized error messages (no auth provider disclosure), 429 rate-limit handling |
 
 **Areas confirmed secure:** SQL injection (parameterized ORM), path traversal (realpath + prefix), IDOR (consistent auth checks), XSS (React auto-escaping, no unsafe innerHTML), admin endpoints (require_admin), token type validation.
+
+---
+
+### Auth & Login Bug Fixes (March 23, 2026) ✅
+**Goal:** Fix all login and registration failures blocking the application from working.
+
+**Root causes identified by 10 parallel investigation agents:**
+1. Backend `.env` file missing — app couldn't start (SECRET_KEY and DATABASE_URL required, no defaults)
+2. Supabase pooler host changed (`aws-0` → `aws-1`) and database password expired
+3. Redis not running — rate limiter crashed all auth endpoints with 500 errors
+4. Python virtual environment and dependencies not installed
+
+**11 bugs fixed across frontend and backend:**
+
+| # | File | Bug | Fix |
+|---|------|-----|-----|
+| 1 | backend/.env | Missing entirely | Created with Supabase connection, localhost Redis |
+| 2 | backend/.env | Wrong Supabase host + expired password | Updated to aws-1 pooler on port 6543 with new password |
+| 3 | backend/app/utils/rate_limiter.py | Redis required, no fallback — all auth 500s | Added in-memory fallback when Redis unavailable |
+| 4 | frontend/src/context/AuthContext.tsx | Silent refresh cookies missing `expires` | Added expires: 1/48 (access) and 7 (refresh/user) |
+| 5 | frontend/src/context/AuthContext.tsx | setTokensFromOAuth cookies missing `expires` | Added same expires values |
+| 6 | frontend/src/app/login/page.tsx | Double navigation (handleSubmit + useEffect) | Removed manual router.replace from handleSubmit |
+| 7 | frontend/src/app/register/page.tsx | Same double navigation | Same fix |
+| 8 | frontend/src/app/dashboard/layout.tsx | logout() not awaited before navigate | Added async/await |
+| 9 | frontend/src/app/dashboard/layout.tsx | Auth guard showed spinner when user null | Split into isLoading check + null return |
+| 10 | backend/app/routers/auth.py | OAuth URL built with string concatenation | Replaced with JSONResponse |
+| 11 | backend/app/routers/auth.py | Token rotation before user validation | Reordered: validate user first, then rotate |
+| 12 | backend/app/routers/auth.py | Missing ValueError handler in OAuth exchange | Added try/except for int(user_id) |
+
+**Verification:** All auth flows tested end-to-end via curl: registration (201), login (200), token refresh (rotation works), protected endpoints (Bearer auth), logout (token revocation), CORS preflight (200 with correct headers).
 
 ---
 

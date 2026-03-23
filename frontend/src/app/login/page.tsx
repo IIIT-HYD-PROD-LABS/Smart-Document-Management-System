@@ -30,7 +30,6 @@ export default function LoginPage() {
         try {
             await login(email, password);
             toast.success("Welcome back");
-            router.replace("/dashboard");
         } catch (err: unknown) {
             const resp = err as { response?: { status?: number; data?: { detail?: string } } };
             if (resp?.response?.status === 429) {

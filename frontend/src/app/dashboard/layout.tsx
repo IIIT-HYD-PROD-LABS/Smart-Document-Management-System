@@ -25,12 +25,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (!isLoading && !user) router.push("/login");
     }, [user, isLoading, router]);
 
-    if (isLoading || !user) {
+    if (isLoading) {
         return (
             <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
                 <div className="w-5 h-5 border-2 border-[#27272a] border-t-[#a1a1aa] rounded-full animate-spin" />
             </div>
         );
+    }
+
+    if (!user) {
+        return null;
     }
 
     const navItems = allNavItems.filter(item => item.roles.includes(user.role || "viewer"));
@@ -82,7 +86,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </div>
                     </div>
                     <button
-                        onClick={() => { logout(); router.push("/login"); }}
+                        onClick={async () => { await logout(); router.push("/login"); }}
                         className="w-full flex items-center gap-2 px-3 py-1.5 text-[13px] text-[#52525b] hover:text-[#ef4444] rounded-md hover:bg-[#111113] transition-colors cursor-pointer"
                     >
                         <FiLogOut className="w-3.5 h-3.5" />

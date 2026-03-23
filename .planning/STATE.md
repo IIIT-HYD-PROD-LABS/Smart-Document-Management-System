@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-stopped_at: Completed 04-03-PLAN.md -- Phase 4 Search & Retrieval complete (human checkpoint approved)
-last_updated: "2026-03-11"
-last_activity: "2026-03-11 -- Phase 4 complete, Opus code review fixed 6 issues"
+stopped_at: "Auth & login fixes complete. All auth flows verified working end-to-end."
+last_updated: "2026-03-23"
+last_activity: "2026-03-23 -- Fixed 11 auth/login bugs, Supabase connection, rate limiter fallback"
 progress:
   total_phases: 8
-  completed_phases: 4
+  completed_phases: 6
   total_plans: 13
   completed_plans: 13
-  percent: 45
+  percent: 76
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Automated classification and intelligent organization of personal and business documents -- upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
-**Current focus:** Phase 4 complete: Search & Retrieval (3/3 plans done, Opus review applied). Next: Phase 5
+**Current focus:** Phase 6 complete: Auth & login fixes. Next: Phase 7 Analytics Dashboard
 
 ## Current Position
 
-Phase: 4 of 8 (Search & Retrieval) -- COMPLETE
+Phase: 6 of 8 -- COMPLETE. Next: Phase 7 Analytics Dashboard
 Plan: 3 of 3 in current phase
-Status: Phase 4 complete + Opus code review applied (6 fixes). FTS, filters, fuzzy, sub-2s all verified.
-Last activity: 2026-03-11 -- Opus code review fixed 6 issues (pattern injection, date validation, amount cast, trigger optimization, rate limiting)
+Status: Phase 6 complete. Fixed 11 auth/login bugs, Supabase connection, rate limiter fallback. All auth flows verified working end-to-end.
+Last activity: 2026-03-23 -- Fixed 11 auth/login bugs, Supabase connection, rate limiter fallback
 
-Progress: [█████████████░░░░░░░░░░░░░░░░] 13/29 (45%)
+Progress: [██████████████████████░░░░░░░] 76%
 
 ## Performance Metrics
 
@@ -102,6 +102,9 @@ Recent decisions affecting current work:
 - [Phase 04-search-retrieval]: NULL guard on extracted_metadata: isnot(None) before astext.cast(Float) prevents 500 on docs without amount metadata
 - [Phase 04-search-retrieval]: OR-combine (not trigram-only): FTS handles exact/stemmed matches; trigram adds typo tolerance as supplemental path via or_(search_vector @@, extracted_text %)
 - [Phase 04-search-retrieval]: pg_trgm threshold 0.3 preserved globally; threshold change from >3 to >2 chars corrects ILIKE fallback boundary so 3-char tokens (UPI, GST) get trigram path
+- [Phase 06-auth-login-fixes]: Rate limiter Redis fallback to memory:// when Redis unavailable
+- [Phase 06-auth-login-fixes]: Supabase pooler port 6543 (not 5432) for connection pooling
+- [Phase 06-auth-login-fixes]: Cookie expiry alignment across all auth paths for consistent session handling
 
 ### Pending Todos
 
@@ -121,7 +124,7 @@ None.
 
 - Research flagged LLM hallucination risk (69-88%) for Phase 5 -- will need validation with real documents
 - ~~Hardcoded SECRET_KEY is a critical security issue to resolve immediately in Phase 1~~ RESOLVED in 01-01
-- Rate limiter requires Redis to be running; without Redis, rate limits won't persist across restarts
+- ~~Rate limiter requires Redis to be running; without Redis, rate limits won't persist across restarts~~ RESOLVED: in-memory fallback added (Phase 6)
 - ~~No Alembic migrations yet; table creation relies on SQLAlchemy auto-create~~ RESOLVED in 01-04
 - New models in future phases must be imported in backend/alembic/env.py for autogenerate to work
 - Metadata extraction is regex-based v1 -- Phase 5 LLM will improve accuracy significantly
@@ -129,6 +132,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T00:00:00Z
-Stopped at: Completed 04-03-PLAN.md -- Phase 4 complete, human checkpoint approved
+Last session: 2026-03-23
+Stopped at: Auth & login fixes complete. All auth flows verified working end-to-end.
 Resume file: None
