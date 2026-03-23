@@ -1,9 +1,14 @@
-"""Rate limiting configuration using slowapi backed by Redis."""
+"""Rate limiting configuration using slowapi backed by Redis with in-memory fallback."""
 
+import logging
+
+from redis import Redis
 from slowapi import Limiter
 from starlette.requests import Request
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _get_real_client_ip(request: Request) -> str:
@@ -17,9 +22,26 @@ def _get_real_client_ip(request: Request) -> str:
     return "127.0.0.1"
 
 
+def _get_storage_uri() -> str:
+    """Return Redis URI if Redis is reachable, otherwise fall back to in-memory storage."""
+    redis_url = settings.REDIS_URL
+    try:
+        r = Redis.from_url(redis_url, socket_connect_timeout=2)
+        r.ping()
+        logger.info("Rate limiter connected to Redis at %s", redis_url)
+        return redis_url
+    except Exception:
+        logger.warning(
+            "Redis unavailable at %s — rate limiter falling back to in-memory storage. "
+            "Rate limits will not be shared across workers.",
+            redis_url,
+        )
+        return "memory://"
+
+
 limiter = Limiter(
     key_func=_get_real_client_ip,
-    storage_uri=settings.REDIS_URL,
+    storage_uri=_get_storage_uri(),
     default_limits=[settings.RATE_LIMIT_DEFAULT],
     headers_enabled=True,
 )

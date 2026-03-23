@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
@@ -186,6 +186,20 @@ def refresh(request: Request, response: Response, payload: RefreshTokenRequest, 
             detail="Refresh token has expired",
         )
 
+    # Load and validate user BEFORE rotating tokens
+    user = db.query(User).filter(User.id == db_token.user_id).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is deactivated",
+        )
+
     # Rotate: revoke old token, issue new pair
     new_refresh_value, new_expires_at = create_refresh_token()
 
@@ -200,20 +214,6 @@ def refresh(request: Request, response: Response, payload: RefreshTokenRequest, 
     )
     db.add(new_db_token)
     db.commit()
-
-    # Load user for the response
-    user = db.query(User).filter(User.id == db_token.user_id).first()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is deactivated",
-        )
 
     access_token = create_access_token(data={"sub": str(user.id), "role": user.role})
 
@@ -268,10 +268,7 @@ def google_auth_url(request: Request, response: Response):
     from app.services.oauth_service import GoogleOAuth
     state = secrets.token_urlsafe(32)
     url = GoogleOAuth.get_auth_url(state)
-    resp = Response(
-        content='{"url": ' + f'"{url}"' + '}',
-        media_type="application/json",
-    )
+    resp = JSONResponse(content={"url": url})
     resp.set_cookie(
         "oauth_state", state, max_age=600, httponly=True,
         samesite="lax", secure=not settings.DEBUG,
@@ -383,10 +380,7 @@ def microsoft_auth_url(request: Request, response: Response):
     from app.services.oauth_service import MicrosoftOAuth
     state = secrets.token_urlsafe(32)
     url = MicrosoftOAuth.get_auth_url(state)
-    resp = Response(
-        content='{"url": ' + f'"{url}"' + '}',
-        media_type="application/json",
-    )
+    resp = JSONResponse(content={"url": url})
     resp.set_cookie(
         "oauth_state", state, max_age=600, httponly=True,
         samesite="lax", secure=not settings.DEBUG,
@@ -498,7 +492,11 @@ def exchange_oauth_code(request: Request, response: Response, payload: OAuthExch
     user_id = token_payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    try:
+        user_id_int = int(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+    user = db.query(User).filter(User.id == user_id_int).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
