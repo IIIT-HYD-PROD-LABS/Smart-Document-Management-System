@@ -1,14 +1,14 @@
 # Smart Document Management System — Status Report
 
 **Organization:** Product Labs, IIIT Hyderabad
-**Last Updated:** 2026-03-11
-**Overall Progress:** 4 of 8 phases complete (50%)
+**Last Updated:** 2026-03-23
+**Overall Progress:** 6 of 8 phases complete (76%)
 
 ---
 
 ## Executive Summary
 
-The Smart Document Management System (SmartDocs) is an AI-powered document management platform that automatically classifies, extracts, and searches personal and business documents. The system has completed security hardening, document processing pipeline, ML classification upgrade (85.06% accuracy), and full-text search with advanced filtering — now at the halfway mark with 4 of 8 phases complete.
+The Smart Document Management System (SmartDocs) is an AI-powered document management platform that automatically classifies, extracts, and searches personal and business documents. The system has completed 6 of 8 phases: security hardening, document processing pipeline, ML classification (85.06% accuracy), full-text search, LLM smart extraction, multi-user RBAC with OAuth SSO, and a comprehensive end-to-end security audit with 21 fixes across 17 files.
 
 ---
 
@@ -20,9 +20,10 @@ The Smart Document Management System (SmartDocs) is an AI-powered document manag
 | 2 | Document Processing Pipeline | ✅ Complete | 2026-03-09 |
 | 3 | ML Classification Upgrade | ✅ Complete | 2026-03-10 |
 | 4 | Search & Retrieval Engine | ✅ Complete | 2026-03-11 |
-| 5 | LLM Smart Extraction | 🔜 Next | — |
-| 6 | Multi-User & RBAC | ⬜ Planned | — |
-| 7 | Analytics Dashboard | ⬜ Planned | — |
+| 5 | LLM Smart Extraction | ✅ Complete | 2026-03-15 |
+| 6 | Multi-User & RBAC | ✅ Complete | 2026-03-20 |
+| — | End-to-End Security Audit | ✅ Complete | 2026-03-23 |
+| 7 | Analytics Dashboard | 🔜 Next | — |
 | 8 | Production Readiness | ⬜ Planned | — |
 
 ---
@@ -132,14 +133,66 @@ The Smart Document Management System (SmartDocs) is an AI-powered document manag
 
 ---
 
-## Next: Phase 5 — LLM Smart Extraction
+### Phase 5: LLM Smart Extraction ✅
+**Goal:** Add LLM-powered intelligent data extraction and summarization.
 
-**Goal:** Integrate LLM APIs for intelligent data extraction beyond regex patterns.
+**What was built:**
+- LLM extraction service with provider abstraction (Ollama, Gemini, Anthropic, OpenAI, local regex fallback)
+- Category-specific extraction prompts with structured JSON output
+- AI summaries and extracted fields stored per document
+- LLM configuration integrated into async Celery pipeline
+- Document detail page extended with AI extraction display
+
+**Requirements completed:** AIML-05, AIML-06, AIML-07, AIML-08
+
+---
+
+### Phase 6: Multi-User & RBAC ✅
+**Goal:** Implement multi-user access with role-based permissions and OAuth SSO.
+
+**What was built:**
+- Three-tier role system: admin, editor, viewer with permission enforcement at API level
+- Admin panel for user management (list, search, role change, activate/deactivate)
+- Document-level sharing with view/edit permissions and revocation
+- Google OAuth and Microsoft OAuth/SSO login integration
+- OAuth exchange code flow with frontend callback handling
+- Alembic migrations for roles, permissions, and OAuth fields
+
+**Requirements completed:** RBAC-01, RBAC-02, RBAC-03, RBAC-04
+
+---
+
+### End-to-End Security Audit ✅ (March 23, 2026)
+**Goal:** Comprehensive security review and hardening across the full stack.
+
+**10 parallel investigation agents** audited: secrets exposure, OAuth CSRF, JWT sessions, input validation, CORS/headers, Google sign-in E2E, login/register flow, token refresh, document API authorization, and frontend dashboard pages.
+
+**21 fixes applied across 17 files (252 additions, 69 deletions):**
+
+| Category | Key Fixes |
+|----------|-----------|
+| OAuth Security | Added CSRF state parameter, email verified check, error param handling |
+| Authentication | is_active check on refresh, token revocation on user deactivation, refresh token row lock |
+| Rate Limiting | Fixed X-Forwarded-For spoofing bypass (use direct client IP) |
+| Security Headers | Fixed CORP for cross-origin API, removed bad CSP from API, added Cache-Control no-store |
+| Frontend Security | Added CSP + HSTS + X-XSS-Protection, cookie expiry, logout race guard |
+| Input Validation | Username regex, email regex + lowercase, filename sanitization path |
+| Auth Flow | React StrictMode double-fire guard, login/register redirect, role guards on pages |
+| Error Handling | Normalized error messages (no auth provider disclosure), 429 rate-limit handling |
+
+**Areas confirmed secure:** SQL injection (parameterized ORM), path traversal (realpath + prefix), IDOR (consistent auth checks), XSS (React auto-escaping, no unsafe innerHTML), admin endpoints (require_admin), token type validation.
+
+---
+
+## Next: Phase 7 — Analytics Dashboard
+
+**Goal:** Deliver polished UI with analytics, document preview, and responsive design.
 
 **Planned deliverables:**
-- Smart data extraction (dates, deadlines, amounts, parties, clauses) via LLM APIs
-- AI-powered document summaries and insights
-- Flexible ML backend (local models + LLM APIs, user-configurable)
+- Analytics dashboard with category breakdown, upload trends, and usage statistics
+- In-browser document preview (PDF.js for PDFs, native for images)
+- Document version control with revision history
+- Responsive design across all pages
 
 ---
 
@@ -180,13 +233,14 @@ docker compose run backend python -m app.ml.datasets.download
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
+| Frontend | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS |
 | Backend | FastAPI, SQLAlchemy 2.0, Pydantic v2, Uvicorn |
-| Database | PostgreSQL 14, Alembic migrations |
+| Database | PostgreSQL (Supabase Cloud), Alembic migrations |
 | ML | scikit-learn (LinearSVC + CalibratedClassifierCV + TF-IDF 15K), Tesseract OCR, pdfplumber, python-docx, OpenCV |
+| AI/LLM | Multi-provider: Ollama, Gemini, Anthropic, OpenAI, local regex fallback |
 | Async | Celery + Redis |
-| Auth | JWT HS256 (30min) + opaque refresh tokens, bcrypt, slowapi rate limiting |
-| Infra | Docker, Docker Compose (5 services) |
+| Auth | JWT HS256 (30min) + opaque refresh tokens with rotation, bcrypt, OAuth (Google/Microsoft), slowapi rate limiting |
+| Infra | Docker, Docker Compose (5 services), Supabase Cloud |
 
 ---
 
