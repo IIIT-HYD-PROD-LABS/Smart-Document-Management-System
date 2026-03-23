@@ -35,7 +35,7 @@ services:
       - ./backend:/app
       - backend_uploads:/app/uploads
       - ./backend/models:/app/models
-      - backend_datasets:/app/datasets
+      - ./backend/datasets:/app/datasets
 
   # Celery Worker
   celery_worker:
@@ -61,7 +61,7 @@ services:
       - ./backend:/app
       - backend_uploads:/app/uploads
       - ./backend/models:/app/models
-      - backend_datasets:/app/datasets
+      - ./backend/datasets:/app/datasets
 
   # Next.js Frontend
   frontend:
@@ -76,4 +76,3 @@ services:
 
 volumes:
   backend_uploads:
-  backend_datasets:
