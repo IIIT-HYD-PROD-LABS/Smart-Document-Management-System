@@ -112,9 +112,10 @@ def login(request: Request, response: Response, payload: UserLogin, db: Session 
         )
 
     if user.auth_provider != "local":
+        logger.warning("login_wrong_provider", email=payload.email, provider=user.auth_provider)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"This account uses {user.auth_provider} login. Please use the {user.auth_provider} button to sign in.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
         )
 
     if not user.hashed_password or not verify_password(payload.password, user.hashed_password):
@@ -125,9 +126,10 @@ def login(request: Request, response: Response, payload: UserLogin, db: Session 
         )
 
     if not user.is_active:
+        logger.warning("login_deactivated", email=payload.email)
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is deactivated",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
         )
 
     return _create_token_pair(user, db)
@@ -146,6 +148,7 @@ def refresh(request: Request, response: Response, payload: RefreshTokenRequest, 
     db_token = (
         db.query(RefreshToken)
         .filter(RefreshToken.token == payload.refresh_token)
+        .with_for_update()  # Row-level lock prevents concurrent rotation race
         .first()
     )
 
@@ -206,6 +209,12 @@ def refresh(request: Request, response: Response, payload: RefreshTokenRequest, 
             detail="User not found",
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is deactivated",
+        )
+
     access_token = create_access_token(data={"sub": str(user.id), "role": user.role})
 
     return TokenPairResponse(
@@ -253,19 +262,48 @@ def get_auth_providers():
 @router.get("/oauth/google")
 @limiter.limit(settings.RATE_LIMIT_AUTH)
 def google_auth_url(request: Request, response: Response):
-    """Return the Google OAuth authorization URL."""
+    """Return the Google OAuth authorization URL with CSRF state parameter."""
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Google OAuth not configured")
     from app.services.oauth_service import GoogleOAuth
-    url = GoogleOAuth.get_auth_url()
-    return {"url": url}
+    state = secrets.token_urlsafe(32)
+    url = GoogleOAuth.get_auth_url(state)
+    resp = Response(
+        content='{"url": ' + f'"{url}"' + '}',
+        media_type="application/json",
+    )
+    resp.set_cookie(
+        "oauth_state", state, max_age=600, httponly=True,
+        samesite="lax", secure=not settings.DEBUG,
+    )
+    return resp
 
 
 @router.get("/callback/google")
-async def google_callback(code: str, db: Session = Depends(get_db)):
-    """Handle Google OAuth callback."""
+async def google_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Handle Google OAuth callback with CSRF state validation."""
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Google OAuth not configured")
+
+    # Handle user-denied consent
+    if error:
+        frontend_url = settings.FRONTEND_URL
+        return RedirectResponse(url=f"{frontend_url}/login?error=oauth_denied")
+
+    if not code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing authorization code")
+
+    # Validate CSRF state parameter
+    stored_state = request.cookies.get("oauth_state")
+    if not stored_state or not state or not secrets.compare_digest(stored_state, state):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state -- possible CSRF")
+
     from app.services.oauth_service import GoogleOAuth
 
     try:
@@ -278,6 +316,9 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
     email = user_info.get("email")
     if not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email not provided by Google")
+
+    if not user_info.get("verified_email", False):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google email is not verified")
 
     oauth_id = f"google_{user_info['id']}"
     user = db.query(User).filter(User.oauth_id == oauth_id).first()
@@ -336,19 +377,46 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
 @router.get("/oauth/microsoft")
 @limiter.limit(settings.RATE_LIMIT_AUTH)
 def microsoft_auth_url(request: Request, response: Response):
-    """Return the Microsoft OAuth authorization URL."""
+    """Return the Microsoft OAuth authorization URL with CSRF state parameter."""
     if not settings.MICROSOFT_CLIENT_ID:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Microsoft OAuth not configured")
     from app.services.oauth_service import MicrosoftOAuth
-    url = MicrosoftOAuth.get_auth_url()
-    return {"url": url}
+    state = secrets.token_urlsafe(32)
+    url = MicrosoftOAuth.get_auth_url(state)
+    resp = Response(
+        content='{"url": ' + f'"{url}"' + '}',
+        media_type="application/json",
+    )
+    resp.set_cookie(
+        "oauth_state", state, max_age=600, httponly=True,
+        samesite="lax", secure=not settings.DEBUG,
+    )
+    return resp
 
 
 @router.get("/callback/microsoft")
-async def microsoft_callback(code: str, db: Session = Depends(get_db)):
-    """Handle Microsoft OAuth callback."""
+async def microsoft_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Handle Microsoft OAuth callback with CSRF state validation."""
     if not settings.MICROSOFT_CLIENT_ID:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Microsoft OAuth not configured")
+
+    if error:
+        frontend_url = settings.FRONTEND_URL
+        return RedirectResponse(url=f"{frontend_url}/login?error=oauth_denied")
+
+    if not code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing authorization code")
+
+    stored_state = request.cookies.get("oauth_state")
+    if not stored_state or not state or not secrets.compare_digest(stored_state, state):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state -- possible CSRF")
+
     from app.services.oauth_service import MicrosoftOAuth
 
     try:

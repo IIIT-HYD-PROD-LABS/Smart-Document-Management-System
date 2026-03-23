@@ -30,23 +30,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "camera=(), microphone=(), geolocation=()"
         )
 
-        # Content Security Policy
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self'; "
-            "img-src 'self' data: blob:; "
-            "font-src 'self'; "
-            "connect-src 'self'; "
-            "frame-ancestors 'none'"
-        )
+        # CSP frame-ancestors only for the API (full CSP belongs on the frontend)
+        response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
 
-        # Cross-origin isolation headers
-        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        # Cross-origin headers: allow frontend (different origin) to read API responses
+        response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
 
         # Restrict cross-domain policy files
         response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+
+        # Prevent caching of sensitive API responses
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+        response.headers["Pragma"] = "no-cache"
 
         # HSTS -- only in production (DEBUG=False)
         if not settings.DEBUG:

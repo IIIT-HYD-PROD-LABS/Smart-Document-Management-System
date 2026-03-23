@@ -19,7 +19,7 @@ class GoogleOAuth:
     USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
     @staticmethod
-    def get_auth_url() -> str:
+    def get_auth_url(state: str) -> str:
         params = {
             "client_id": settings.GOOGLE_CLIENT_ID,
             "redirect_uri": f"{_get_backend_url()}/api/auth/callback/google",
@@ -27,6 +27,7 @@ class GoogleOAuth:
             "scope": "openid email profile",
             "access_type": "offline",
             "prompt": "consent",
+            "state": state,
         }
         return f"{GoogleOAuth.AUTH_URL}?{urlencode(params)}"
 
@@ -76,13 +77,14 @@ class MicrosoftOAuth:
     USERINFO_URL = "https://graph.microsoft.com/v1.0/me"
 
     @classmethod
-    def get_auth_url(cls) -> str:
+    def get_auth_url(cls, state: str) -> str:
         params = {
             "client_id": settings.MICROSOFT_CLIENT_ID,
             "redirect_uri": f"{_get_backend_url()}/api/auth/callback/microsoft",
             "response_type": "code",
             "scope": "openid email profile User.Read",
             "response_mode": "query",
+            "state": state,
         }
         return f"{cls.auth_url_base()}?{urlencode(params)}"
 

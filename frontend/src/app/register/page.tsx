@@ -11,8 +11,13 @@ export default function RegisterPage() {
     const [form, setForm] = useState({ email: "", username: "", password: "", full_name: "" });
     const [loading, setLoading] = useState(false);
     const [providers, setProviders] = useState<string[]>([]);
-    const { register } = useAuth();
+    const { register, user, isLoading } = useAuth();
     const router = useRouter();
+
+    // Redirect already logged-in users to dashboard
+    useEffect(() => {
+        if (!isLoading && user) router.replace("/dashboard");
+    }, [user, isLoading, router]);
 
     useEffect(() => {
         oauthApi.getProviders().then((res) => setProviders(res.data.providers)).catch(() => {});
@@ -24,11 +29,13 @@ export default function RegisterPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (form.password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+        if (form.password.length > 128) { toast.error("Password must be at most 128 characters"); return; }
+        if (!/^[a-zA-Z0-9_-]+$/.test(form.username)) { toast.error("Username may only contain letters, numbers, hyphens, and underscores"); return; }
         setLoading(true);
         try {
             await register(form);
             toast.success("Account created");
-            router.push("/dashboard");
+            router.replace("/dashboard");
         } catch (err: unknown) {
             const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
             toast.error(message || "Registration failed");

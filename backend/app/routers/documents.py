@@ -157,11 +157,15 @@ def get_shared_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get documents shared with the current user."""
+    """Get documents shared with the current user (excluding deactivated owners)."""
     query = (
         db.query(Document)
         .join(DocumentPermission, DocumentPermission.document_id == Document.id)
-        .filter(DocumentPermission.user_id == current_user.id)
+        .join(User, Document.user_id == User.id)
+        .filter(
+            DocumentPermission.user_id == current_user.id,
+            User.is_active == True,  # noqa: E712
+        )
     )
     total = query.count()
     documents = (

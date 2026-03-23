@@ -1,5 +1,6 @@
 """Pydantic schemas for User request/response models."""
 
+import re
 from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 
@@ -15,8 +16,16 @@ class UserRegister(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_email_format(cls, v: str) -> str:
-        if "@" not in v or "." not in v:
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(pattern, v):
             raise ValueError("Invalid email format")
+        return v.lower()
+
+    @field_validator("username")
+    @classmethod
+    def validate_username_chars(cls, v: str) -> str:
+        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
+            raise ValueError("Username may only contain letters, numbers, hyphens, and underscores")
         return v
 
 

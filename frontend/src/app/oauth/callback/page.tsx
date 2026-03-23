@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { oauthApi } from "@/lib/api";
@@ -11,8 +11,13 @@ function OAuthCallbackInner() {
     const searchParams = useSearchParams();
     const { setTokensFromOAuth } = useAuth();
     const [error, setError] = useState<string | null>(null);
+    const exchanged = useRef(false);
 
     useEffect(() => {
+        // Guard against React StrictMode double-fire
+        if (exchanged.current) return;
+        exchanged.current = true;
+
         const code = searchParams.get("code");
         const token = searchParams.get("token");
 
@@ -26,7 +31,7 @@ function OAuthCallbackInner() {
                 const { access_token, refresh_token, user } = res.data;
                 setTokensFromOAuth(access_token, refresh_token, user);
                 toast.success("Signed in successfully");
-                router.push("/dashboard");
+                router.replace("/dashboard");
             })
             .catch((err) => {
                 const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;

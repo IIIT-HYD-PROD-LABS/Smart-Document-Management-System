@@ -12,8 +12,13 @@ export default function LoginPage() {
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [providers, setProviders] = useState<string[]>([]);
-    const { login } = useAuth();
+    const { login, user, isLoading } = useAuth();
     const router = useRouter();
+
+    // Redirect already logged-in users to dashboard
+    useEffect(() => {
+        if (!isLoading && user) router.replace("/dashboard");
+    }, [user, isLoading, router]);
 
     useEffect(() => {
         oauthApi.getProviders().then((res) => setProviders(res.data.providers)).catch(() => {});
@@ -25,10 +30,14 @@ export default function LoginPage() {
         try {
             await login(email, password);
             toast.success("Welcome back");
-            router.push("/dashboard");
+            router.replace("/dashboard");
         } catch (err: unknown) {
-            const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-            toast.error(message || "Login failed");
+            const resp = err as { response?: { status?: number; data?: { detail?: string } } };
+            if (resp?.response?.status === 429) {
+                toast.error("Too many attempts. Please wait a minute and try again.");
+            } else {
+                toast.error(resp?.response?.data?.detail || "Login failed");
+            }
         } finally {
             setLoading(false);
         }

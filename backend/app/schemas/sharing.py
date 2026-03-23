@@ -16,7 +16,7 @@ class DocumentPermissionResponse(BaseModel):
     user_email: str
     user_name: str
     permission: str
-    granted_by: int
+    granted_by: int | None = None
     created_at: datetime
 
     class Config:
