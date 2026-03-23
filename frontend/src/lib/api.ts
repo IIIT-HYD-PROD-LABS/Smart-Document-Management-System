@@ -14,6 +14,10 @@ const api = axios.create({
 // Prevents multiple concurrent refresh requests when several 401s arrive simultaneously.
 
 let isRefreshing = false;
+let isLoggingOut = false;
+
+export function setLoggingOut(value: boolean) { isLoggingOut = value; }
+
 let failedQueue: Array<{
     resolve: (token: string) => void;
     reject: (error: unknown) => void;
@@ -47,8 +51,8 @@ api.interceptors.response.use(
             _retry?: boolean;
         };
 
-        // Only attempt refresh on 401, and only once per request
-        if (error.response?.status !== 401 || originalRequest._retry) {
+        // Only attempt refresh on 401, only once per request, and not during logout
+        if (error.response?.status !== 401 || originalRequest._retry || isLoggingOut) {
             return Promise.reject(error);
         }
 
@@ -89,9 +93,9 @@ api.interceptors.response.use(
             const { access_token, refresh_token: newRefreshToken, user } = response.data;
 
             // Update cookies with new tokens
-            Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
-            Cookies.set("refresh_token", newRefreshToken, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
-            Cookies.set("user", JSON.stringify(user), { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+            Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 1 / 48 });
+            Cookies.set("refresh_token", newRefreshToken, { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 7 });
+            Cookies.set("user", JSON.stringify(user), { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 7 });
 
             // Retry all queued requests with the new token
             processQueue(null, access_token);

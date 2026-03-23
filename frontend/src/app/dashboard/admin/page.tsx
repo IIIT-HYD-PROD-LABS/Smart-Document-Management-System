@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { adminApi } from "@/lib/api";
@@ -47,25 +47,40 @@ export default function AdminPage() {
     const [stats, setStats] = useState<AdminStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
     const perPage = 20;
+    const debounceTimer = useRef<ReturnType<typeof setTimeout>>();
 
+    // Role guard: redirect non-admins
     useEffect(() => {
         if (user && user.role !== "admin") {
-            router.push("/dashboard");
+            router.replace("/dashboard");
         }
     }, [user, router]);
 
+    // Immediate render guard: don't show admin UI to non-admins
+    if (user?.role !== "admin") return null;
+
+    // Debounce search input (400ms)
+    useEffect(() => {
+        debounceTimer.current = setTimeout(() => {
+            setDebouncedSearch(search);
+            setPage(1);
+        }, 400);
+        return () => clearTimeout(debounceTimer.current);
+    }, [search]);
+
     const fetchUsers = useCallback(async () => {
         try {
-            const res = await adminApi.getUsers(page, perPage, search || undefined);
+            const res = await adminApi.getUsers(page, perPage, debouncedSearch || undefined);
             setUsers(res.data.users);
             setTotal(res.data.total);
         } catch {
             toast.error("Failed to load users");
         }
-    }, [page, search]);
+    }, [page, debouncedSearch]);
 
     const fetchStats = useCallback(async () => {
         try {
@@ -140,8 +155,9 @@ export default function AdminPage() {
                     <input
                         type="text"
                         value={search}
-                        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                        onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search users..."
+                        aria-label="Search users"
                         className="w-full pl-9 pr-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors"
                     />
                 </div>

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import Cookies from "js-cookie";
-import { authApi } from "@/lib/api";
+import { authApi, setLoggingOut } from "@/lib/api";
 
 interface User {
     id: number;
@@ -72,9 +72,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const login = useCallback(async (email: string, password: string) => {
         const response = await authApi.login({ email, password });
         const { access_token, refresh_token, user: userData } = response.data;
-        Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
-        Cookies.set("refresh_token", refresh_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
-        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+        Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 1 / 48 });
+        Cookies.set("refresh_token", refresh_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 7 });
+        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 7 });
         setToken(access_token);
         setUser(userData);
     }, []);
@@ -82,9 +82,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const register = useCallback(async (data: { email: string; username: string; password: string; full_name?: string }) => {
         const response = await authApi.register(data);
         const { access_token, refresh_token, user: userData } = response.data;
-        Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
-        Cookies.set("refresh_token", refresh_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
-        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict", secure: process.env.NODE_ENV === "production" });
+        Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 1 / 48 });
+        Cookies.set("refresh_token", refresh_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 7 });
+        Cookies.set("user", JSON.stringify(userData), { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 7 });
         setToken(access_token);
         setUser(userData);
     }, []);
@@ -98,19 +98,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const logout = useCallback(async () => {
+        setLoggingOut(true);
         const refreshToken = Cookies.get("refresh_token");
-        if (refreshToken) {
-            try {
-                await authApi.logout(refreshToken);
-            } catch {
-                // Best-effort server-side revocation; clear cookies regardless
-            }
-        }
+        // Clear cookies FIRST to prevent interceptor from reading them during logout
         Cookies.remove("token");
         Cookies.remove("refresh_token");
         Cookies.remove("user");
         setToken(null);
         setUser(null);
+        if (refreshToken) {
+            try {
+                await authApi.logout(refreshToken);
+            } catch {
+                // Best-effort server-side revocation
+            }
+        }
+        setLoggingOut(false);
     }, []);
 
     return (

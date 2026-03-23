@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import { AnimatePresence, motion } from "framer-motion";
+import { useAuth } from "@/context/AuthContext";
 import { documentsApi } from "@/lib/api";
 import { FiUploadCloud, FiFile, FiCheckCircle, FiX, FiLoader } from "react-icons/fi";
 
@@ -40,9 +42,18 @@ interface UploadItem {
 }
 
 export default function UploadPage() {
+    const { user } = useAuth();
+    const router = useRouter();
     const [uploads, setUploads] = useState<UploadItem[]>([]);
     const [uploading, setUploading] = useState(false);
     const pollTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+    // Role guard: only editors and admins can upload
+    useEffect(() => {
+        if (user && user.role === "viewer") router.replace("/dashboard");
+    }, [user, router]);
+
+    if (user?.role === "viewer") return null;
 
     const updateItem = useCallback((file: File, updates: Partial<UploadItem>) => {
         setUploads((prev) => prev.map((u) => (u.file === file ? { ...u, ...updates } : u)));

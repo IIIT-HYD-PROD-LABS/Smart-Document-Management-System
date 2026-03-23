@@ -39,10 +39,25 @@ def process_document_task(self, document_id: int):
         doc.status = DocumentStatus.PROCESSING
         db.commit()
 
-        # Stage 1: Read file
+        # Stage 1: Read file (with path traversal protection)
         self.update_state(state="PROGRESS", meta={"stage": "reading_file", "progress": 10})
-        if doc.file_path and os.path.exists(doc.file_path):
-            with open(doc.file_path, "rb") as f:
+        if doc.file_path:
+            from app.services.storage_service import _validate_path_inside_upload_dir
+            try:
+                validated_path = _validate_path_inside_upload_dir(doc.file_path)
+            except ValueError:
+                doc.status = DocumentStatus.FAILED
+                doc.extracted_text = "File path validation failed."
+                db.commit()
+                logger.error("path_traversal_blocked_in_task", document_id=document_id, file_path=doc.file_path)
+                return {"error": "Invalid file path"}
+            if not os.path.exists(validated_path):
+                doc.status = DocumentStatus.FAILED
+                doc.extracted_text = "File not found in storage."
+                db.commit()
+                logger.error("file_not_found", document_id=document_id, file_path=doc.file_path)
+                return {"error": "File not found"}
+            with open(validated_path, "rb") as f:
                 file_bytes = f.read()
         else:
             doc.status = DocumentStatus.FAILED

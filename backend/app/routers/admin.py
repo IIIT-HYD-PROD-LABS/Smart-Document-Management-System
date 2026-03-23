@@ -1,5 +1,7 @@
 """Admin API routes - User management and system stats."""
 
+from datetime import datetime, timezone
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
@@ -160,6 +162,20 @@ def update_user_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     user.is_active = payload.is_active
+
+    # Revoke all active refresh tokens when deactivating a user
+    if not payload.is_active:
+        from app.models.refresh_token import RefreshToken
+        db.query(RefreshToken).filter(
+            RefreshToken.user_id == user_id,
+            RefreshToken.is_revoked == False,  # noqa: E712
+        ).update(
+            {
+                "is_revoked": True,
+                "revoked_at": datetime.now(timezone.utc),
+            }
+        )
+
     db.commit()
 
     status_str = "activated" if payload.is_active else "deactivated"
