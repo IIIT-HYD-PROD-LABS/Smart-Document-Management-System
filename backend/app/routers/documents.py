@@ -19,9 +19,11 @@ from app.database import get_db
 from app.models.user import User
 from app.models.document import Document, DocumentCategory, DocumentStatus
 from app.models.document_permission import DocumentPermission
+from app.models.document_version import DocumentVersion
 from app.schemas.document import (
     DocumentResponse, DocumentListResponse, DocumentUploadResponse,
-    DocumentStats,
+    DocumentStats, DocumentTrends, TrendPoint,
+    DocumentVersionResponse, DocumentVersionListResponse, RollbackRequest,
 )
 from app.schemas.sharing import ShareDocumentRequest, DocumentPermissionResponse
 from app.utils.security import get_current_user, require_editor
@@ -116,27 +118,81 @@ async def upload_document(
             detail=f"File content does not match declared type '.{ext}'",
         )
 
+    # Check for existing document with same original_filename for this user (version control)
+    existing_doc = db.query(Document).filter(
+        Document.original_filename == file.filename,
+        Document.user_id == current_user.id,
+        Document.status != DocumentStatus.FAILED,
+    ).first()
+
     # Save file to storage
     file_path, s3_url = save_file(file_bytes, file.filename)
 
-    # Create document record with PENDING status
-    doc = Document(
-        user_id=current_user.id,
-        filename=os.path.basename(file_path) if file_path else file.filename,
-        original_filename=file.filename,
-        file_type=ext,
-        file_size=file_size,
-        file_path=file_path,
-        s3_url=s3_url,
-        status=DocumentStatus.PENDING,
-    )
-    db.add(doc)
-    try:
-        db.commit()
-    except (IntegrityError, OperationalError):
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to save document record")
-    db.refresh(doc)
+    if existing_doc:
+        # Snapshot current document state as a version record
+        version = DocumentVersion(
+            document_id=existing_doc.id,
+            version_number=existing_doc.current_version,
+            filename=existing_doc.filename,
+            original_filename=existing_doc.original_filename,
+            file_type=existing_doc.file_type,
+            file_size=existing_doc.file_size,
+            file_path=existing_doc.file_path,
+            s3_url=existing_doc.s3_url,
+            extracted_text=existing_doc.extracted_text,
+            extracted_metadata=existing_doc.extracted_metadata,
+            category=existing_doc.category.value if existing_doc.category else None,
+            confidence_score=existing_doc.confidence_score,
+            ai_summary=existing_doc.ai_summary,
+            ai_extracted_fields=existing_doc.ai_extracted_fields,
+            created_by=current_user.id,
+            change_reason="New version uploaded",
+        )
+        db.add(version)
+
+        # Update the document in-place with new file data
+        existing_doc.filename = os.path.basename(file_path) if file_path else file.filename
+        existing_doc.file_type = ext
+        existing_doc.file_size = file_size
+        existing_doc.file_path = file_path
+        existing_doc.s3_url = s3_url
+        existing_doc.status = DocumentStatus.PENDING
+        existing_doc.current_version = existing_doc.current_version + 1
+        existing_doc.extracted_text = None
+        existing_doc.extracted_metadata = None
+        existing_doc.ai_summary = None
+        existing_doc.ai_extracted_fields = None
+        existing_doc.ai_extraction_status = None
+        existing_doc.ai_provider = None
+        existing_doc.ai_error = None
+
+        doc = existing_doc
+        try:
+            db.commit()
+        except (IntegrityError, OperationalError):
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to save document version")
+        db.refresh(doc)
+    else:
+        # Create new document record with PENDING status
+        doc = Document(
+            user_id=current_user.id,
+            filename=os.path.basename(file_path) if file_path else file.filename,
+            original_filename=file.filename,
+            file_type=ext,
+            file_size=file_size,
+            file_path=file_path,
+            s3_url=s3_url,
+            status=DocumentStatus.PENDING,
+            current_version=1,
+        )
+        db.add(doc)
+        try:
+            db.commit()
+        except (IntegrityError, OperationalError):
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to save document record")
+        db.refresh(doc)
 
     # Dispatch async processing
     try:
@@ -162,6 +218,7 @@ async def upload_document(
         status="pending",
         task_id=task.id,
         message="Document uploaded. Processing started.",
+        version=doc.current_version,
     )
 
 
@@ -394,6 +451,52 @@ def get_document_stats(
     )
 
 
+@router.get("/stats/trends", response_model=DocumentTrends)
+@limiter.limit("20/minute")
+def get_document_trends(
+    request: Request,
+    response: Response,
+    months: int = Query(12, ge=1, le=24),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get monthly document upload trends for the dashboard chart."""
+    from dateutil.relativedelta import relativedelta
+
+    now = datetime.now(timezone.utc)
+    start = (now - relativedelta(months=months - 1)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    rows = (
+        db.query(
+            func.date_trunc("month", Document.created_at).label("month"),
+            func.count().label("count"),
+        )
+        .filter(
+            Document.user_id == current_user.id,
+            Document.created_at >= start,
+        )
+        .group_by("month")
+        .order_by("month")
+        .all()
+    )
+
+    # Build a lookup from query results
+    counts_by_month: dict[str, int] = {}
+    for row in rows:
+        key = row.month.strftime("%Y-%m")
+        counts_by_month[key] = row.count
+
+    # Fill in zero-count months for a contiguous array
+    trends: list[TrendPoint] = []
+    cursor = start
+    while cursor <= now:
+        key = cursor.strftime("%Y-%m")
+        trends.append(TrendPoint(month=key, count=counts_by_month.get(key, 0)))
+        cursor += relativedelta(months=1)
+
+    return DocumentTrends(trends=trends)
+
+
 @router.get("/all", response_model=DocumentListResponse)
 @limiter.limit("30/minute")
 def get_all_documents(
@@ -445,11 +548,180 @@ def batch_delete_documents(
     ).all()
     deleted = []
     for doc in docs:
+        # Delete version files from storage
+        for version in doc.versions:
+            delete_file(version.file_path, version.s3_url)
         delete_file(doc.file_path, doc.s3_url)
         db.delete(doc)
         deleted.append(doc.id)
     db.commit()
     return {"deleted": deleted, "count": len(deleted)}
+
+
+@router.get("/{document_id}/versions", response_model=DocumentVersionListResponse)
+@limiter.limit("30/minute")
+def list_document_versions(
+    request: Request,
+    response: Response,
+    document_id: int,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all versions of a document, paginated."""
+    doc = _get_accessible_document(document_id, current_user, db)
+
+    query = db.query(DocumentVersion).filter(DocumentVersion.document_id == document_id)
+    total = query.count()
+    versions = (
+        query
+        .order_by(DocumentVersion.version_number.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    version_responses = []
+    for v in versions:
+        vr = DocumentVersionResponse.model_validate(v)
+        vr.is_current = (v.version_number == doc.current_version)
+        version_responses.append(vr)
+
+    return DocumentVersionListResponse(
+        versions=version_responses,
+        document_id=document_id,
+        current_version=doc.current_version,
+        total=total,
+    )
+
+
+@router.post("/{document_id}/rollback", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
+def rollback_document(
+    request: Request,
+    response: Response,
+    document_id: int,
+    payload: RollbackRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """Rollback a document to a previous version.
+
+    Snapshots the current state as a new version, then restores the target version.
+    """
+    doc = _get_accessible_document(document_id, current_user, db, require_edit=True)
+
+    # Find the target version
+    target_version = db.query(DocumentVersion).filter(
+        DocumentVersion.document_id == document_id,
+        DocumentVersion.version_number == payload.version_number,
+    ).first()
+    if not target_version:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Version {payload.version_number} not found",
+        )
+
+    # Snapshot current state as a new version
+    snapshot = DocumentVersion(
+        document_id=doc.id,
+        version_number=doc.current_version,
+        filename=doc.filename,
+        original_filename=doc.original_filename,
+        file_type=doc.file_type,
+        file_size=doc.file_size,
+        file_path=doc.file_path,
+        s3_url=doc.s3_url,
+        extracted_text=doc.extracted_text,
+        extracted_metadata=doc.extracted_metadata,
+        category=doc.category.value if doc.category else None,
+        confidence_score=doc.confidence_score,
+        ai_summary=doc.ai_summary,
+        ai_extracted_fields=doc.ai_extracted_fields,
+        created_by=current_user.id,
+        change_reason=payload.reason or f"Rolled back to version {payload.version_number}",
+    )
+    db.add(snapshot)
+
+    # Restore the target version onto the document
+    new_version_number = doc.current_version + 1
+    doc.filename = target_version.filename
+    doc.original_filename = target_version.original_filename
+    doc.file_type = target_version.file_type
+    doc.file_size = target_version.file_size
+    doc.file_path = target_version.file_path
+    doc.s3_url = target_version.s3_url
+    doc.extracted_text = target_version.extracted_text
+    doc.extracted_metadata = target_version.extracted_metadata
+    if target_version.category:
+        try:
+            doc.category = DocumentCategory(target_version.category)
+        except ValueError:
+            doc.category = DocumentCategory.UNKNOWN
+    else:
+        doc.category = DocumentCategory.UNKNOWN
+    doc.confidence_score = target_version.confidence_score or 0.0
+    doc.ai_summary = target_version.ai_summary
+    doc.ai_extracted_fields = target_version.ai_extracted_fields
+    doc.status = DocumentStatus.COMPLETED
+    doc.current_version = new_version_number
+
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to rollback document")
+    db.refresh(doc)
+
+    return {
+        "detail": f"Document rolled back to version {payload.version_number}",
+        "document_id": doc.id,
+        "new_version": doc.current_version,
+        "restored_from": payload.version_number,
+    }
+
+
+@router.get("/{document_id}/versions/{version_number}/download")
+def download_document_version(
+    document_id: int,
+    version_number: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download a specific version of a document file."""
+    from app.services.storage_service import get_presigned_url, _validate_path_inside_upload_dir
+
+    doc = _get_accessible_document(document_id, current_user, db)
+
+    version = db.query(DocumentVersion).filter(
+        DocumentVersion.document_id == document_id,
+        DocumentVersion.version_number == version_number,
+    ).first()
+    if not version:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Version {version_number} not found",
+        )
+
+    if version.s3_url and settings.USE_S3:
+        s3_key = version.s3_url.split(".amazonaws.com/")[-1]
+        url = get_presigned_url(s3_key)
+        if not url:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate download URL")
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=url)
+
+    if not version.file_path or not os.path.exists(version.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version file not found in storage")
+
+    try:
+        real_path = _validate_path_inside_upload_dir(version.file_path)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    media_type = mimetypes.guess_type(version.original_filename)[0] or "application/octet-stream"
+    return FileResponse(path=real_path, filename=version.original_filename, media_type=media_type)
 
 
 @router.get("/{document_id}/status")
@@ -514,6 +786,37 @@ def download_document(
 
     media_type = mimetypes.guess_type(doc.original_filename)[0] or "application/octet-stream"
     return FileResponse(path=real_path, filename=doc.original_filename, media_type=media_type)
+
+
+@router.get("/{document_id}/preview")
+def preview_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Preview a document inline (Content-Disposition: inline)."""
+    from app.services.storage_service import get_presigned_url, _validate_path_inside_upload_dir
+
+    doc = _get_accessible_document(document_id, current_user, db)
+
+    if doc.s3_url and settings.USE_S3:
+        s3_key = doc.s3_url.split(".amazonaws.com/")[-1]
+        url = get_presigned_url(s3_key)
+        if not url:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate preview URL")
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=url)
+
+    if not doc.file_path or not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found in storage")
+
+    try:
+        real_path = _validate_path_inside_upload_dir(doc.file_path)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    media_type = mimetypes.guess_type(doc.original_filename)[0] or "application/octet-stream"
+    return FileResponse(path=real_path, media_type=media_type)
 
 
 class HighlightItem(BaseModel):
@@ -695,7 +998,11 @@ def delete_document(
     if doc.user_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-    # Delete from storage
+    # Delete version files from storage
+    for version in doc.versions:
+        delete_file(version.file_path, version.s3_url)
+
+    # Delete current file from storage
     delete_file(doc.file_path, doc.s3_url)
 
     # Delete from database

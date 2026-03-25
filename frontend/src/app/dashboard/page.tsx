@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { documentsApi } from "@/lib/api";
+import { StatusBadge } from "@/components";
 import { useAuth } from "@/context/AuthContext";
 import { FiFileText, FiCheckCircle, FiClock, FiArrowRight } from "react-icons/fi";
 import Link from "next/link";
@@ -97,13 +98,7 @@ export default function DashboardPage() {
                                         {doc.category} {doc.confidence_score ? `· ${(doc.confidence_score * 100).toFixed(0)}%` : ""}
                                     </p>
                                 </div>
-                                <span className={`text-[11px] px-2 py-0.5 rounded ${
-                                    doc.status === "completed" ? "bg-[#10b981]/10 text-[#10b981]" :
-                                    doc.status === "processing" ? "bg-[#f59e0b]/10 text-[#f59e0b]" :
-                                    "bg-[#27272a] text-[#71717a]"
-                                }`}>
-                                    {doc.status}
-                                </span>
+                                <StatusBadge status={doc.status} />
                             </div>
                         ))}
                     </div>

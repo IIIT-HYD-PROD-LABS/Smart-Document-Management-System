@@ -79,6 +79,9 @@ class Document(Base):
     ai_provider = Column(String(50), nullable=True)
     ai_error = Column(Text, nullable=True)
 
+    # Version control
+    current_version = Column(Integer, default=1, nullable=False)
+
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
@@ -90,6 +93,7 @@ class Document(Base):
     # Relationships
     owner = relationship("User", back_populates="documents")
     permissions = relationship("DocumentPermission", back_populates="document", cascade="all, delete-orphan")
+    versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan", order_by="DocumentVersion.version_number.desc()")
 
     # Indexes for search performance
     __table_args__ = (

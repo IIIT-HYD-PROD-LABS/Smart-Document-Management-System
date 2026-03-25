@@ -187,6 +187,9 @@ export const documentsApi = {
     getStats: () =>
         api.get("/documents/stats"),
 
+    getTrends: (months?: number) =>
+        api.get(`/documents/stats/trends${months ? `?months=${months}` : ''}`),
+
     delete: (id: number) =>
         api.delete(`/documents/${id}`),
 
@@ -195,6 +198,15 @@ export const documentsApi = {
 
     batchDelete: (ids: number[]) =>
         api.post("/documents/batch-delete", ids),
+
+    getPreviewUrl: (id: number) =>
+        `${API_URL}/api/documents/${id}/preview`,
+
+    getVersions: (id: number, page = 1) =>
+        api.get(`/documents/${id}/versions?page=${page}`),
+
+    rollback: (id: number, versionNumber: number, reason?: string) =>
+        api.post(`/documents/${id}/rollback`, { version_number: versionNumber, reason }),
 };
 
 // ──── ML API ────

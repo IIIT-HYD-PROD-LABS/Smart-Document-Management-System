@@ -5,7 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { documentsApi, sharingApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import toast from "react-hot-toast";
-import { FiArrowLeft, FiFile, FiCalendar, FiTag, FiHash, FiCopy, FiCheck, FiEdit3, FiX, FiSave, FiShare2, FiTrash2 } from "react-icons/fi";
+import { ConfidenceBadge, StatusBadge } from "@/components";
+import { FiArrowLeft, FiFile, FiCalendar, FiTag, FiHash, FiCopy, FiCheck, FiEdit3, FiX, FiSave, FiShare2, FiTrash2, FiEye } from "react-icons/fi";
+import Link from "next/link";
 
 interface AIField {
     value: unknown;
@@ -49,30 +51,6 @@ interface SharePermission {
     permission: string;
     granted_by: number;
     created_at: string;
-}
-
-function StatusBadge({ status }: { status: string }) {
-    const styles: Record<string, string> = {
-        completed: "bg-[#10b981]/10 text-[#10b981]",
-        processing: "bg-[#f59e0b]/10 text-[#f59e0b]",
-        pending: "bg-[#3b82f6]/10 text-[#3b82f6]",
-        failed: "bg-[#ef4444]/10 text-[#ef4444]",
-    };
-    return (
-        <span className={`text-xs px-2.5 py-1 rounded-md ${styles[status] || "bg-[#27272a] text-[#71717a]"}`}>
-            {status}
-        </span>
-    );
-}
-
-function ConfidenceBadge({ score }: { score: number }) {
-    if (score <= 0) return null;
-    const pct = Math.round(score * 100);
-    let color: string;
-    if (score >= 0.8) color = "text-[#10b981]";
-    else if (score >= 0.5) color = "text-[#f59e0b]";
-    else color = "text-[#ef4444]";
-    return <span className={`text-2xl font-semibold ${color}`}>{pct}%</span>;
 }
 
 function MetadataItem({ label, value }: { label: string; value: string }) {
@@ -321,7 +299,13 @@ export default function DocumentDetailPage() {
                         <p className="text-xs text-[#52525b] mt-1">{fileSize} &middot; {doc.file_type.toUpperCase()}</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <Link
+                        href={`/dashboard/documents/${doc.id}/preview`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#71717a] hover:text-white border border-[#27272a] rounded-md hover:border-[#3f3f46] transition-colors"
+                    >
+                        <FiEye className="w-3.5 h-3.5" /> Preview
+                    </Link>
                     {canShare && (
                         <button
                             onClick={() => setShowShareModal(true)}
@@ -345,7 +329,7 @@ export default function DocumentDetailPage() {
                     <FiHash className="w-4 h-4 text-[#52525b] mt-0.5 shrink-0" />
                     <div>
                         <p className="text-[11px] text-[#52525b] uppercase tracking-wider mb-1">Confidence</p>
-                        <ConfidenceBadge score={doc.confidence_score} />
+                        <ConfidenceBadge score={doc.confidence_score} variant="display" />
                     </div>
                 </div>
                 <div className="flex items-start gap-3">

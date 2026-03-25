@@ -2,6 +2,11 @@
 const nextConfig = {
     output: "standalone",
     poweredByHeader: false,
+    webpack: (config) => {
+        // react-pdf requires canvas to be aliased to false for SSR
+        config.resolve.alias.canvas = false;
+        return config;
+    },
     env: {
         NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
     },
@@ -20,7 +25,7 @@ const nextConfig = {
                     { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
                     {
                         key: "Content-Security-Policy",
-                        value: `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ${apiUrl}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
+                        value: `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ${apiUrl}; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
                     },
                 ],
             },

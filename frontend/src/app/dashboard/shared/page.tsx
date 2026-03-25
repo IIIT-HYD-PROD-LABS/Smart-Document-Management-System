@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { sharingApi } from "@/lib/api";
+import { StatusBadge } from "@/components";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { FiFile, FiChevronLeft, FiChevronRight } from "react-icons/fi";
@@ -57,8 +58,8 @@ export default function SharedWithMePage() {
                 </div>
             ) : (
                 <>
-                    <div className="bg-[#111113] border border-[#27272a] rounded-lg overflow-hidden">
-                        <table className="w-full">
+                    <div className="bg-[#111113] border border-[#27272a] rounded-lg overflow-x-auto">
+                        <table className="w-full min-w-[640px]">
                             <thead>
                                 <tr className="border-b border-[#27272a]">
                                     <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">Document</th>
@@ -83,14 +84,7 @@ export default function SharedWithMePage() {
                                             <span className="text-xs text-[#71717a]">{doc.category}</span>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={`text-xs px-2 py-0.5 rounded ${
-                                                doc.status === "completed" ? "bg-[#10b981]/10 text-[#10b981]" :
-                                                doc.status === "processing" ? "bg-[#f59e0b]/10 text-[#f59e0b]" :
-                                                doc.status === "failed" ? "bg-[#ef4444]/10 text-[#ef4444]" :
-                                                "bg-[#3b82f6]/10 text-[#3b82f6]"
-                                            }`}>
-                                                {doc.status}
-                                            </span>
+                                            <StatusBadge status={doc.status} />
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className="text-xs text-[#71717a]">

@@ -14,7 +14,8 @@ from app.models.user import User
 from app.models.document import Document
 from app.models.refresh_token import RefreshToken
 from app.models.document_permission import DocumentPermission
-_models = (User, Document, RefreshToken, DocumentPermission)
+from app.models.document_version import DocumentVersion
+_models = (User, Document, RefreshToken, DocumentPermission, DocumentVersion)
 
 config = context.config
 
