@@ -8,10 +8,9 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.database import get_db
 from app.models.user import User
-from app.models.document import Document, DocumentStatus
+from app.models.document import Document
 from app.models.audit_log import AuditLog
 from app.schemas.admin import (
     AdminUserResponse,

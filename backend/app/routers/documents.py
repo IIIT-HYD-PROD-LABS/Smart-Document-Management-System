@@ -774,7 +774,7 @@ def download_document_version(
     """Download a specific version of a document file."""
     from app.services.storage_service import get_presigned_url, _validate_path_inside_upload_dir
 
-    doc = _get_accessible_document(document_id, current_user, db)
+    _get_accessible_document(document_id, current_user, db)  # access control check
 
     version = db.query(DocumentVersion).filter(
         DocumentVersion.document_id == document_id,

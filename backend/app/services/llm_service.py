@@ -62,7 +62,7 @@ def _parse_llm_response(raw: str | None) -> dict:
         raise ValueError("LLM returned whitespace-only response")
     if text.startswith("```"):
         lines = text.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
+        lines = [ln for ln in lines if not ln.strip().startswith("```")]
         text = "\n".join(lines).strip()
     if not text:
         raise ValueError("LLM response contained only code fences")

@@ -302,7 +302,7 @@ def train_model(mode: str = "auto"):
     all_cleaned = [clean_text(t) for t in texts]
 
     # Filter out empty texts after cleaning
-    valid_pairs = [(t, l) for t, l in zip(all_cleaned, labels) if t.strip()]
+    valid_pairs = [(t, lbl) for t, lbl in zip(all_cleaned, labels) if t.strip()]
     cleaned_texts = [p[0] for p in valid_pairs]
     filtered_labels = [p[1] for p in valid_pairs]
     logger.info("preprocessing_complete", valid_samples=len(cleaned_texts))
@@ -490,11 +490,11 @@ def train_model(mode: str = "auto"):
     print(f"  Best model:        {best_name}")
     print(f"  Test accuracy:     {test_acc:.4f}")
     print(f"  CV score:          {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
-    print(f"\nValidation accuracies:")
+    print("\nValidation accuracies:")
     print(f"  Logistic Regression: {lr_val_acc:.4f}")
     print(f"  Naive Bayes:         {nb_val_acc:.4f}")
     print(f"  Linear SVC:          {svc_val_acc:.4f}")
-    print(f"\nPer-category metrics:")
+    print("\nPer-category metrics:")
     print(report_str)
     print(f"\nArtifacts saved to: {settings.MODEL_DIR}")
     print(f"Evaluation report:  {eval_path}")
