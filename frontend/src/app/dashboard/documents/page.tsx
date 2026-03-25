@@ -3,32 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
+import { ConfidenceBadge, StatusBadge, CategoryBadge } from "@/components";
 import { FiFileText, FiTrash2, FiFilter, FiCheckSquare, FiSquare, FiX } from "react-icons/fi";
 import toast from "react-hot-toast";
 
 const categories = ["all", "bills", "upi", "tickets", "tax", "bank", "invoices", "unknown"];
-
-function ConfidenceBadge({ score }: { score: number }) {
-    if (score <= 0) return null;
-    const pct = Math.round(score * 100);
-    let colorClass: string;
-    let label: string;
-    if (score >= 0.8) {
-        colorClass = "bg-[#10b981]/10 text-[#10b981]";
-        label = "High";
-    } else if (score >= 0.5) {
-        colorClass = "bg-[#f59e0b]/10 text-[#f59e0b]";
-        label = "Medium";
-    } else {
-        colorClass = "bg-[#ef4444]/10 text-[#ef4444]";
-        label = "Low";
-    }
-    return (
-        <span className={`text-[11px] px-2 py-0.5 rounded ${colorClass}`} title={`${label} confidence`}>
-            {pct}%
-        </span>
-    );
-}
 
 export default function DocumentsPage() {
     const router = useRouter();
@@ -190,24 +169,11 @@ export default function DocumentsPage() {
                                 </p>
                             </div>
                             <div className="flex items-center gap-3">
-                                {doc.category && doc.category !== "unknown" && (
-                                    <span className="text-[11px] px-2 py-0.5 rounded bg-[#10b981]/10 text-[#10b981]">
-                                        {doc.category}
-                                    </span>
-                                )}
-                                {doc.category === "unknown" && (
-                                    <span className="text-[11px] px-2 py-0.5 rounded bg-[#27272a] text-[#71717a]">
-                                        unknown
-                                    </span>
+                                {doc.category && (
+                                    <CategoryBadge category={doc.category} />
                                 )}
                                 <ConfidenceBadge score={doc.confidence_score} />
-                                <span className={`text-[11px] px-2 py-0.5 rounded ${
-                                    doc.status === "completed" ? "bg-[#10b981]/10 text-[#10b981]" :
-                                    doc.status === "processing" ? "bg-[#f59e0b]/10 text-[#f59e0b]" :
-                                    "bg-[#27272a] text-[#71717a]"
-                                }`}>
-                                    {doc.status}
-                                </span>
+                                <StatusBadge status={doc.status} />
                                 <button
                                     onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
                                     className="opacity-0 group-hover:opacity-100 text-[#52525b] hover:text-[#ef4444] transition-all cursor-pointer"

@@ -2,9 +2,9 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { FiHome, FiUpload, FiSearch, FiBarChart2, FiLogOut, FiFileText, FiShield, FiShare2 } from "react-icons/fi";
+import { FiHome, FiUpload, FiSearch, FiBarChart2, FiLogOut, FiFileText, FiShield, FiShare2, FiMenu, FiX } from "react-icons/fi";
 
 const allNavItems = [
     { href: "/dashboard", icon: FiHome, label: "Overview", roles: ["admin", "editor", "viewer"] },
@@ -20,10 +20,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const { user, isLoading, logout } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     useEffect(() => {
         if (!isLoading && !user) router.push("/login");
     }, [user, isLoading, router]);
+
+    // Close sidebar on route change (mobile)
+    useEffect(() => {
+        setSidebarOpen(false);
+    }, [pathname]);
 
     if (isLoading) {
         return (
@@ -41,11 +47,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     return (
         <div className="min-h-screen bg-[#09090b] flex">
-            <aside className="w-56 fixed left-0 top-0 h-full bg-[#09090b] border-r border-[#1f1f23] flex flex-col z-40">
-                <div className="px-5 h-14 flex items-center border-b border-[#1f1f23]">
+            {/* Mobile top bar */}
+            <div className="fixed top-0 left-0 right-0 h-14 bg-[#09090b] border-b border-[#1f1f23] flex items-center px-4 z-50 md:hidden">
+                <button onClick={() => setSidebarOpen(true)} className="text-[#a1a1aa] hover:text-white p-1">
+                    <FiMenu className="w-5 h-5" />
+                </button>
+                <span className="ml-3 text-sm font-semibold text-white tracking-tight">SmartDocs</span>
+            </div>
+
+            {/* Sidebar backdrop (mobile) */}
+            {sidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/60 z-40 md:hidden"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+
+            {/* Sidebar */}
+            <aside className={`
+                w-56 fixed left-0 top-0 h-full bg-[#09090b] border-r border-[#1f1f23] flex flex-col z-50
+                transition-transform duration-200 ease-in-out
+                ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+                md:translate-x-0
+            `}>
+                <div className="px-5 h-14 flex items-center justify-between border-b border-[#1f1f23]">
                     <Link href="/dashboard" className="text-sm font-semibold text-white tracking-tight">
                         SmartDocs
                     </Link>
+                    <button onClick={() => setSidebarOpen(false)} className="text-[#71717a] hover:text-white md:hidden">
+                        <FiX className="w-4 h-4" />
+                    </button>
                 </div>
 
                 <nav className="flex-1 py-3 px-2">
@@ -95,7 +126,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
             </aside>
 
-            <main className="flex-1 ml-56 p-8">
+            <main className="flex-1 md:ml-56 ml-0 p-6 md:p-8 mt-14 md:mt-0">
                 <div className="max-w-5xl">
                     {children}
                 </div>

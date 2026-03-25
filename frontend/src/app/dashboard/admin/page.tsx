@@ -164,8 +164,8 @@ export default function AdminPage() {
             </div>
 
             {/* User table */}
-            <div className="bg-[#111113] border border-[#27272a] rounded-lg overflow-hidden">
-                <table className="w-full">
+            <div className="bg-[#111113] border border-[#27272a] rounded-lg overflow-x-auto">
+                <table className="w-full min-w-[700px]">
                     <thead>
                         <tr className="border-b border-[#27272a]">
                             <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">User</th>

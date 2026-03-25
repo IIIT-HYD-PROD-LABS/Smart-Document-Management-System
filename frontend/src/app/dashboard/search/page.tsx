@@ -3,32 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
+import { ConfidenceBadge, CategoryBadge } from "@/components";
 import { FiSearch, FiFileText } from "react-icons/fi";
 import toast from "react-hot-toast";
 
 const categories = ["", "bills", "upi", "tickets", "tax", "bank", "invoices"];
-
-function ConfidenceBadge({ score }: { score: number }) {
-    if (score <= 0) return null;
-    const pct = Math.round(score * 100);
-    let colorClass: string;
-    let label: string;
-    if (score >= 0.8) {
-        colorClass = "bg-[#10b981]/10 text-[#10b981]";
-        label = "High";
-    } else if (score >= 0.5) {
-        colorClass = "bg-[#f59e0b]/10 text-[#f59e0b]";
-        label = "Medium";
-    } else {
-        colorClass = "bg-[#ef4444]/10 text-[#ef4444]";
-        label = "Low";
-    }
-    return (
-        <span className={`text-[11px] px-2 py-0.5 rounded ${colorClass}`} title={`${label} confidence`}>
-            {pct}%
-        </span>
-    );
-}
 
 export default function SearchPage() {
     const router = useRouter();
@@ -172,7 +151,7 @@ export default function SearchPage() {
                                     <div className="flex items-center gap-3 mb-2">
                                         <FiFileText className="w-4 h-4 text-[#52525b]" />
                                         <span className="text-sm text-white">{doc.original_filename}</span>
-                                        <span className="text-[11px] px-2 py-0.5 rounded bg-[#10b981]/10 text-[#10b981]">{doc.category}</span>
+                                        <CategoryBadge category={doc.category} />
                                         <ConfidenceBadge score={doc.confidence_score} />
                                     </div>
                                     {doc.extracted_text && (

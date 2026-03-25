@@ -6,29 +6,8 @@ import { useDropzone } from "react-dropzone";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { documentsApi } from "@/lib/api";
+import { ConfidenceBadge } from "@/components";
 import { FiUploadCloud, FiFile, FiCheckCircle, FiX, FiLoader } from "react-icons/fi";
-
-function ConfidenceBadge({ score }: { score: number }) {
-    if (score <= 0) return null;
-    const pct = Math.round(score * 100);
-    let colorClass: string;
-    let label: string;
-    if (score >= 0.8) {
-        colorClass = "bg-[#10b981]/10 text-[#10b981]";
-        label = "High";
-    } else if (score >= 0.5) {
-        colorClass = "bg-[#f59e0b]/10 text-[#f59e0b]";
-        label = "Medium";
-    } else {
-        colorClass = "bg-[#ef4444]/10 text-[#ef4444]";
-        label = "Low";
-    }
-    return (
-        <span className={`text-[11px] px-2 py-0.5 rounded ${colorClass}`} title={`${label} confidence`}>
-            {pct}%
-        </span>
-    );
-}
 
 interface UploadItem {
     file: File;
