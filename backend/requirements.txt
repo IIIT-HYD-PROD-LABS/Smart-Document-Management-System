@@ -5,7 +5,7 @@ python-multipart==0.0.22
 
 # Database
 sqlalchemy==2.0.23
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.11
 alembic==1.18.4
 
 # Authentication
