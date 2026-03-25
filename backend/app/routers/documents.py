@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime, date, timedelta, timezone
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Request, Response, UploadFile, File, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path as PathParam, Request, Response, UploadFile, File, Query, status
 from pydantic import BaseModel, Field, model_validator
 from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, Float
@@ -27,6 +27,7 @@ from app.schemas.document import (
 )
 from app.schemas.sharing import ShareDocumentRequest, DocumentPermissionResponse
 from app.utils.security import get_current_user, require_editor
+from app.services.audit_service import log_audit_event
 from app.services.storage_service import save_file, delete_file
 
 logger = structlog.stdlib.get_logger()
@@ -69,6 +70,7 @@ async def upload_document(
     request: Request,
     response: Response,
     file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
@@ -226,6 +228,13 @@ async def upload_document(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Document saved but processing queue is unavailable. Please retry later.",
         )
+
+    background_tasks.add_task(
+        log_audit_event, user_id=current_user.id, action="upload",
+        resource_type="document", resource_id=doc.id,
+        details={"filename": file.filename, "version": doc.current_version},
+        ip_address=request.client.host if request.client else None,
+    )
 
     return DocumentUploadResponse(
         id=doc.id,
@@ -564,6 +573,7 @@ def batch_delete_documents(
     request: Request,
     response: Response,
     ids: list[int],
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
@@ -584,6 +594,12 @@ def batch_delete_documents(
     ).all()
     deleted = []
     for doc in docs:
+        background_tasks.add_task(
+            log_audit_event, user_id=current_user.id, action="delete",
+            resource_type="document", resource_id=doc.id,
+            details={"filename": doc.original_filename},
+            ip_address=request.client.host if request.client else None,
+        )
         # Delete version files from storage
         for version in doc.versions:
             delete_file(version.file_path, version.s3_url)
@@ -647,6 +663,7 @@ def rollback_document(
     request: Request,
     response: Response,
     payload: RollbackRequest,
+    background_tasks: BackgroundTasks,
     document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -728,6 +745,13 @@ def rollback_document(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to rollback document")
     db.refresh(doc)
+
+    background_tasks.add_task(
+        log_audit_event, user_id=current_user.id, action="rollback",
+        resource_type="document", resource_id=document_id,
+        details={"from_version": doc.current_version, "to_version": payload.version_number},
+        ip_address=request.client.host if request.client else None,
+    )
 
     return {
         "detail": f"Document rolled back to version {payload.version_number}",
@@ -820,6 +844,7 @@ def get_document_status(
 def download_document(
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -828,6 +853,13 @@ def download_document(
     from app.services.storage_service import get_presigned_url, _validate_path_inside_upload_dir
 
     doc = _get_accessible_document(document_id, current_user, db)
+
+    background_tasks.add_task(
+        log_audit_event, user_id=current_user.id, action="download",
+        resource_type="document", resource_id=document_id,
+        details={"filename": doc.original_filename},
+        ip_address=request.client.host if request.client else None,
+    )
 
     if doc.s3_url and settings.USE_S3:
         s3_key = doc.s3_url.split(".amazonaws.com/")[-1]
@@ -941,6 +973,7 @@ def share_document(
     request: Request,
     response: Response,
     payload: ShareDocumentRequest,
+    background_tasks: BackgroundTasks,
     document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -982,6 +1015,12 @@ def share_document(
         except (IntegrityError, OperationalError):
             db.rollback()
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to update permission")
+        background_tasks.add_task(
+            log_audit_event, user_id=current_user.id, action="share",
+            resource_type="document", resource_id=document_id,
+            details={"shared_with_email": payload.email, "permission": payload.permission},
+            ip_address=request.client.host if request.client else None,
+        )
         return {"detail": "Permission updated", "permission_id": existing.id}
 
     perm = DocumentPermission(
@@ -997,6 +1036,12 @@ def share_document(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Permission already exists")
     db.refresh(perm)
+    background_tasks.add_task(
+        log_audit_event, user_id=current_user.id, action="share",
+        resource_type="document", resource_id=document_id,
+        details={"shared_with_email": payload.email, "permission": payload.permission},
+        ip_address=request.client.host if request.client else None,
+    )
     return {"detail": "Document shared", "permission_id": perm.id}
 
 
@@ -1047,6 +1092,7 @@ def get_document_permissions(
 def revoke_share(
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     document_id: int = PathParam(..., ge=1),
     permission_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
@@ -1076,12 +1122,20 @@ def revoke_share(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to revoke permission")
 
+    background_tasks.add_task(
+        log_audit_event, user_id=current_user.id, action="unshare",
+        resource_type="document", resource_id=document_id,
+        details={"permission_id": permission_id},
+        ip_address=request.client.host if request.client else None,
+    )
+
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("10/minute")
 def delete_document(
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -1093,6 +1147,13 @@ def delete_document(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     if doc.user_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    background_tasks.add_task(
+        log_audit_event, user_id=current_user.id, action="delete",
+        resource_type="document", resource_id=document_id,
+        details={"filename": doc.original_filename},
+        ip_address=request.client.host if request.client else None,
+    )
 
     # Delete version files from storage
     for version in doc.versions:

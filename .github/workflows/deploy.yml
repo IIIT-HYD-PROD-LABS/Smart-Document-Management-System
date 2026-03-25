@@ -1,0 +1,45 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    needs: []
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker images
+        run: docker compose build
+
+      - name: Login to Docker Hub
+        if: env.DOCKER_USERNAME != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+
+      - name: Tag and push backend image
+        if: env.DOCKER_USERNAME != ''
+        run: |
+          docker tag smart-document-management-system-backend:latest ${{ secrets.DOCKER_USERNAME }}/smartdocs-backend:latest
+          docker tag smart-document-management-system-backend:latest ${{ secrets.DOCKER_USERNAME }}/smartdocs-backend:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/smartdocs-backend:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/smartdocs-backend:${{ github.sha }}
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+
+      - name: Tag and push frontend image
+        if: env.DOCKER_USERNAME != ''
+        run: |
+          docker tag smart-document-management-system-frontend:latest ${{ secrets.DOCKER_USERNAME }}/smartdocs-frontend:latest
+          docker tag smart-document-management-system-frontend:latest ${{ secrets.DOCKER_USERNAME }}/smartdocs-frontend:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/smartdocs-frontend:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/smartdocs-frontend:${{ github.sha }}
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
