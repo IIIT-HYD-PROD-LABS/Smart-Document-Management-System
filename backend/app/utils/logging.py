@@ -1,11 +1,36 @@
 """Structured logging configuration using structlog."""
 
 import logging
+import re
 import sys
 
 import structlog
 
 from app.config import settings
+
+# Keys whose values must never appear in logs
+_SENSITIVE_KEYS = frozenset({
+    "password", "passwd", "secret", "token", "access_token", "refresh_token",
+    "api_key", "apikey", "authorization", "cookie", "session_id",
+    "credit_card", "ssn", "private_key",
+})
+
+# Pattern to detect email addresses in string values
+_EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+
+
+def sanitize_sensitive_data(_, __, event_dict: dict) -> dict:
+    """Scrub PII and secrets from structured log fields (defense-in-depth).
+
+    - Redacts values of known-sensitive keys entirely.
+    - Masks email addresses found in string values of any key.
+    """
+    for key in list(event_dict.keys()):
+        if key.lower() in _SENSITIVE_KEYS:
+            event_dict[key] = "***REDACTED***"
+        elif isinstance(event_dict[key], str) and _EMAIL_RE.search(event_dict[key]):
+            event_dict[key] = _EMAIL_RE.sub("***@***.***", event_dict[key])
+    return event_dict
 
 
 def drop_color_message_key(_, __, event_dict: dict) -> dict:
@@ -28,6 +53,7 @@ def setup_logging() -> None:
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.stdlib.ExtraAdder(),
         drop_color_message_key,
+        sanitize_sensitive_data,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
     ]

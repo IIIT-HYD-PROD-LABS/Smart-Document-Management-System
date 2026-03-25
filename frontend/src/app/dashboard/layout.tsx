@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { LoadingSpinner } from "@/components";
 import { FiHome, FiUpload, FiSearch, FiBarChart2, FiLogOut, FiFileText, FiShield, FiShare2, FiMenu, FiX } from "react-icons/fi";
 
 const allNavItems = [
@@ -34,7 +35,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (isLoading) {
         return (
             <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
-                <div className="w-5 h-5 border-2 border-[#27272a] border-t-[#a1a1aa] rounded-full animate-spin" />
+                <LoadingSpinner />
             </div>
         );
     }

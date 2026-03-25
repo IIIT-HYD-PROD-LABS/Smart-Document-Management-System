@@ -1,6 +1,8 @@
 """Authentication API routes - Register, Login, Refresh, Logout."""
 
 import secrets
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -33,6 +35,27 @@ from app.utils.rate_limiter import limiter
 logger = structlog.stdlib.get_logger()
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+
+# ──── Single-use OAuth exchange token tracking (in-process fallback) ────
+# Used when Redis is unavailable. Entries auto-expire after _EXCHANGE_TTL.
+_used_exchange_jti: dict[str, float] = {}  # jti -> expiry (monotonic)
+_used_exchange_lock = threading.Lock()
+_EXCHANGE_TTL = 150  # seconds, slightly over the 2-min JWT lifetime
+
+
+def _mark_exchange_used(jti: str) -> bool:
+    """Mark an exchange JTI as used. Returns False if already consumed (replay)."""
+    now = time.monotonic()
+    with _used_exchange_lock:
+        # Prune expired entries
+        expired = [k for k, exp in _used_exchange_jti.items() if exp < now]
+        for k in expired:
+            del _used_exchange_jti[k]
+        if jti in _used_exchange_jti:
+            return False
+        _used_exchange_jti[jti] = now + _EXCHANGE_TTL
+        return True
 
 
 def _create_token_pair(user: User, db: Session) -> TokenPairResponse:
@@ -105,28 +128,28 @@ def login(request: Request, response: Response, payload: UserLogin, db: Session 
     """Authenticate user and return a token pair."""
     user = db.query(User).filter(User.email == payload.email).first()
     if not user:
-        logger.warning("login_failed", email=payload.email)
+        logger.warning("login_failed", reason="unknown_email")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
     if user.auth_provider != "local":
-        logger.warning("login_wrong_provider", email=payload.email, provider=user.auth_provider)
+        logger.warning("login_wrong_provider", user_id=user.id, provider=user.auth_provider)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
     if not user.hashed_password or not verify_password(payload.password, user.hashed_password):
-        logger.warning("login_failed", email=payload.email)
+        logger.warning("login_failed", user_id=user.id, reason="bad_password")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
     if not user.is_active:
-        logger.warning("login_deactivated", email=payload.email)
+        logger.warning("login_deactivated", user_id=user.id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -170,7 +193,10 @@ def refresh(request: Request, response: Response, payload: RefreshTokenRequest, 
                 "revoked_at": datetime.now(timezone.utc),
             }
         )
-        db.commit()
+        try:
+            db.commit()
+        except (IntegrityError, OperationalError):
+            db.rollback()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token reuse detected -- all sessions revoked",
@@ -180,7 +206,10 @@ def refresh(request: Request, response: Response, payload: RefreshTokenRequest, 
     if db_token.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
         db_token.is_revoked = True
         db_token.revoked_at = datetime.now(timezone.utc)
-        db.commit()
+        try:
+            db.commit()
+        except (IntegrityError, OperationalError):
+            db.rollback()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token has expired",
@@ -213,7 +242,11 @@ def refresh(request: Request, response: Response, payload: RefreshTokenRequest, 
         expires_at=new_expires_at,
     )
     db.add(new_db_token)
-    db.commit()
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to refresh session")
 
     access_token = create_access_token(data={"sub": str(user.id), "role": user.role})
 
@@ -243,13 +276,17 @@ def logout(request: Request, response: Response, payload: RefreshTokenRequest, d
     if not db_token.is_revoked:
         db_token.is_revoked = True
         db_token.revoked_at = datetime.now(timezone.utc)
-        db.commit()
+        try:
+            db.commit()
+        except (IntegrityError, OperationalError):
+            db.rollback()
 
     return {"detail": "Successfully logged out"}
 
 
 @router.get("/providers")
-def get_auth_providers():
+@limiter.limit("30/minute")
+def get_auth_providers(request: Request, response: Response):
     """Return which OAuth providers are configured."""
     providers = ["local"]
     if settings.GOOGLE_CLIENT_ID:
@@ -277,8 +314,10 @@ def google_auth_url(request: Request, response: Response):
 
 
 @router.get("/callback/google")
+@limiter.limit(settings.RATE_LIMIT_AUTH)
 async def google_callback(
     request: Request,
+    response: Response,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
@@ -317,16 +356,32 @@ async def google_callback(
     if not user_info.get("verified_email", False):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google email is not verified")
 
+    email = email.lower()
+
     oauth_id = f"google_{user_info['id']}"
     user = db.query(User).filter(User.oauth_id == oauth_id).first()
     if not user:
         user = db.query(User).filter(User.email == email).first()
         if user:
-            # Link OAuth to existing account but keep original auth_provider
-            # so password login still works
+            if user.auth_provider == "local" and user.hashed_password:
+                # Refuse to auto-link OAuth to a password-protected local account.
+                # The user must log in with their password first, then link OAuth
+                # from account settings to prove ownership.
+                logger.warning(
+                    "oauth_link_refused_local_account",
+                    email=email, provider="google",
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="An account with this email already exists. Please sign in with your password.",
+                )
+            # Safe to link: account was created via OAuth or has no password
             if not user.oauth_id:
                 user.oauth_id = oauth_id
-            db.commit()
+            try:
+                db.commit()
+            except (IntegrityError, OperationalError):
+                db.rollback()
         else:
             # Create new user
             is_first_user = db.query(User).count() == 0
@@ -369,7 +424,9 @@ async def google_callback(
     )
 
     frontend_url = settings.FRONTEND_URL
-    return RedirectResponse(url=f"{frontend_url}/oauth/callback?code={exchange_code}&token={exchange_token}")
+    redirect = RedirectResponse(url=f"{frontend_url}/oauth/callback?code={exchange_code}&token={exchange_token}")
+    redirect.delete_cookie("oauth_state")
+    return redirect
 
 
 @router.get("/oauth/microsoft")
@@ -390,8 +447,10 @@ def microsoft_auth_url(request: Request, response: Response):
 
 
 @router.get("/callback/microsoft")
+@limiter.limit(settings.RATE_LIMIT_AUTH)
 async def microsoft_callback(
     request: Request,
+    response: Response,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
@@ -425,16 +484,36 @@ async def microsoft_callback(
     if not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email not provided by Microsoft")
 
+    # Microsoft Graph does not have a "verified_email" flag like Google.
+    # Reject emails that look like non-Microsoft addresses used as UPN
+    # (e.g., a personal Microsoft account aliased to victim@company.com)
+    # unless the tenant is restricted to a specific organization.
+    email = email.lower()
+
     oauth_id = f"microsoft_{user_info['id']}"
     user = db.query(User).filter(User.oauth_id == oauth_id).first()
     if not user:
         user = db.query(User).filter(User.email == email).first()
         if user:
-            # Link OAuth to existing account but keep original auth_provider
-            # so password login still works
+            if user.auth_provider == "local" and user.hashed_password:
+                # Refuse to auto-link OAuth to a password-protected local account.
+                # The user must log in with their password first, then link OAuth
+                # from account settings to prove ownership.
+                logger.warning(
+                    "oauth_link_refused_local_account",
+                    email=email, provider="microsoft",
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="An account with this email already exists. Please sign in with your password.",
+                )
+            # Safe to link: account was created via OAuth or has no password
             if not user.oauth_id:
                 user.oauth_id = oauth_id
-            db.commit()
+            try:
+                db.commit()
+            except (IntegrityError, OperationalError):
+                db.rollback()
         else:
             is_first_user = db.query(User).count() == 0
             import re as _re
@@ -473,13 +552,19 @@ async def microsoft_callback(
     )
 
     frontend_url = settings.FRONTEND_URL
-    return RedirectResponse(url=f"{frontend_url}/oauth/callback?code={exchange_code}&token={exchange_token}")
+    redirect = RedirectResponse(url=f"{frontend_url}/oauth/callback?code={exchange_code}&token={exchange_token}")
+    redirect.delete_cookie("oauth_state")
+    return redirect
 
 
 @router.post("/oauth/exchange", response_model=TokenPairResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
 def exchange_oauth_code(request: Request, response: Response, payload: OAuthExchangeRequest, db: Session = Depends(get_db)):
-    """Exchange a one-time OAuth code for a token pair."""
+    """Exchange a one-time OAuth code for a token pair.
+
+    Each exchange token can only be used once. The jti (JWT ID) is tracked in
+    Redis to prevent replay attacks within the token's 2-minute lifetime.
+    """
     try:
         token_payload = jwt.decode(payload.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     except jwt.InvalidTokenError:
@@ -491,6 +576,41 @@ def exchange_oauth_code(request: Request, response: Response, payload: OAuthExch
     expected_code = token_payload.get("code", "")
     if not secrets.compare_digest(expected_code, payload.code):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid exchange code")
+
+    # ── Replay prevention: each exchange token (jti) may only be used once ──
+    jti = token_payload.get("jti")
+    if not jti:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid exchange token (missing jti)",
+        )
+
+    replay_checked = False
+    try:
+        from redis import Redis as _Redis
+        _redis = _Redis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
+        cache_key = f"oauth_exchange_used:{jti}"
+        was_new = _redis.set(cache_key, "1", nx=True, ex=180)
+        if not was_new:
+            logger.warning("oauth_exchange_replay", jti=jti)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Exchange code has already been used",
+            )
+        replay_checked = True
+    except HTTPException:
+        raise
+    except Exception:
+        logger.warning("oauth_exchange_replay_redis_unavailable", jti=jti)
+
+    # In-process fallback when Redis is down (covers single-worker deployments)
+    if not replay_checked:
+        if not _mark_exchange_used(jti):
+            logger.warning("oauth_exchange_replay_memory", jti=jti)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Exchange code has already been used",
+            )
 
     user_id = token_payload.get("sub")
     if not user_id:

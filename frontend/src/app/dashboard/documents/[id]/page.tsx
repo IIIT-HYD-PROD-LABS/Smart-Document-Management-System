@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { documentsApi, sharingApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import toast from "react-hot-toast";
-import { ConfidenceBadge, StatusBadge } from "@/components";
-import { FiArrowLeft, FiFile, FiCalendar, FiTag, FiHash, FiCopy, FiCheck, FiEdit3, FiX, FiSave, FiShare2, FiTrash2, FiEye } from "react-icons/fi";
+import { ConfidenceBadge, StatusBadge, LoadingSpinner } from "@/components";
+import { FiArrowLeft, FiFile, FiCalendar, FiTag, FiHash, FiCopy, FiCheck, FiEdit3, FiX, FiSave, FiShare2, FiTrash2, FiEye, FiClock, FiRotateCcw } from "react-icons/fi";
 import Link from "next/link";
 
 interface AIField {
@@ -38,8 +38,23 @@ interface DocumentDetail {
     highlighted_text: Highlight[] | null;
     status: string;
     s3_url: string | null;
+    current_version: number;
+    total_versions: number;
     created_at: string;
     updated_at: string | null;
+}
+
+interface DocumentVersionEntry {
+    id: number;
+    version_number: number;
+    original_filename: string;
+    file_type: string;
+    file_size: number;
+    category: string | null;
+    created_by: number | null;
+    created_at: string;
+    change_reason: string | null;
+    is_current: boolean;
 }
 
 interface SharePermission {
@@ -97,12 +112,19 @@ export default function DocumentDetailPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const copiedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
     // Highlighting state
     const [highlightMode, setHighlightMode] = useState(false);
     const [highlights, setHighlights] = useState<Highlight[]>([]);
     const [saving, setSaving] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
+
+    // Version history state
+    const [versions, setVersions] = useState<DocumentVersionEntry[]>([]);
+    const [showVersions, setShowVersions] = useState(false);
+    const [versionsLoading, setVersionsLoading] = useState(false);
+    const [rollingBack, setRollingBack] = useState(false);
 
     // Sharing state
     const [showShareModal, setShowShareModal] = useState(false);
@@ -112,6 +134,7 @@ export default function DocumentDetailPage() {
     const [sharingLoading, setSharingLoading] = useState(false);
 
     const canShare = user?.role === "admin" || user?.role === "editor";
+    const canEdit = user?.role === "admin" || user?.role === "editor";
 
     useEffect(() => {
         const id = Number(params.id);
@@ -176,6 +199,43 @@ export default function DocumentDetailPage() {
         }
     };
 
+    const loadVersions = useCallback(async () => {
+        if (!docId) return;
+        setVersionsLoading(true);
+        try {
+            const res = await documentsApi.getVersions(docId);
+            setVersions(res.data.versions || []);
+        } catch {
+            toast.error("Failed to load version history");
+        } finally {
+            setVersionsLoading(false);
+        }
+    }, [docId]);
+
+    const handleRollback = async (versionNumber: number) => {
+        if (!doc) return;
+        if (!confirm(`Restore version ${versionNumber}? The current state will be saved as a new version.`)) return;
+        setRollingBack(true);
+        try {
+            await documentsApi.rollback(doc.id, versionNumber);
+            toast.success(`Restored to version ${versionNumber}`);
+            // Reload the document and version list
+            const res = await documentsApi.getById(doc.id);
+            setDoc(res.data);
+            setHighlights(res.data.highlighted_text || []);
+            loadVersions();
+        } catch (err: unknown) {
+            const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+            toast.error(message || "Rollback failed");
+        } finally {
+            setRollingBack(false);
+        }
+    };
+
+    useEffect(() => {
+        if (showVersions && docId) loadVersions();
+    }, [showVersions, docId, loadVersions]);
+
     const copyText = () => {
         if (!doc?.extracted_text) return;
         // If highlights exist, copy only highlighted text
@@ -187,8 +247,14 @@ export default function DocumentDetailPage() {
             navigator.clipboard.writeText(doc.extracted_text);
         }
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     };
+
+    // Cleanup the copied-state timer on unmount
+    useEffect(() => {
+        return () => clearTimeout(copiedTimerRef.current);
+    }, []);
 
     const handleTextSelect = useCallback(() => {
         if (!highlightMode || !doc?.extracted_text) return;
@@ -257,7 +323,7 @@ export default function DocumentDetailPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
-                <div className="w-5 h-5 border-2 border-[#27272a] border-t-[#a1a1aa] rounded-full animate-spin" />
+                <LoadingSpinner />
             </div>
         );
     }
@@ -289,17 +355,17 @@ export default function DocumentDetailPage() {
             </button>
 
             {/* Header */}
-            <div className="flex items-start justify-between mb-8">
-                <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-[#18181b] border border-[#27272a] rounded-lg flex items-center justify-center">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+                <div className="flex items-center gap-4 min-w-0">
+                    <div className="w-12 h-12 bg-[#18181b] border border-[#27272a] rounded-lg flex items-center justify-center shrink-0">
                         <FiFile className="w-5 h-5 text-[#52525b]" />
                     </div>
-                    <div>
-                        <h1 className="text-lg font-semibold text-white">{doc.original_filename}</h1>
+                    <div className="min-w-0">
+                        <h1 className="text-lg font-semibold text-white truncate">{doc.original_filename}</h1>
                         <p className="text-xs text-[#52525b] mt-1">{fileSize} &middot; {doc.file_type.toUpperCase()}</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap shrink-0">
                     <Link
                         href={`/dashboard/documents/${doc.id}/preview`}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#71717a] hover:text-white border border-[#27272a] rounded-md hover:border-[#3f3f46] transition-colors"
@@ -329,7 +395,7 @@ export default function DocumentDetailPage() {
                     <FiHash className="w-4 h-4 text-[#52525b] mt-0.5 shrink-0" />
                     <div>
                         <p className="text-[11px] text-[#52525b] uppercase tracking-wider mb-1">Confidence</p>
-                        <ConfidenceBadge score={doc.confidence_score} variant="display" />
+                        <ConfidenceBadge score={doc.confidence_score ?? 0} variant="display" />
                     </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -341,6 +407,99 @@ export default function DocumentDetailPage() {
                     <MetadataItem label="File ID" value={`#${doc.id}`} />
                 </div>
             </div>
+
+            {/* Version history */}
+            {doc.total_versions > 1 && (
+                <div className="p-5 bg-[#111113] border border-[#27272a] rounded-lg mb-6">
+                    <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                            <FiClock className="w-4 h-4 text-[#52525b]" />
+                            <h2 className="text-sm font-medium text-white">
+                                Version History
+                            </h2>
+                            <span className="text-xs text-[#52525b]">
+                                (v{doc.current_version} &middot; {doc.total_versions} total)
+                            </span>
+                        </div>
+                        <button
+                            onClick={() => setShowVersions(!showVersions)}
+                            className="text-xs text-[#71717a] hover:text-white transition-colors cursor-pointer"
+                        >
+                            {showVersions ? "Hide" : "Show"}
+                        </button>
+                    </div>
+
+                    {showVersions && (
+                        <div className="mt-4">
+                            {versionsLoading ? (
+                                <div className="flex justify-center py-4">
+                                    <div className="w-4 h-4 border-2 border-[#27272a] border-t-[#a1a1aa] rounded-full animate-spin" />
+                                </div>
+                            ) : versions.length === 0 ? (
+                                <p className="text-xs text-[#52525b] italic">No previous versions found.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {versions.map((v) => {
+                                        const vSize = v.file_size >= 1024 * 1024
+                                            ? `${(v.file_size / (1024 * 1024)).toFixed(1)} MB`
+                                            : `${(v.file_size / 1024).toFixed(1)} KB`;
+                                        return (
+                                            <div
+                                                key={v.id}
+                                                className={`flex items-center justify-between p-3 rounded-md border ${
+                                                    v.is_current
+                                                        ? "bg-[#10b981]/5 border-[#10b981]/20"
+                                                        : "bg-[#09090b] border-[#1e1e21]"
+                                                }`}
+                                            >
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-medium text-white">
+                                                            v{v.version_number}
+                                                        </span>
+                                                        {v.is_current && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#10b981]/10 text-[#10b981]">
+                                                                previous
+                                                            </span>
+                                                        )}
+                                                        <span className="text-xs text-[#52525b]">
+                                                            {vSize} &middot; {v.file_type.toUpperCase()}
+                                                        </span>
+                                                    </div>
+                                                    {v.change_reason && (
+                                                        <p className="text-xs text-[#71717a] mt-1 truncate">
+                                                            {v.change_reason}
+                                                        </p>
+                                                    )}
+                                                    <p className="text-[11px] text-[#52525b] mt-0.5">
+                                                        {new Date(v.created_at).toLocaleDateString("en-IN", {
+                                                            day: "numeric", month: "short", year: "numeric",
+                                                            hour: "2-digit", minute: "2-digit",
+                                                        })}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2 ml-3 shrink-0">
+                                                    {canEdit && (
+                                                        <button
+                                                            onClick={() => handleRollback(v.version_number)}
+                                                            disabled={rollingBack}
+                                                            className="flex items-center gap-1 text-xs text-[#71717a] hover:text-[#f59e0b] transition-colors cursor-pointer disabled:opacity-50"
+                                                            title={`Restore version ${v.version_number}`}
+                                                        >
+                                                            <FiRotateCcw className="w-3.5 h-3.5" />
+                                                            Restore
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Extracted metadata */}
             {doc.extracted_metadata && Object.keys(doc.extracted_metadata).length > 0 && (

@@ -16,7 +16,7 @@ interface UploadItem {
     processingProgress?: { stage: string; progress: number };
     documentId?: number;
     taskId?: string;
-    result?: any;
+    result?: { category: string; confidence_score: number | null };
     error?: string;
 }
 
@@ -95,8 +95,9 @@ export default function UploadPage() {
                 const { id, task_id } = res.data;
                 updateItem(item.file, { status: "uploaded", uploadProgress: 100, documentId: id, taskId: task_id });
                 pollProcessingStatus(item.file, id);
-            } catch (err: any) {
-                updateItem(item.file, { status: "error", error: err.response?.data?.detail || "Upload failed" });
+            } catch (err: unknown) {
+                const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+                updateItem(item.file, { status: "error", error: message || "Upload failed" });
             }
         }
         setUploading(false);
@@ -146,8 +147,8 @@ export default function UploadPage() {
                     </div>
                     <div className="bg-[#111113] border border-[#27272a] rounded-lg divide-y divide-[#1f1f23]">
                         <AnimatePresence>
-                            {uploads.map((item, i) => (
-                                <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 py-3">
+                            {uploads.map((item) => (
+                                <motion.div key={`${item.file.name}-${item.file.size}-${item.file.lastModified}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 py-3">
                                     <div className="flex items-center gap-3">
                                         <div className="w-8 h-8 rounded bg-[#18181b] flex items-center justify-center">
                                             {item.status === "completed" ? <FiCheckCircle className="w-4 h-4 text-[#10b981]" /> :
@@ -165,7 +166,7 @@ export default function UploadPage() {
                                     {item.status === "completed" && item.result && (
                                         <div className="flex items-center gap-2 mt-1">
                                             <span className="text-xs text-[#10b981]">{item.result.category}</span>
-                                            <ConfidenceBadge score={item.result.confidence_score} />
+                                            <ConfidenceBadge score={item.result.confidence_score ?? 0} />
                                         </div>
                                     )}
                                     {["error","failed"].includes(item.status) && item.error && <p className="text-xs text-[#ef4444] mt-1">{item.error}</p>}

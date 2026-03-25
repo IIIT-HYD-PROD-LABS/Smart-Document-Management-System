@@ -32,6 +32,8 @@ def upgrade() -> None:
         sa.Column("confidence_score", sa.Float(), nullable=True),
         sa.Column("ai_summary", sa.Text(), nullable=True),
         sa.Column("ai_extracted_fields", sa.JSON(), nullable=True),
+        sa.Column("status", sa.String(20), nullable=True),
+        sa.Column("highlighted_text", sa.JSON(), nullable=True),
         sa.Column("created_by", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.Column("change_reason", sa.String(500), nullable=True),

@@ -30,6 +30,7 @@ class DocumentPermission(Base):
     # Relationships
     document = relationship("Document", back_populates="permissions")
     user = relationship("User", foreign_keys=[user_id], back_populates="shared_documents")
+    granter = relationship("User", foreign_keys=[granted_by])
 
     __table_args__ = (
         UniqueConstraint("document_id", "user_id", name="uq_document_user_permission"),

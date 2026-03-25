@@ -12,6 +12,42 @@ from app.ml.metadata_extractor import extract_metadata
 
 logger = structlog.stdlib.get_logger()
 
+# Exceptions that will never succeed on retry -- do not waste retries on these.
+_NON_RETRYABLE = (ValueError, TypeError, KeyError, AttributeError)
+
+
+def _safe_set_status(db, doc, status: DocumentStatus, message: str, document_id: int) -> None:
+    """Set document status, swallowing DB errors so the caller stays clean."""
+    if doc is None:
+        return
+    try:
+        doc.status = status
+        doc.extracted_text = message
+        db.commit()
+    except Exception as commit_err:
+        logger.error("status_update_failed", document_id=document_id, error=str(commit_err))
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
+def _safe_set_failed(db, doc, message: str, document_id: int) -> None:
+    """Convenience wrapper: mark document as FAILED."""
+    _safe_set_status(db, doc, DocumentStatus.FAILED, message, document_id)
+
+
+def _cleanup_file(file_path: str | None) -> None:
+    """Remove an uploaded file from disk if it exists. Best-effort, logs errors."""
+    if not file_path:
+        return
+    try:
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+            logger.info("orphan_file_cleaned", filename=os.path.basename(file_path))
+    except Exception as err:
+        logger.warning("orphan_file_cleanup_failed", error=str(err))
+
 
 @celery_app.task(bind=True, max_retries=3, time_limit=600, soft_time_limit=540)
 def process_document_task(self, document_id: int):
@@ -50,13 +86,13 @@ def process_document_task(self, document_id: int):
                 doc.status = DocumentStatus.FAILED
                 doc.extracted_text = "File path validation failed."
                 db.commit()
-                logger.error("path_traversal_blocked_in_task", document_id=document_id, file_path=doc.file_path)
+                logger.error("path_traversal_blocked_in_task", document_id=document_id)
                 return {"error": "Invalid file path"}
             if not os.path.exists(validated_path):
                 doc.status = DocumentStatus.FAILED
                 doc.extracted_text = "File not found in storage."
                 db.commit()
-                logger.error("file_not_found", document_id=document_id, file_path=doc.file_path)
+                logger.error("file_not_found", document_id=document_id)
                 return {"error": "File not found"}
             file_size = os.path.getsize(validated_path)
             max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
@@ -72,7 +108,7 @@ def process_document_task(self, document_id: int):
             doc.status = DocumentStatus.FAILED
             doc.extracted_text = "File not found in storage."
             db.commit()
-            logger.error("file_not_found", document_id=document_id, file_path=doc.file_path)
+            logger.error("file_not_found", document_id=document_id)
             return {"error": "File not found"}
 
         # Stage 2: Extract text and classify
@@ -80,6 +116,8 @@ def process_document_task(self, document_id: int):
         logger.info("processing_document", document_id=document_id, file_type=doc.file_type)
 
         result = extract_and_classify(file_bytes, doc.file_type)
+        # Free raw bytes immediately to reduce memory pressure in the worker
+        del file_bytes
         extracted_text: str = result[0]
         category: str = result[1]
         confidence: float = result[2]
@@ -103,11 +141,22 @@ def process_document_task(self, document_id: int):
         self.update_state(state="PROGRESS", meta={"stage": "saving_results", "progress": 85})
 
         doc.extracted_text = extracted_text
-        doc.category = (
-            DocumentCategory(category)
-            if category != "unknown"
-            else DocumentCategory.UNKNOWN
-        )
+
+        # Safely map category string to enum, falling back to UNKNOWN on mismatch
+        try:
+            doc.category = (
+                DocumentCategory(category)
+                if category != "unknown"
+                else DocumentCategory.UNKNOWN
+            )
+        except ValueError:
+            logger.warning(
+                "unknown_category_from_classifier",
+                document_id=document_id,
+                raw_category=category,
+            )
+            doc.category = DocumentCategory.UNKNOWN
+
         doc.confidence_score = confidence
         doc.extracted_metadata = metadata
 
@@ -139,31 +188,42 @@ def process_document_task(self, document_id: int):
 
     except SoftTimeLimitExceeded:
         logger.error("document_processing_timeout", document_id=document_id)
-        if doc is not None:
-            try:
-                doc.status = DocumentStatus.FAILED
-                doc.extracted_text = "Processing timed out."
-                db.commit()
-            except Exception:
-                db.rollback()
+        _safe_set_failed(db, doc, "Processing timed out.", document_id)
         raise
+
+    except _NON_RETRYABLE as e:
+        # Permanent failures -- retrying will not help
+        logger.error("document_processing_permanent_failure", document_id=document_id, error=str(e), error_type=type(e).__name__)
+        _safe_set_failed(db, doc, "Processing failed. Please retry or contact support.", document_id)
+        return {"error": str(e), "document_id": document_id, "status": "failed"}
 
     except Exception as e:
         logger.error("document_processing_failed", document_id=document_id, error=str(e))
-        if doc is not None:
-            try:
-                doc.status = DocumentStatus.FAILED
-                doc.extracted_text = "Processing failed. Please retry or contact support."
-                db.commit()
-            except Exception as rollback_err:
-                logger.error("status_update_failed", error=str(rollback_err))
-                db.rollback()
+        retries_left = self.max_retries - self.request.retries
+        if retries_left > 0:
+            # Will retry -- keep status as PROCESSING so the UI doesn't
+            # flash FAILED between retry attempts.
+            _safe_set_status(
+                db, doc, DocumentStatus.PROCESSING,
+                f"Processing failed, retrying ({retries_left} attempt(s) left)...",
+                document_id,
+            )
+        else:
+            # Final attempt exhausted -- mark FAILED and clean up orphaned file.
+            _safe_set_failed(db, doc, "Processing failed after all retries. Please re-upload or contact support.", document_id)
+            _cleanup_file(getattr(doc, "file_path", None) if doc else None)
         try:
             raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
         except self.MaxRetriesExceededError:
             logger.error("max_retries_exceeded", document_id=document_id)
+            # Belt-and-suspenders: ensure FAILED is persisted
+            _safe_set_failed(db, doc, "Processing failed after all retries. Please re-upload or contact support.", document_id)
+            _cleanup_file(getattr(doc, "file_path", None) if doc else None)
             raise
 
     finally:
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass
         db.close()

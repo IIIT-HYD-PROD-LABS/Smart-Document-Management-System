@@ -3,15 +3,26 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
-import { ConfidenceBadge, StatusBadge, CategoryBadge } from "@/components";
+import { ConfidenceBadge, StatusBadge, CategoryBadge, LoadingSpinner } from "@/components";
 import { FiFileText, FiTrash2, FiFilter, FiCheckSquare, FiSquare, FiX } from "react-icons/fi";
 import toast from "react-hot-toast";
 
 const categories = ["all", "bills", "upi", "tickets", "tax", "bank", "invoices", "unknown"];
 
+interface DocumentListItem {
+    id: number;
+    original_filename: string;
+    file_size: number | null;
+    file_type: string;
+    category: string;
+    confidence_score: number | null;
+    status: string;
+    created_at: string;
+}
+
 export default function DocumentsPage() {
     const router = useRouter();
-    const [docs, setDocs] = useState<any[]>([]);
+    const [docs, setDocs] = useState<DocumentListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState("all");
     const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -78,7 +89,7 @@ export default function DocumentsPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
-                <div className="w-5 h-5 border-2 border-[#27272a] border-t-[#a1a1aa] rounded-full animate-spin" />
+                <LoadingSpinner />
             </div>
         );
     }
@@ -124,8 +135,8 @@ export default function DocumentsPage() {
                 </div>
             )}
 
-            <div className="flex items-center gap-1.5 mb-6">
-                <FiFilter className="w-3.5 h-3.5 text-[#52525b] mr-1" />
+            <div className="flex flex-wrap items-center gap-1.5 mb-6">
+                <FiFilter className="w-3.5 h-3.5 text-[#52525b] mr-1 shrink-0" />
                 {categories.map((cat) => (
                     <button
                         key={cat}
@@ -165,14 +176,18 @@ export default function DocumentsPage() {
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm text-white truncate">{doc.original_filename}</p>
                                 <p className="text-xs text-[#52525b] mt-0.5">
-                                    {(doc.file_size / 1024).toFixed(1)} KB · {new Date(doc.created_at).toLocaleDateString()}
+                                    {doc.file_size != null ? `${(doc.file_size / 1024).toFixed(1)} KB` : "Unknown size"} · {new Date(doc.created_at).toLocaleDateString()}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-3">
-                                {doc.category && (
-                                    <CategoryBadge category={doc.category} />
-                                )}
-                                <ConfidenceBadge score={doc.confidence_score} />
+                            <div className="flex items-center gap-3 shrink-0">
+                                <span className="hidden sm:inline-flex">
+                                    {doc.category && (
+                                        <CategoryBadge category={doc.category} />
+                                    )}
+                                </span>
+                                <span className="hidden md:inline-flex">
+                                    <ConfidenceBadge score={doc.confidence_score ?? 0} />
+                                </span>
                                 <StatusBadge status={doc.status} />
                                 <button
                                     onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { documentsApi } from "@/lib/api";
-import { StatusBadge } from "@/components";
+import { StatusBadge, LoadingSpinner } from "@/components";
 import { useAuth } from "@/context/AuthContext";
 import { FiFileText, FiCheckCircle, FiClock, FiArrowRight } from "react-icons/fi";
 import Link from "next/link";
@@ -13,9 +13,23 @@ const categoryLabels: Record<string, string> = {
     tax: "Tax", bank: "Bank", invoices: "Invoices", unknown: "Unknown",
 };
 
+interface DashboardStats {
+    total_documents: number;
+    completed_count: number;
+    processing_count: number;
+    category_counts: Record<string, number>;
+    recent_uploads: Array<{
+        id: number;
+        original_filename: string;
+        category: string;
+        confidence_score: number | null;
+        status: string;
+    }>;
+}
+
 export default function DashboardPage() {
     const { user } = useAuth();
-    const [stats, setStats] = useState<any>(null);
+    const [stats, setStats] = useState<DashboardStats | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -28,7 +42,7 @@ export default function DashboardPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
-                <div className="w-5 h-5 border-2 border-[#27272a] border-t-[#a1a1aa] rounded-full animate-spin" />
+                <LoadingSpinner />
             </div>
         );
     }
@@ -52,7 +66,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-[#52525b] mt-1">Overview of your document library</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
                 {cards.map((c, i) => (
                     <div key={i} className="bg-[#111113] border border-[#27272a] rounded-lg p-5">
                         <div className="flex items-center justify-between mb-3">
@@ -89,7 +103,7 @@ export default function DashboardPage() {
                 </div>
                 {recent.length > 0 ? (
                     <div className="divide-y divide-[#1f1f23]">
-                        {recent.slice(0, 5).map((doc: any) => (
+                        {recent.slice(0, 5).map((doc) => (
                             <div key={doc.id} className="flex items-center gap-4 px-5 py-3">
                                 <FiFileText className="w-4 h-4 text-[#52525b] shrink-0" />
                                 <div className="flex-1 min-w-0">

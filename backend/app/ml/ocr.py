@@ -79,14 +79,28 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
     return thresh
 
 
+# Maximum decoded image size (pixels) to prevent memory exhaustion.
+# A 6000x6000 RGB image is ~100 MB in memory; this caps at ~108 MP.
+_MAX_IMAGE_PIXELS = 108_000_000
+
+
 def extract_text_from_image(image_bytes: bytes) -> str:
     """Extract text from image bytes using Tesseract OCR with preprocessing."""
     try:
         nparr = np.frombuffer(image_bytes, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        del nparr  # free compressed buffer
 
         if image is None:
             return ""
+
+        # Guard against extremely large images that would blow up memory
+        h, w = image.shape[:2]
+        channels = image.shape[2] if len(image.shape) == 3 else 1
+        if h * w * channels > _MAX_IMAGE_PIXELS:
+            scale = (_MAX_IMAGE_PIXELS / (h * w * channels)) ** 0.5
+            image = cv2.resize(image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+            logger.warning("image_downscaled_for_memory", original_h=h, original_w=w, new_h=image.shape[0], new_w=image.shape[1])
 
         processed = preprocess_image(image)
 
@@ -98,16 +112,19 @@ def extract_text_from_image(image_bytes: bytes) -> str:
             ).strip()
             if len(candidate) > len(best_text):
                 best_text = candidate
+        del processed  # free preprocessed buffer
 
         # Also try on original grayscale (preprocessing can hurt clean images)
         if len(image.shape) == 3:
             gray_orig = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         else:
             gray_orig = image
+        del image  # free original color image
         gray_orig = _upscale_if_small(gray_orig)
         raw_text = pytesseract.image_to_string(
             gray_orig, config="--oem 3 --psm 3"
         ).strip()
+        del gray_orig  # free grayscale buffer
         if len(raw_text) > len(best_text):
             best_text = raw_text
 

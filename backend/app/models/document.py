@@ -49,7 +49,7 @@ class Document(Base):
         nullable=False,
         index=True,
     )
-    confidence_score = Column(Float, default=0.0)
+    confidence_score = Column(Float, default=0.0, nullable=False)
     extracted_text = Column(Text, nullable=True)
 
     # Processing status
@@ -100,6 +100,11 @@ class Document(Base):
         Index("idx_documents_category_user", "category", "user_id"),
         Index("idx_documents_created_at", "created_at"),
     )
+
+    @property
+    def total_versions(self) -> int:
+        """Total version count: stored snapshots + the current live version."""
+        return len(self.versions) + 1 if self.versions is not None else 1
 
     def __repr__(self):
         return (
