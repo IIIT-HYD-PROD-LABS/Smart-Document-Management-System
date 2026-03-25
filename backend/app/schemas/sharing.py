@@ -1,12 +1,21 @@
 """Pydantic schemas for document sharing."""
 
+import re
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ShareDocumentRequest(BaseModel):
-    email: str = Field(..., min_length=1, max_length=255)
+    email: str = Field(..., min_length=5, max_length=255)
     permission: str = Field("view", pattern="^(view|edit)$")
+
+    @field_validator("email")
+    @classmethod
+    def validate_email_format(cls, v: str) -> str:
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(pattern, v):
+            raise ValueError("Invalid email format")
+        return v.lower()
 
 
 class DocumentPermissionResponse(BaseModel):

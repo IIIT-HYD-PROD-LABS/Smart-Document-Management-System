@@ -6,6 +6,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 from app.tasks import celery_app
 from app.database import SessionLocal
 from app.models.document import Document, DocumentStatus, DocumentCategory
+from app.config import settings
 from app.ml.classifier import extract_and_classify
 from app.ml.metadata_extractor import extract_metadata
 
@@ -57,6 +58,14 @@ def process_document_task(self, document_id: int):
                 db.commit()
                 logger.error("file_not_found", document_id=document_id, file_path=doc.file_path)
                 return {"error": "File not found"}
+            file_size = os.path.getsize(validated_path)
+            max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
+            if file_size > max_bytes:
+                doc.status = DocumentStatus.FAILED
+                doc.extracted_text = f"File too large ({file_size} bytes, max {max_bytes})."
+                db.commit()
+                logger.error("file_too_large", document_id=document_id, file_size=file_size)
+                return {"error": "File too large"}
             with open(validated_path, "rb") as f:
                 file_bytes = f.read()
         else:

@@ -24,4 +24,9 @@ celery_app.conf.update(
     worker_max_memory_per_child=512000,
     result_expires=86400,
     broker_connection_retry_on_startup=True,
+    broker_pool_limit=10,
+    redis_max_connections=20,
+    task_annotations={
+        "app.tasks.document_tasks.process_document_task": {"rate_limit": "20/m"},
+    },
 )

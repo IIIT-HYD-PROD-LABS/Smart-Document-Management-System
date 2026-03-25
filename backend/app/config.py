@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
 
+    @field_validator("ALLOWED_ORIGINS")
+    @classmethod
+    def origins_must_not_be_wildcard(cls, v: list[str]) -> list[str]:
+        if "*" in v:
+            raise ValueError(
+                "ALLOWED_ORIGINS must not contain '*' (wildcard). "
+                "Specify explicit origins, e.g. ['http://localhost:3000']."
+            )
+        return v
+
     # File Storage
     UPLOAD_DIR: str = str(BASE_DIR / "uploads")
     MAX_FILE_SIZE_MB: int = 50

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 class UserRegister(BaseModel):
     email: str = Field(..., min_length=5, max_length=255, examples=["user@example.com"])
     username: str = Field(..., min_length=3, max_length=100, examples=["johndoe"])
-    password: str = Field(..., min_length=6, max_length=128)
+    password: str = Field(..., min_length=8, max_length=128)
     full_name: str | None = Field(None, max_length=200, examples=["John Doe"])
 
     @field_validator("email")
@@ -24,9 +24,31 @@ class UserRegister(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username_chars(cls, v: str) -> str:
-        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
-            raise ValueError("Username may only contain letters, numbers, hyphens, and underscores")
+        if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9_-]*$', v):
+            raise ValueError("Username must start with a letter or number and may only contain letters, numbers, hyphens, and underscores")
         return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_complexity(cls, v: str) -> str:
+        if not re.search(r'[A-Z]', v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r'[a-z]', v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r'[0-9]', v):
+            raise ValueError("Password must contain at least one digit")
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/~`]', v):
+            raise ValueError("Password must contain at least one special character")
+        return v
+
+    @field_validator("full_name")
+    @classmethod
+    def sanitize_full_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        sanitized = re.sub(r'<[^>]*>', '', v)
+        sanitized = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', sanitized)
+        return sanitized.strip()
 
 
 class UserLogin(BaseModel):

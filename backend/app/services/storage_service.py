@@ -1,6 +1,7 @@
 """Storage service - local filesystem or AWS S3."""
 
 import os
+import re
 import uuid
 from pathlib import Path
 
@@ -11,6 +12,28 @@ from botocore.exceptions import ClientError
 from app.config import settings
 
 logger = structlog.stdlib.get_logger()
+
+# Magic byte signatures for file type validation
+_MAGIC_SIGNATURES: dict[str, list[bytes]] = {
+    "pdf": [b"%PDF"],
+    "png": [b"\x89PNG\r\n\x1a\n"],
+    "jpg": [b"\xff\xd8\xff"],
+    "jpeg": [b"\xff\xd8\xff"],
+    "tiff": [b"II\x2a\x00", b"MM\x00\x2a"],
+    "bmp": [b"BM"],
+    "docx": [b"PK\x03\x04"],
+}
+
+
+def validate_magic_bytes(file_bytes: bytes, declared_extension: str) -> bool:
+    """Validate that file content matches declared extension via magic bytes."""
+    if not file_bytes:
+        return False
+    ext = declared_extension.lower().lstrip(".")
+    signatures = _MAGIC_SIGNATURES.get(ext)
+    if not signatures:
+        return False
+    return any(file_bytes[:len(sig)] == sig for sig in signatures)
 
 
 def _validate_path_inside_upload_dir(file_path: str) -> str:

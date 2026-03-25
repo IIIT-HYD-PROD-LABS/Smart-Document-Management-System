@@ -1,10 +1,14 @@
 """FastAPI application entry point."""
 
+import structlog
 from asgi_correlation_id import CorrelationIdMiddleware
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
 from app.middleware.logging import RequestLoggingMiddleware
@@ -66,6 +70,32 @@ app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(ml.router)
 app.include_router(admin.router)
+
+
+_logger = structlog.stdlib.get_logger()
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    _logger.error("unhandled_exception", path=request.url.path, exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "An internal server error occurred."})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = []
+    for err in exc.errors():
+        errors.append({
+            "loc": list(err.get("loc", [])),
+            "msg": str(err.get("msg", "")),
+            "type": str(err.get("type", "")),
+        })
+    return JSONResponse(status_code=422, content={"detail": errors})
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
 @app.get("/", tags=["Root"])
