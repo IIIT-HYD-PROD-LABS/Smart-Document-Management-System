@@ -33,6 +33,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    env:
+      SECRET_KEY: test-secret-key-for-ci-pipeline-minimum-32-chars-long
+      DATABASE_URL: postgresql://test:test@localhost:5432/smartdocs_test
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/0
+      DEBUG: "true"
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,15 +48,13 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
+      - name: Enable pg_trgm extension
+        run: PGPASSWORD=test psql -h localhost -U test -d smartdocs_test -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+      - name: Run database migrations
+        working-directory: backend
+        run: alembic upgrade head
       - name: Run tests
         working-directory: backend
-        env:
-          SECRET_KEY: test-secret-key-for-ci-pipeline-minimum-32-chars-long
-          DATABASE_URL: postgresql://test:test@localhost:5432/smartdocs_test
-          REDIS_URL: redis://localhost:6379/0
-          CELERY_BROKER_URL: redis://localhost:6379/0
-          CELERY_RESULT_BACKEND: redis://localhost:6379/0
-          DEBUG: "true"
         run: python -m pytest tests/ -v --tb=short
 
   lint:
