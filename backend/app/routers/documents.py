@@ -646,8 +646,8 @@ def list_document_versions(
 def rollback_document(
     request: Request,
     response: Response,
-    document_id: int = PathParam(..., ge=1),
     payload: RollbackRequest,
+    document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
@@ -901,8 +901,8 @@ class HighlightItem(BaseModel):
 def save_highlights(
     request: Request,
     response: Response,
-    document_id: int = PathParam(..., ge=1),
     highlights: list[HighlightItem],
+    document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
@@ -940,8 +940,8 @@ def get_document(
 def share_document(
     request: Request,
     response: Response,
-    document_id: int = PathParam(..., ge=1),
     payload: ShareDocumentRequest,
+    document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):

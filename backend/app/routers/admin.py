@@ -100,7 +100,7 @@ def list_users(
 def get_user_detail(
     request: Request,
     response: Response,
-    user_id: int,
+    user_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -130,8 +130,8 @@ def get_user_detail(
 def update_user_role(
     request: Request,
     response: Response,
-    user_id: int,
     payload: RoleUpdateRequest,
+    user_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -175,8 +175,8 @@ def update_user_role(
 def update_user_status(
     request: Request,
     response: Response,
-    user_id: int,
     payload: StatusUpdateRequest,
+    user_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
