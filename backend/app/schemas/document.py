@@ -1,7 +1,8 @@
 """Pydantic schemas for Document request/response models."""
 
 from datetime import datetime
-from pydantic import BaseModel, Field
+from typing import Any
+from pydantic import BaseModel, Field, model_validator
 
 
 class DocumentResponse(BaseModel):
@@ -12,7 +13,7 @@ class DocumentResponse(BaseModel):
     file_size: int
     category: str
     confidence_score: float
-    extracted_text: str | None
+    extracted_text: str | None = None
     extracted_metadata: dict | None = None
     ai_summary: str | None = None
     ai_extracted_fields: dict | None = None
@@ -23,7 +24,24 @@ class DocumentResponse(BaseModel):
     current_version: int = 1
     total_versions: int = 1
     created_at: datetime
-    updated_at: datetime | None
+    updated_at: datetime | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def compute_total_versions(cls, data: Any) -> Any:
+        """Compute total_versions from the ORM relationship if available."""
+        # When data is an ORM model (from model_validate), pull version count
+        if hasattr(data, "versions") and not isinstance(data, dict):
+            versions = data.versions
+            if versions is not None:
+                # +1 to include the current (un-snapshotted) version
+                data = {
+                    **{k: getattr(data, k) for k in data.__table__.columns.keys()},
+                    "total_versions": len(versions) + 1,
+                }
+        elif isinstance(data, dict) and "total_versions" not in data:
+            data["total_versions"] = 1
+        return data
 
     class Config:
         from_attributes = True
@@ -87,5 +105,5 @@ class DocumentVersionListResponse(BaseModel):
 
 
 class RollbackRequest(BaseModel):
-    version_number: int = Field(..., ge=1)
+    version_number: int = Field(..., ge=1, le=2_000_000_000)
     reason: str | None = Field(None, max_length=500)

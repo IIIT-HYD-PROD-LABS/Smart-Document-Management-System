@@ -6,8 +6,8 @@ from pathlib import Path
 from datetime import datetime, date, timedelta, timezone
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, Query, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Request, Response, UploadFile, File, Query, status
+from pydantic import BaseModel, Field, model_validator
 from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, Float
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -81,6 +81,10 @@ async def upload_document(
             detail="Filename is required.",
         )
 
+    # Strip null bytes from filename FIRST to prevent null-byte injection
+    # before any path/extension logic operates on the name.
+    file.filename = file.filename.replace("\x00", "")
+
     # Validate file type
     ext = Path(file.filename).suffix.lstrip(".").lower()
     if ext not in settings.ALLOWED_EXTENSIONS:
@@ -88,9 +92,6 @@ async def upload_document(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File type '.{ext}' not allowed. Allowed: {settings.ALLOWED_EXTENSIONS}",
         )
-
-    # Strip null bytes from filename to prevent null-byte injection
-    file.filename = file.filename.replace("\x00", "")
 
     # Read file bytes with streaming size check to prevent memory exhaustion
     max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
@@ -118,15 +119,24 @@ async def upload_document(
             detail=f"File content does not match declared type '.{ext}'",
         )
 
-    # Check for existing document with same original_filename for this user (version control)
+    # Check for existing document with same original_filename for this user (version control).
+    # Use with_for_update() to acquire a row-level lock, preventing race conditions
+    # when two concurrent uploads target the same filename.
     existing_doc = db.query(Document).filter(
         Document.original_filename == file.filename,
         Document.user_id == current_user.id,
         Document.status != DocumentStatus.FAILED,
-    ).first()
+    ).with_for_update().first()
 
     # Save file to storage
-    file_path, s3_url = save_file(file_bytes, file.filename)
+    try:
+        file_path, s3_url = save_file(file_bytes, file.filename)
+    except Exception as e:
+        logger.error("file_storage_failed", filename=file.filename, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="File storage is temporarily unavailable. Please try again later.",
+        )
 
     if existing_doc:
         # Snapshot current document state as a version record
@@ -145,6 +155,8 @@ async def upload_document(
             confidence_score=existing_doc.confidence_score,
             ai_summary=existing_doc.ai_summary,
             ai_extracted_fields=existing_doc.ai_extracted_fields,
+            status=existing_doc.status.value if existing_doc.status else None,
+            highlighted_text=existing_doc.highlighted_text,
             created_by=current_user.id,
             change_reason="New version uploaded",
         )
@@ -165,13 +177,16 @@ async def upload_document(
         existing_doc.ai_extraction_status = None
         existing_doc.ai_provider = None
         existing_doc.ai_error = None
+        existing_doc.highlighted_text = None
 
         doc = existing_doc
         try:
             db.commit()
         except (IntegrityError, OperationalError):
             db.rollback()
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to save document version")
+            # Clean up the orphaned file that was already saved to storage
+            delete_file(file_path, s3_url)
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Concurrent upload conflict. Please retry.")
         db.refresh(doc)
     else:
         # Create new document record with PENDING status
@@ -227,7 +242,7 @@ async def upload_document(
 def get_shared_documents(
     request: Request,
     response: Response,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -266,14 +281,26 @@ def search_documents(
     category: str | None = Query(None, description="Filter by category"),
     date_from: date | None = Query(None, description="Filter by start date (YYYY-MM-DD)"),
     date_to: date | None = Query(None, description="Filter by end date inclusive (YYYY-MM-DD)"),
-    amount_min: float | None = Query(None, description="Minimum document amount"),
-    amount_max: float | None = Query(None, description="Maximum document amount"),
-    page: int = Query(1, ge=1),
+    amount_min: float | None = Query(None, ge=0, le=1e15, description="Minimum document amount"),
+    amount_max: float | None = Query(None, ge=0, le=1e15, description="Maximum document amount"),
+    page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Search documents by extracted text content using PostgreSQL FTS."""
+    # Validate filter consistency
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="date_from must not be after date_to",
+        )
+    if amount_min is not None and amount_max is not None and amount_min > amount_max:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="amount_min must not exceed amount_max",
+        )
+
     query = db.query(Document).filter(
         Document.user_id == current_user.id,
         Document.status == DocumentStatus.COMPLETED,
@@ -372,7 +399,7 @@ def get_documents_by_category(
     request: Request,
     response: Response,
     category: str,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -417,37 +444,41 @@ def get_document_stats(
     current_user: User = Depends(get_current_user),
 ):
     """Get document statistics for the dashboard."""
-    user_docs = db.query(Document).filter(Document.user_id == current_user.id)
-
-    total = user_docs.count()
-
-    # Category counts
-    category_counts = {}
-    for cat in DocumentCategory:
-        count = user_docs.filter(Document.category == cat).count()
-        if count > 0:
-            category_counts[cat.value] = count
+    # Single GROUP BY instead of one COUNT per category (was N+1)
+    cat_rows = (
+        db.query(Document.category, func.count(Document.id))
+        .filter(Document.user_id == current_user.id)
+        .group_by(Document.category)
+        .all()
+    )
+    category_counts = {cat.value: count for cat, count in cat_rows if count > 0}
+    total = sum(category_counts.values())
 
     # Recent uploads (last 5)
     recent = (
-        user_docs
+        db.query(Document)
+        .filter(Document.user_id == current_user.id)
         .order_by(Document.created_at.desc())
         .limit(5)
         .all()
     )
 
-    # Status counts
-    processing = user_docs.filter(Document.status == DocumentStatus.PROCESSING).count()
-    completed = user_docs.filter(Document.status == DocumentStatus.COMPLETED).count()
-    failed = user_docs.filter(Document.status == DocumentStatus.FAILED).count()
+    # Single GROUP BY instead of separate COUNT per status (was N+1)
+    status_rows = (
+        db.query(Document.status, func.count(Document.id))
+        .filter(Document.user_id == current_user.id)
+        .group_by(Document.status)
+        .all()
+    )
+    status_counts = {s.value: count for s, count in status_rows}
 
     return DocumentStats(
         total_documents=total,
         category_counts=category_counts,
         recent_uploads=[DocumentResponse.model_validate(d) for d in recent],
-        processing_count=processing,
-        completed_count=completed,
-        failed_count=failed,
+        processing_count=status_counts.get(DocumentStatus.PROCESSING.value, 0),
+        completed_count=status_counts.get(DocumentStatus.COMPLETED.value, 0),
+        failed_count=status_counts.get(DocumentStatus.FAILED.value, 0),
     )
 
 
@@ -502,7 +533,7 @@ def get_document_trends(
 def get_all_documents(
     request: Request,
     response: Response,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -542,6 +573,11 @@ def batch_delete_documents(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Provide 1-100 document IDs.",
         )
+    if any(i < 1 for i in ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="All document IDs must be positive integers.",
+        )
     docs = db.query(Document).filter(
         Document.id.in_(ids),
         Document.user_id == current_user.id,
@@ -554,7 +590,11 @@ def batch_delete_documents(
         delete_file(doc.file_path, doc.s3_url)
         db.delete(doc)
         deleted.append(doc.id)
-    db.commit()
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to delete documents")
     return {"deleted": deleted, "count": len(deleted)}
 
 
@@ -563,8 +603,8 @@ def batch_delete_documents(
 def list_document_versions(
     request: Request,
     response: Response,
-    document_id: int,
-    page: int = Query(1, ge=1),
+    document_id: int = PathParam(..., ge=1),
+    page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -582,10 +622,15 @@ def list_document_versions(
         .all()
     )
 
+    # The versions table stores snapshots of *previous* states, so the live
+    # document's current_version is never in this table.  Mark the most recent
+    # snapshot (current_version - 1) so the frontend knows which entry
+    # represents the state just before the latest upload / rollback.
+    latest_snapshot_number = doc.current_version - 1
     version_responses = []
     for v in versions:
         vr = DocumentVersionResponse.model_validate(v)
-        vr.is_current = (v.version_number == doc.current_version)
+        vr.is_current = (v.version_number == latest_snapshot_number)
         version_responses.append(vr)
 
     return DocumentVersionListResponse(
@@ -601,7 +646,7 @@ def list_document_versions(
 def rollback_document(
     request: Request,
     response: Response,
-    document_id: int,
+    document_id: int = PathParam(..., ge=1),
     payload: RollbackRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -639,6 +684,8 @@ def rollback_document(
         confidence_score=doc.confidence_score,
         ai_summary=doc.ai_summary,
         ai_extracted_fields=doc.ai_extracted_fields,
+        status=doc.status.value if doc.status else None,
+        highlighted_text=doc.highlighted_text,
         created_by=current_user.id,
         change_reason=payload.reason or f"Rolled back to version {payload.version_number}",
     )
@@ -664,7 +711,15 @@ def rollback_document(
     doc.confidence_score = target_version.confidence_score or 0.0
     doc.ai_summary = target_version.ai_summary
     doc.ai_extracted_fields = target_version.ai_extracted_fields
-    doc.status = DocumentStatus.COMPLETED
+    doc.highlighted_text = target_version.highlighted_text
+    # Restore the status from the snapshot if available, otherwise default to COMPLETED
+    if target_version.status:
+        try:
+            doc.status = DocumentStatus(target_version.status)
+        except ValueError:
+            doc.status = DocumentStatus.COMPLETED
+    else:
+        doc.status = DocumentStatus.COMPLETED
     doc.current_version = new_version_number
 
     try:
@@ -683,9 +738,12 @@ def rollback_document(
 
 
 @router.get("/{document_id}/versions/{version_number}/download")
+@limiter.limit("30/minute")
 def download_document_version(
-    document_id: int,
-    version_number: int,
+    request: Request,
+    response: Response,
+    document_id: int = PathParam(..., ge=1),
+    version_number: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -729,7 +787,7 @@ def download_document_version(
 def get_document_status(
     request: Request,
     response: Response,
-    document_id: int,
+    document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -758,8 +816,11 @@ def get_document_status(
 
 
 @router.get("/{document_id}/download")
+@limiter.limit("30/minute")
 def download_document(
-    document_id: int,
+    request: Request,
+    response: Response,
+    document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -789,8 +850,11 @@ def download_document(
 
 
 @router.get("/{document_id}/preview")
+@limiter.limit("30/minute")
 def preview_document(
-    document_id: int,
+    request: Request,
+    response: Response,
+    document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -825,10 +889,19 @@ class HighlightItem(BaseModel):
     start: int = Field(..., ge=0)
     end: int = Field(..., ge=0)
 
+    @model_validator(mode="after")
+    def end_must_be_gte_start(self) -> "HighlightItem":
+        if self.end < self.start:
+            raise ValueError("end must be greater than or equal to start")
+        return self
+
 
 @router.put("/{document_id}/highlights")
+@limiter.limit("20/minute")
 def save_highlights(
-    document_id: int,
+    request: Request,
+    response: Response,
+    document_id: int = PathParam(..., ge=1),
     highlights: list[HighlightItem],
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -849,8 +922,11 @@ def save_highlights(
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
+@limiter.limit("60/minute")
 def get_document(
-    document_id: int,
+    request: Request,
+    response: Response,
+    document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -860,8 +936,11 @@ def get_document(
 
 
 @router.post("/{document_id}/share")
+@limiter.limit("20/minute")
 def share_document(
-    document_id: int,
+    request: Request,
+    response: Response,
+    document_id: int = PathParam(..., ge=1),
     payload: ShareDocumentRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -898,7 +977,11 @@ def share_document(
 
     if existing:
         existing.permission = payload.permission
-        db.commit()
+        try:
+            db.commit()
+        except (IntegrityError, OperationalError):
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to update permission")
         return {"detail": "Permission updated", "permission_id": existing.id}
 
     perm = DocumentPermission(
@@ -918,32 +1001,40 @@ def share_document(
 
 
 @router.get("/{document_id}/permissions", response_model=list[DocumentPermissionResponse])
+@limiter.limit("30/minute")
 def get_document_permissions(
-    document_id: int,
+    request: Request,
+    response: Response,
+    document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """List who has access to a document."""
-    doc = db.query(Document).filter(
-        Document.id == document_id,
-        Document.user_id == current_user.id,
-    ).first()
-    if not doc and current_user.role != "admin":
+    # Validate document exists first (prevents silent empty-list on bogus IDs for admins)
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-    perms = db.query(DocumentPermission).filter(
-        DocumentPermission.document_id == document_id,
-    ).all()
+    # Only owner or admin may list permissions
+    if doc.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    # Single JOIN instead of one SELECT per permission (was N+1)
+    rows = (
+        db.query(DocumentPermission, User)
+        .join(User, DocumentPermission.user_id == User.id)
+        .filter(DocumentPermission.document_id == document_id)
+        .all()
+    )
 
     result = []
-    for p in perms:
-        user = db.query(User).filter(User.id == p.user_id).first()
+    for p, user in rows:
         result.append(DocumentPermissionResponse(
             id=p.id,
             document_id=p.document_id,
             user_id=p.user_id,
-            user_email=user.email if user else "",
-            user_name=user.full_name or user.username if user else "",
+            user_email=user.email,
+            user_name=user.full_name or user.username,
             permission=p.permission,
             granted_by=p.granted_by,
             created_at=p.created_at,
@@ -952,18 +1043,23 @@ def get_document_permissions(
 
 
 @router.delete("/{document_id}/share/{permission_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("20/minute")
 def revoke_share(
-    document_id: int,
-    permission_id: int,
+    request: Request,
+    response: Response,
+    document_id: int = PathParam(..., ge=1),
+    permission_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
     """Revoke a document share."""
-    doc = db.query(Document).filter(
-        Document.id == document_id,
-        Document.user_id == current_user.id,
-    ).first()
-    if not doc and current_user.role != "admin":
+    # Validate document exists first
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    # Only owner or admin may revoke shares
+    if doc.user_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     perm = db.query(DocumentPermission).filter(
@@ -986,7 +1082,7 @@ def revoke_share(
 def delete_document(
     request: Request,
     response: Response,
-    document_id: int,
+    document_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
@@ -1007,4 +1103,8 @@ def delete_document(
 
     # Delete from database
     db.delete(doc)
-    db.commit()
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to delete document")

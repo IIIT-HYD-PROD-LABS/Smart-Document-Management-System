@@ -41,7 +41,8 @@ def _validate_path_inside_upload_dir(file_path: str) -> str:
     real_path = os.path.realpath(file_path)
     real_upload_dir = os.path.realpath(settings.UPLOAD_DIR)
     if not real_path.startswith(real_upload_dir + os.sep) and real_path != real_upload_dir:
-        raise ValueError(f"Path traversal detected: '{real_path}' escapes '{real_upload_dir}'")
+        logger.warning("path_traversal_detected", resolved=real_path, upload_dir=real_upload_dir)
+        raise ValueError("Path traversal detected")
     return real_path
 
 
@@ -62,23 +63,60 @@ def generate_filename(original_filename: str) -> str:
 
 
 def save_file_local(file_bytes: bytes, filename: str) -> str:
-    """Save file to local upload directory. Returns the file path."""
+    """Save file to local upload directory. Returns the file path.
+
+    Raises OSError on disk-full or permission errors so callers can return
+    an appropriate HTTP response.
+    """
     file_path = os.path.join(settings.UPLOAD_DIR, filename)
     file_path = _validate_path_inside_upload_dir(file_path)
-    with open(file_path, "wb") as f:
-        f.write(file_bytes)
+    # Use restrictive permissions (owner read/write only) to prevent other
+    # system users from reading uploaded documents.
+    try:
+        fd = os.open(file_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    except OSError as e:
+        logger.error("file_open_failed", path=file_path, error=str(e))
+        raise OSError("Storage unavailable") from e
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(file_bytes)
+    except OSError as e:
+        # fd is already closed by os.fdopen; only clean up the file
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        logger.error("file_write_failed", path=file_path, error=str(e))
+        raise OSError("Storage write failed (disk may be full)") from e
+    except BaseException:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
     return file_path
 
 
 def upload_to_s3(file_bytes: bytes, filename: str) -> str:
-    """Upload file to AWS S3. Returns the S3 URL."""
+    """Upload file to AWS S3. Returns the S3 URL.
+
+    Raises ClientError on S3 failures so callers can return an appropriate
+    HTTP response.
+    """
+    import mimetypes
+
     s3_client = _get_s3_client()
     s3_key = f"documents/{filename}"
-    s3_client.put_object(
-        Bucket=settings.S3_BUCKET_NAME,
-        Key=s3_key,
-        Body=file_bytes,
-    )
+    # Derive content type from filename; default to binary stream to prevent
+    # browsers from sniffing/rendering uploaded content (XSS risk).
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    try:
+        s3_client.put_object(
+            Bucket=settings.S3_BUCKET_NAME,
+            Key=s3_key,
+            Body=file_bytes,
+            ContentType=content_type,
+            ContentDisposition="attachment",
+        )
+    except ClientError as e:
+        logger.error("s3_upload_failed", key=s3_key, error=str(e))
+        raise
     return f"https://{settings.S3_BUCKET_NAME}.s3.{settings.AWS_REGION}.amazonaws.com/{s3_key}"
 
 
@@ -120,7 +158,7 @@ def delete_file(file_path: str | None, s3_url: str | None) -> None:
             if os.path.exists(real_path):
                 os.remove(real_path)
         except ValueError:
-            logger.warning("path_traversal_blocked_on_delete", file_path=file_path)
+            logger.warning("path_traversal_blocked_on_delete")
     if s3_url and settings.USE_S3:
         s3_key = s3_url.split(".amazonaws.com/")[-1]
         s3_client = _get_s3_client()

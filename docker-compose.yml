@@ -3,10 +3,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: smartdocs-redis
-    ports:
-      - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD:-smartdocs_redis_secret}
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-smartdocs_redis_secret}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -18,17 +18,24 @@ services:
     env_file: .env
     ports:
       - "8000:8000"
+    restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-smartdocs_redis_secret}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-smartdocs_redis_secret}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-smartdocs_redis_secret}@redis:6379/0
       SECRET_KEY: ${SECRET_KEY}
       LLM_PROVIDER: ${LLM_PROVIDER:-local}
       OLLAMA_BASE_URL: http://host.docker.internal:11434
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -42,18 +49,26 @@ services:
     build: ./backend
     container_name: smartdocs-celery
     env_file: .env
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2 --pool=prefork --max-memory-per-child=512000
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping --timeout 10 2>&1 | grep -q OK || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-smartdocs_redis_secret}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-smartdocs_redis_secret}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-smartdocs_redis_secret}@redis:6379/0
       SECRET_KEY: ${SECRET_KEY}
       LLM_PROVIDER: ${LLM_PROVIDER:-local}
       OLLAMA_BASE_URL: http://host.docker.internal:11434
     depends_on:
       redis:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -69,10 +84,12 @@ services:
     container_name: smartdocs-frontend
     ports:
       - "3000:3000"
+    restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   backend_uploads:

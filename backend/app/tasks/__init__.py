@@ -26,6 +26,10 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
     broker_pool_limit=10,
     redis_max_connections=20,
+    # Default safety timeouts for any task that doesn't set its own.
+    # Prevents new tasks from hanging forever if a developer forgets to set limits.
+    task_time_limit=900,           # hard kill after 15 min
+    task_soft_time_limit=840,      # raise SoftTimeLimitExceeded at 14 min
     task_annotations={
         "app.tasks.document_tasks.process_document_task": {"rate_limit": "20/m"},
     },

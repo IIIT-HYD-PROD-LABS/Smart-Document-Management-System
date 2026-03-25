@@ -28,7 +28,7 @@ export default function RegisterPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (form.password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+        if (form.password.length < 8) { toast.error("Password must be at least 8 characters"); return; }
         if (form.password.length > 128) { toast.error("Password must be at most 128 characters"); return; }
         if (!/^[a-zA-Z0-9_-]+$/.test(form.username)) { toast.error("Username may only contain letters, numbers, hyphens, and underscores"); return; }
         setLoading(true);

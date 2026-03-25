@@ -53,13 +53,19 @@ Document text:
 ---"""
 
 
-def _parse_llm_response(raw: str) -> dict:
-    """Parse JSON from LLM response, handling markdown code blocks."""
+def _parse_llm_response(raw: str | None) -> dict:
+    """Parse JSON from LLM response, handling markdown code blocks and edge cases."""
+    if not raw:
+        raise ValueError("LLM returned empty response")
     text = raw.strip()
+    if not text:
+        raise ValueError("LLM returned whitespace-only response")
     if text.startswith("```"):
         lines = text.split("\n")
         lines = [l for l in lines if not l.strip().startswith("```")]
-        text = "\n".join(lines)
+        text = "\n".join(lines).strip()
+    if not text:
+        raise ValueError("LLM response contained only code fences")
     return json.loads(text)
 
 
@@ -130,7 +136,10 @@ class OllamaProvider(LLMProvider):
             timeout=settings.LLM_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
-        content = response.json()["message"]["content"]
+        data = response.json()
+        content = data.get("message", {}).get("content")
+        if not content:
+            raise ValueError(f"Ollama returned unexpected response structure: {list(data.keys())}")
         return _parse_llm_response(content)
 
 
@@ -156,7 +165,12 @@ class GeminiProvider(LLMProvider):
             timeout=settings.LLM_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
-        content = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        data = response.json()
+        try:
+            content = data["candidates"][0]["content"]["parts"][0]["text"]
+        except (KeyError, IndexError, TypeError) as e:
+            # Gemini may return blocked responses, empty candidates, or safety filters
+            raise ValueError(f"Gemini returned unexpected response structure: {e}") from e
         return _parse_llm_response(content)
 
 
@@ -202,6 +216,16 @@ def _get_provider_chain() -> list[tuple[str, LLMProvider]]:
     return chain
 
 
+def _sanitize_error(error: str) -> str:
+    """Remove potential API keys/tokens from error messages before logging."""
+    import re
+    # Redact long hex/base64 strings that look like API keys (32+ chars)
+    sanitized = re.sub(r'[A-Za-z0-9_\-]{32,}', '***REDACTED***', error)
+    # Redact query parameters that typically carry keys
+    sanitized = re.sub(r'(key|token|secret|password|api_key)=[^&\s]+', r'\1=***', sanitized, flags=re.IGNORECASE)
+    return sanitized
+
+
 def extract_with_llm(text: str, category: str) -> dict:
     """Try providers in order. First success wins, failures fall through."""
     chain = _get_provider_chain()
@@ -215,7 +239,7 @@ def extract_with_llm(text: str, category: str) -> dict:
         except json.JSONDecodeError:
             logger.warning("llm_json_parse_failed", provider=provider_name)
         except Exception as e:
-            logger.warning("llm_provider_failed", provider=provider_name, error=str(e))
+            logger.warning("llm_provider_failed", provider=provider_name, error=_sanitize_error(str(e)))
 
     # Should never reach here since LocalProvider doesn't fail, but just in case
     return LocalProvider().extract(text, category)

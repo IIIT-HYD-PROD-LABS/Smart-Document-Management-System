@@ -1,24 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { oauthApi } from "@/lib/api";
+import { LoadingSpinner } from "@/components";
 import toast from "react-hot-toast";
 import Link from "next/link";
 
-export default function LoginPage() {
+function LoginInner() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [providers, setProviders] = useState<string[]>([]);
     const { login, user, isLoading } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
 
-    // Redirect already logged-in users to dashboard
+    // Sanitize redirect parameter: only allow relative paths starting with "/"
+    // to prevent open-redirect attacks (e.g., ?redirect=https://evil.com)
+    const rawRedirect = searchParams.get("redirect") || "/dashboard";
+    const redirectTo = rawRedirect.startsWith("/") && !rawRedirect.startsWith("//")
+        ? rawRedirect
+        : "/dashboard";
+
+    // Redirect already logged-in users to their intended destination
     useEffect(() => {
-        if (!isLoading && user) router.replace("/dashboard");
-    }, [user, isLoading, router]);
+        if (!isLoading && user) router.replace(redirectTo);
+    }, [user, isLoading, router, redirectTo]);
 
     useEffect(() => {
         oauthApi.getProviders().then((res) => setProviders(res.data.providers)).catch(() => {});
@@ -111,5 +120,19 @@ export default function LoginPage() {
                 </p>
             </div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+                    <LoadingSpinner />
+                </div>
+            }
+        >
+            <LoginInner />
+        </Suspense>
     );
 }

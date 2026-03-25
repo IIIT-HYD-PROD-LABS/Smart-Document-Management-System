@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { oauthApi } from "@/lib/api";
+import { LoadingSpinner } from "@/components";
 import toast from "react-hot-toast";
 
 function OAuthCallbackInner() {
@@ -24,6 +25,12 @@ function OAuthCallbackInner() {
         if (!code || !token) {
             setError("Missing OAuth parameters");
             return;
+        }
+
+        // Immediately strip sensitive exchange tokens from the URL / browser history
+        // so they cannot be leaked via Referer header, browser history, or shoulder-surfing
+        if (typeof window !== "undefined") {
+            window.history.replaceState({}, "", "/oauth/callback");
         }
 
         oauthApi.exchangeCode(code, token)
@@ -59,7 +66,7 @@ function OAuthCallbackInner() {
     return (
         <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
             <div className="text-center">
-                <div className="w-5 h-5 border-2 border-[#27272a] border-t-[#a1a1aa] rounded-full animate-spin mx-auto mb-4" />
+                <LoadingSpinner className="mx-auto mb-4" />
                 <p className="text-sm text-[#71717a]">Completing sign-in...</p>
             </div>
         </div>
@@ -71,7 +78,7 @@ export default function OAuthCallbackPage() {
         <Suspense
             fallback={
                 <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
-                    <div className="w-5 h-5 border-2 border-[#27272a] border-t-[#a1a1aa] rounded-full animate-spin" />
+                    <LoadingSpinner />
                 </div>
             }
         >

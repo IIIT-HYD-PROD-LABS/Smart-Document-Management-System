@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { sharingApi } from "@/lib/api";
-import { StatusBadge } from "@/components";
+import { StatusBadge, LoadingSpinner } from "@/components";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { FiFile, FiChevronLeft, FiChevronRight } from "react-icons/fi";
@@ -40,7 +40,7 @@ export default function SharedWithMePage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
-                <div className="w-5 h-5 border-2 border-[#27272a] border-t-[#a1a1aa] rounded-full animate-spin" />
+                <LoadingSpinner />
             </div>
         );
     }

@@ -26,6 +26,8 @@ class DocumentVersion(Base):
     confidence_score = Column(Float, nullable=True)
     ai_summary = Column(Text, nullable=True)
     ai_extracted_fields = Column(JSON, nullable=True)
+    status = Column(String(20), nullable=True)  # processing status at time of snapshot
+    highlighted_text = Column(JSON, nullable=True)  # user-highlighted text selections
 
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

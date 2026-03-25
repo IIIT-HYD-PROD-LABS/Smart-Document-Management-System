@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { adminApi } from "@/lib/api";
+import { LoadingSpinner } from "@/components";
 import toast from "react-hot-toast";
 import { FiUsers, FiFileText, FiSearch, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 
@@ -60,9 +61,6 @@ export default function AdminPage() {
         }
     }, [user, router]);
 
-    // Immediate render guard: don't show admin UI to non-admins
-    if (user?.role !== "admin") return null;
-
     // Debounce search input (400ms)
     useEffect(() => {
         debounceTimer.current = setTimeout(() => {
@@ -97,21 +95,40 @@ export default function AdminPage() {
         Promise.all([fetchUsers(), fetchStats()]).finally(() => setLoading(false));
     }, [fetchUsers, fetchStats, user?.role]);
 
-    const handleRoleChange = async (userId: number, newRole: string) => {
+    // Render guard: don't show admin UI to non-admins (placed after all hooks)
+    if (user?.role !== "admin") return null;
+
+    const handleRoleChange = async (targetUser: AdminUser, newRole: string) => {
+        if (newRole === targetUser.role) return;
+        const confirmed = window.confirm(
+            `Change ${targetUser.username}'s role from "${targetUser.role}" to "${newRole}"?`
+        );
+        if (!confirmed) {
+            // Reset the select element to the original value
+            fetchUsers();
+            return;
+        }
         try {
-            await adminApi.updateRole(userId, newRole);
+            await adminApi.updateRole(targetUser.id, newRole);
             toast.success("Role updated");
             fetchUsers();
+            fetchStats();
         } catch (err: unknown) {
             const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
             toast.error(message || "Failed to update role");
+            fetchUsers();
         }
     };
 
-    const handleStatusToggle = async (userId: number, currentStatus: boolean) => {
+    const handleStatusToggle = async (targetUser: AdminUser) => {
+        const action = targetUser.is_active ? "deactivate" : "activate";
+        const confirmed = window.confirm(
+            `Are you sure you want to ${action} ${targetUser.username}?`
+        );
+        if (!confirmed) return;
         try {
-            await adminApi.updateStatus(userId, !currentStatus);
-            toast.success(currentStatus ? "User deactivated" : "User activated");
+            await adminApi.updateStatus(targetUser.id, !targetUser.is_active);
+            toast.success(targetUser.is_active ? "User deactivated" : "User activated");
             fetchUsers();
             fetchStats();
         } catch (err: unknown) {
@@ -123,7 +140,7 @@ export default function AdminPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
-                <div className="w-5 h-5 border-2 border-[#27272a] border-t-[#a1a1aa] rounded-full animate-spin" />
+                <LoadingSpinner />
             </div>
         );
     }
@@ -188,7 +205,7 @@ export default function AdminPage() {
                                 <td className="px-4 py-3">
                                     <select
                                         value={u.role}
-                                        onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                                        onChange={(e) => handleRoleChange(u, e.target.value)}
                                         disabled={u.id === user?.id}
                                         className="bg-[#09090b] border border-[#27272a] rounded px-2 py-1 text-xs text-white focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                     >
@@ -199,7 +216,7 @@ export default function AdminPage() {
                                 </td>
                                 <td className="px-4 py-3">
                                     <button
-                                        onClick={() => handleStatusToggle(u.id, u.is_active)}
+                                        onClick={() => handleStatusToggle(u)}
                                         disabled={u.id === user?.id}
                                         className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                                             u.is_active

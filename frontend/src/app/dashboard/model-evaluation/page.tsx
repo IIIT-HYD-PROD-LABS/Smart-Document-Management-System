@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { mlApi } from "@/lib/api";
+import { LoadingSpinner } from "@/components";
 import { FiBarChart2 } from "react-icons/fi";
 
 interface CategoryMetrics {
@@ -49,8 +50,8 @@ export default function ModelEvaluationPage() {
             try {
                 const res = await mlApi.getEvaluation();
                 setReport(res.data);
-            } catch (err: any) {
-                if (err.response?.status === 404) {
+            } catch (err: unknown) {
+                if ((err as { response?: { status?: number } })?.response?.status === 404) {
                     setError("No evaluation report available. Train the model first to generate metrics.");
                 } else {
                     setError("Failed to load evaluation report.");
@@ -65,7 +66,7 @@ export default function ModelEvaluationPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
-                <div className="w-5 h-5 border-2 border-[#27272a] border-t-[#a1a1aa] rounded-full animate-spin" />
+                <LoadingSpinner />
             </div>
         );
     }

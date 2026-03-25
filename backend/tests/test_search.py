@@ -131,6 +131,72 @@ def test_search_with_amount_filter(authenticated_client):
 
 
 # ---------------------------------------------------------------------------
+# SRCH-02b: Filter validation (date_from > date_to, amount_min > amount_max)
+# ---------------------------------------------------------------------------
+
+def test_search_rejects_inverted_date_range(authenticated_client):
+    """SRCH-02b: date_from after date_to returns 400."""
+    response = authenticated_client.get(
+        "/api/documents/search?q=bill&date_from=2025-12-31&date_to=2024-01-01",
+    )
+    assert response.status_code == 400, (
+        f"Inverted date range should return 400, got {response.status_code}"
+    )
+    assert "date_from" in response.json().get("detail", "").lower()
+
+
+def test_search_rejects_inverted_amount_range(authenticated_client):
+    """SRCH-02b: amount_min > amount_max returns 400."""
+    response = authenticated_client.get(
+        "/api/documents/search?q=bill&amount_min=500&amount_max=100",
+    )
+    assert response.status_code == 400, (
+        f"Inverted amount range should return 400, got {response.status_code}"
+    )
+    assert "amount_min" in response.json().get("detail", "").lower()
+
+
+def test_search_rejects_negative_amounts(authenticated_client):
+    """SRCH-02b: negative amount values return 422 (ge=0 constraint)."""
+    response = authenticated_client.get(
+        "/api/documents/search?q=bill&amount_min=-10",
+    )
+    assert response.status_code == 422, (
+        f"Negative amount_min should return 422, got {response.status_code}"
+    )
+
+
+def test_search_rejects_page_over_limit(authenticated_client):
+    """Pagination: page > 10000 returns 422."""
+    response = authenticated_client.get(
+        "/api/documents/search?q=bill&page=10001",
+    )
+    assert response.status_code == 422, (
+        f"page=10001 should return 422, got {response.status_code}"
+    )
+
+
+def test_search_empty_query_rejected(authenticated_client):
+    """Empty query string should be rejected (min_length=1)."""
+    response = authenticated_client.get(
+        "/api/documents/search?q=",
+    )
+    assert response.status_code == 422, (
+        f"Empty q should return 422, got {response.status_code}"
+    )
+
+
+def test_search_invalid_category_ignored(authenticated_client):
+    """Invalid category should be silently ignored (not 400/422)."""
+    response = authenticated_client.get(
+        "/api/documents/search?q=bill&category=nonexistent",
+    )
+    # Should not be 404 or 422; invalid category is silently ignored
+    assert response.status_code != 404
+    assert response.status_code != 422
+
+
+# ---------------------------------------------------------------------------
 # SRCH-03 / SRCH-04: Real PostgreSQL tests (skip gracefully if unavailable)
 # ---------------------------------------------------------------------------
 
@@ -213,7 +279,11 @@ def test_fuzzy_typo_matching(pg_db):
             f"but got: {found_ids}. Trigram OR-combine may not be working."
         )
     finally:
-        session.rollback()
+        # Reset threshold, then unconditionally clean up the test row
+        try:
+            session.execute(text("RESET pg_trgm.similarity_threshold"))
+        except Exception:
+            session.rollback()
         session.execute(text("DELETE FROM documents WHERE id = :doc_id"), {"doc_id": doc_id})
         session.commit()
 

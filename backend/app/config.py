@@ -101,22 +101,37 @@ class Settings(BaseSettings):
     @field_validator("SECRET_KEY")
     @classmethod
     def secret_key_must_be_strong(cls, v: str) -> str:
+        _generate_hint = (
+            'Generate a secure key with: python -c "import secrets; print(secrets.token_urlsafe(64))"'
+        )
+        if not v or not v.strip():
+            raise ValueError(
+                f"SECRET_KEY must not be empty. {_generate_hint}"
+            )
         insecure_values = {
             "super-secret-key-change-in-production",
             "super-secret-docker-key",
             "your-super-secret-key-change-this-in-production",
             "changeme",
             "secret",
+            "test",
+            "password",
+            "development",
+            "12345678901234567890123456789012",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         }
-        if v in insecure_values:
+        if v.lower() in insecure_values:
             raise ValueError(
-                "SECRET_KEY must be changed from default insecure value. "
-                "Generate a secure key with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+                f"SECRET_KEY must be changed from default insecure value. {_generate_hint}"
             )
         if len(v) < 32:
             raise ValueError(
-                "SECRET_KEY must be at least 32 characters. "
-                "Generate a secure key with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+                f"SECRET_KEY must be at least 32 characters. {_generate_hint}"
+            )
+        # Reject keys with very low entropy (all same char, all digits, all lowercase)
+        if len(set(v)) < 10:
+            raise ValueError(
+                f"SECRET_KEY has too few unique characters (needs 10+). {_generate_hint}"
             )
         return v
 

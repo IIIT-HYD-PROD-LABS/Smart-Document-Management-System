@@ -3,7 +3,9 @@
 from datetime import datetime, timezone
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Query, Request, Response, status
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -30,7 +32,7 @@ router = APIRouter(prefix="/api/admin", tags=["Admin"])
 def list_users(
     request: Request,
     response: Response,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
     search: str | None = Query(None, max_length=200),
     db: Session = Depends(get_db),
@@ -49,16 +51,29 @@ def list_users(
         )
 
     total = query.count()
-    users = (
-        query.order_by(User.created_at.desc())
+
+    # Single query with LEFT JOIN subquery to count documents per user,
+    # avoiding N+1 (previously ran a separate COUNT per user).
+    doc_count_subq = (
+        db.query(
+            Document.user_id,
+            func.count(Document.id).label("doc_count"),
+        )
+        .group_by(Document.user_id)
+        .subquery()
+    )
+    users_with_counts = (
+        query
+        .outerjoin(doc_count_subq, User.id == doc_count_subq.c.user_id)
+        .add_columns(func.coalesce(doc_count_subq.c.doc_count, 0).label("doc_count"))
+        .order_by(User.created_at.desc())
         .offset((page - 1) * per_page)
         .limit(per_page)
         .all()
     )
 
     user_responses = []
-    for u in users:
-        doc_count = db.query(Document).filter(Document.user_id == u.id).count()
+    for u, doc_count in users_with_counts:
         user_responses.append(AdminUserResponse(
             id=u.id,
             email=u.email,
@@ -94,7 +109,7 @@ def get_user_detail(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    doc_count = db.query(Document).filter(Document.user_id == user.id).count()
+    doc_count = db.query(func.count(Document.id)).filter(Document.user_id == user.id).scalar()
 
     return AdminUserResponse(
         id=user.id,
@@ -120,7 +135,7 @@ def update_user_role(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Change a user's role (admin only). Cannot demote self."""
+    """Change a user's role (admin only). Cannot demote self or remove the last admin."""
     if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -131,9 +146,24 @@ def update_user_role(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    # Prevent removing the last active admin
+    if user.role == "admin" and payload.role != "admin":
+        admin_count = db.query(func.count(User.id)).filter(
+            User.role == "admin", User.is_active == True  # noqa: E712
+        ).scalar()
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot demote the last admin. Promote another user to admin first.",
+            )
+
     old_role = user.role
     user.role = payload.role
-    db.commit()
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to update role")
 
     logger.info("role_changed", user_id=user_id, old_role=old_role, new_role=payload.role, changed_by=current_user.id)
 
@@ -150,7 +180,7 @@ def update_user_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Activate or deactivate a user (admin only). Cannot deactivate self."""
+    """Activate or deactivate a user (admin only). Cannot deactivate self or the last admin."""
     if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -160,6 +190,17 @@ def update_user_status(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Prevent deactivating the last active admin
+    if user.role == "admin" and not payload.is_active:
+        admin_count = db.query(func.count(User.id)).filter(
+            User.role == "admin", User.is_active == True  # noqa: E712
+        ).scalar()
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot deactivate the last admin. Promote another user to admin first.",
+            )
 
     user.is_active = payload.is_active
 
@@ -176,7 +217,11 @@ def update_user_status(
             }
         )
 
-    db.commit()
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to update user status")
 
     status_str = "activated" if payload.is_active else "deactivated"
     logger.info("user_status_changed", user_id=user_id, status=status_str, changed_by=current_user.id)
@@ -193,22 +238,26 @@ def get_admin_stats(
     current_user: User = Depends(require_admin),
 ):
     """Get system-wide statistics (admin only)."""
-    total_users = db.query(User).count()
-    active_users = db.query(User).filter(User.is_active == True).count()
+    total_users = db.query(func.count(User.id)).scalar()
+    active_users = db.query(func.count(User.id)).filter(User.is_active == True).scalar()  # noqa: E712
 
-    users_by_role = {}
-    for role in ("admin", "editor", "viewer"):
-        count = db.query(User).filter(User.role == role).count()
-        if count > 0:
-            users_by_role[role] = count
+    # Single GROUP BY instead of one COUNT per role
+    role_rows = (
+        db.query(User.role, func.count(User.id))
+        .group_by(User.role)
+        .all()
+    )
+    users_by_role = {role: count for role, count in role_rows if count > 0}
 
-    total_documents = db.query(Document).count()
+    total_documents = db.query(func.count(Document.id)).scalar()
 
-    docs_by_status = {}
-    for doc_status in DocumentStatus:
-        count = db.query(Document).filter(Document.status == doc_status).count()
-        if count > 0:
-            docs_by_status[doc_status.value] = count
+    # Single GROUP BY instead of one COUNT per status
+    status_rows = (
+        db.query(Document.status, func.count(Document.id))
+        .group_by(Document.status)
+        .all()
+    )
+    docs_by_status = {s.value: count for s, count in status_rows if count > 0}
 
     return AdminStatsResponse(
         total_users=total_users,

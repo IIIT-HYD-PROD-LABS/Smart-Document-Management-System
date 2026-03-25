@@ -9,6 +9,15 @@ import toast from "react-hot-toast";
 
 const categories = ["", "bills", "upi", "tickets", "tax", "bank", "invoices"];
 
+interface SearchResult {
+    id: number;
+    original_filename: string;
+    category: string;
+    confidence_score: number | null;
+    extracted_text: string | null;
+    status: string;
+}
+
 export default function SearchPage() {
     const router = useRouter();
     const [query, setQuery] = useState("");
@@ -17,7 +26,7 @@ export default function SearchPage() {
     const [dateTo, setDateTo] = useState("");
     const [amountMin, setAmountMin] = useState("");
     const [amountMax, setAmountMax] = useState("");
-    const [results, setResults] = useState<any[]>([]);
+    const [results, setResults] = useState<SearchResult[]>([]);
     const [searched, setSearched] = useState(false);
     const [loading, setLoading] = useState(false);
 
@@ -58,7 +67,7 @@ export default function SearchPage() {
 
             <form onSubmit={handleSearch} className="mb-8 space-y-4">
                 {/* Main search bar */}
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                     <div className="relative flex-1">
                         <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#52525b] w-4 h-4" />
                         <input
@@ -148,11 +157,11 @@ export default function SearchPage() {
                                     onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
                                     className="px-5 py-4 hover:bg-[#18181b] transition-colors cursor-pointer"
                                 >
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <FiFileText className="w-4 h-4 text-[#52525b]" />
-                                        <span className="text-sm text-white">{doc.original_filename}</span>
+                                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+                                        <FiFileText className="w-4 h-4 text-[#52525b] shrink-0" />
+                                        <span className="text-sm text-white truncate max-w-[60vw] sm:max-w-none">{doc.original_filename}</span>
                                         <CategoryBadge category={doc.category} />
-                                        <ConfidenceBadge score={doc.confidence_score} />
+                                        <span className="hidden sm:inline-flex"><ConfidenceBadge score={doc.confidence_score ?? 0} /></span>
                                     </div>
                                     {doc.extracted_text && (
                                         <p className="text-xs text-[#71717a] leading-relaxed line-clamp-2 ml-7">
