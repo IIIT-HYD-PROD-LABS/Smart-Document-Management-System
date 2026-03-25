@@ -300,8 +300,8 @@ docker-compose.yml           # Redis, Backend, Celery, Frontend
 | Security Audit | 21 fixes across 17 files | ✅ Done |
 | Auth & Login Fixes | 11 bugs fixed (March 2026) | ✅ Done |
 | Security Hardening | 25 fixes across 14 files + all tests green | ✅ Done |
-| 7 | Analytics Dashboard | Next |
-| 8 | Production Deployment | Planned |
+| 7 | UI & Analytics | ✅ Done |
+| 8 | Production Deployment | Next |
 
 ### Completed
 
@@ -322,6 +322,8 @@ docker-compose.yml           # Redis, Backend, Celery, Frontend
 **Auth & Login Fixes (March 23, 2026)** — Fixed 11 bugs blocking login/registration: database connection (Supabase pooler host/password), Redis rate limiter graceful fallback, cookie expiry on silent refresh and OAuth paths, double navigation in login/register, logout race condition, dashboard auth guard, OAuth JSON response safety, token rotation ordering, ValueError handling in OAuth exchange.
 
 **Security Hardening (March 25, 2026)** — Comprehensive security audit with 20 parallel agents. 25 fixes across 14 files: password complexity enforcement (8+ chars, upper/lower/digit/special), magic bytes file validation, streaming upload to prevent memory DoS, CSP hardening (removed unsafe-eval), server-side route protection via Next.js middleware, global exception handler, JWT jti claims, OAuth timing-safe comparison, CORS wildcard validation, DB SSL + connection pool hardening, Celery rate limiting. All 12 tests fixed and passing (was 2/12).
+
+**Phase 7 — UI & Analytics (March 25, 2026)** — Full recharts analytics dashboard (area chart for upload trends, donut chart for category distribution, stat cards, processing status bar). In-browser document preview (react-pdf for PDFs with page nav + zoom, image viewer with zoom/pan, DOCX extracted text). Document version control (auto-versioning on re-upload, version history, rollback). Shared component library (ConfidenceBadge, StatusBadge, CategoryBadge, LoadingSpinner). Responsive sidebar with hamburger menu on mobile/tablet.
 
 **UI Redesign** — Minimalist dark theme (Linear/Notion-inspired), Inter font, zinc/neutral palette, no glassmorphism. Clean dashboard with stats, category filters, full-text search, analytics.
 
