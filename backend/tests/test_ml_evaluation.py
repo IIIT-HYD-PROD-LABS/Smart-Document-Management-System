@@ -11,12 +11,13 @@ from fastapi.testclient import TestClient
 def app_with_auth(mock_current_user):
     """Create a FastAPI TestClient with auth dependency overridden."""
     from app.routers.ml import router
-    from app.utils.security import get_current_user
+    from app.utils.security import require_admin
     from fastapi import FastAPI
 
+    mock_current_user.role = "admin"
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: mock_current_user
+    app.dependency_overrides[require_admin] = lambda: mock_current_user
     return app
 
 

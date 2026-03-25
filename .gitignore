@@ -2,6 +2,18 @@
 .env
 .env.local
 .env.production
+.env.development
+.env.staging
+.env.*.local
+
+# Certificates and private keys
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.secret
+*credentials*.json
 
 # Do NOT ignore .env.example (it is documentation)
 

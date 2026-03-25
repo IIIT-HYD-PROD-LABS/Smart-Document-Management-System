@@ -14,7 +14,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.user import User
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 security_scheme = HTTPBearer(auto_error=False)
 
 
@@ -37,6 +37,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode["exp"] = expire
     if "type" not in to_encode:
         to_encode["type"] = "access"
+    to_encode["jti"] = secrets.token_urlsafe(16)
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 

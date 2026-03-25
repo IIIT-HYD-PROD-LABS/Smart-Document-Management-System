@@ -330,7 +330,8 @@ async def google_callback(
         else:
             # Create new user
             is_first_user = db.query(User).count() == 0
-            username = email.split("@")[0]
+            import re as _re
+            username = _re.sub(r'[^a-zA-Z0-9_-]', '', email.split("@")[0]) or "user"
             # Ensure unique username
             base_username = username
             counter = 1
@@ -436,7 +437,8 @@ async def microsoft_callback(
             db.commit()
         else:
             is_first_user = db.query(User).count() == 0
-            username = email.split("@")[0]
+            import re as _re
+            username = _re.sub(r'[^a-zA-Z0-9_-]', '', email.split("@")[0]) or "user"
             base_username = username
             counter = 1
             while db.query(User).filter(User.username == username).first():
@@ -486,7 +488,8 @@ def exchange_oauth_code(request: Request, response: Response, payload: OAuthExch
     if token_payload.get("type") != "oauth_exchange":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
 
-    if token_payload.get("code") != payload.code:
+    expected_code = token_payload.get("code", "")
+    if not secrets.compare_digest(expected_code, payload.code):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid exchange code")
 
     user_id = token_payload.get("sub")

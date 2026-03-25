@@ -87,15 +87,33 @@ async def upload_document(
             detail=f"File type '.{ext}' not allowed. Allowed: {settings.ALLOWED_EXTENSIONS}",
         )
 
-    # Read file bytes
-    file_bytes = await file.read()
-    file_size = len(file_bytes)
+    # Strip null bytes from filename to prevent null-byte injection
+    file.filename = file.filename.replace("\x00", "")
 
-    # Validate file size
-    if file_size > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
+    # Read file bytes with streaming size check to prevent memory exhaustion
+    max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
+    chunks = []
+    total_read = 0
+    while True:
+        chunk = await file.read(1024 * 1024)  # 1MB chunks
+        if not chunk:
+            break
+        total_read += len(chunk)
+        if total_read > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File too large. Max size: {settings.MAX_FILE_SIZE_MB}MB",
+            )
+        chunks.append(chunk)
+    file_bytes = b"".join(chunks)
+    file_size = total_read
+
+    # Validate file content matches declared type (magic bytes)
+    from app.services.storage_service import validate_magic_bytes
+    if not validate_magic_bytes(file_bytes, ext):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File too large. Max size: {settings.MAX_FILE_SIZE_MB}MB",
+            detail=f"File content does not match declared type '.{ext}'",
         )
 
     # Save file to storage
@@ -561,6 +579,12 @@ def share_document(
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    if not target_user.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot share with deactivated user")
+
+    if target_user.id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot share with yourself")
+
     if target_user.id == doc.user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot share with document owner")
 
@@ -664,7 +688,12 @@ def delete_document(
     current_user: User = Depends(require_editor),
 ):
     """Delete a document and its associated file."""
-    doc = _get_accessible_document(document_id, current_user, db, require_edit=True)
+    # Only document owner or admin can delete (shared edit users cannot)
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if doc.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Delete from storage
     delete_file(doc.file_path, doc.s3_url)
