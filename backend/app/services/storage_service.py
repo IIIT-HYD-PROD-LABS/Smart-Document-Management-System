@@ -1,7 +1,6 @@
 """Storage service - local filesystem or AWS S3."""
 
 import os
-import re
 import uuid
 from pathlib import Path
 

@@ -1,7 +1,6 @@
 """Tests for the ML evaluation API endpoint (GET /api/ml/evaluation)."""
 
-import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
