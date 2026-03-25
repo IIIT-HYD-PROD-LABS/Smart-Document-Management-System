@@ -84,6 +84,8 @@ This launches the following containers:
 
 The PostgreSQL database is hosted on Supabase Cloud and configured via `DATABASE_URL` in `.env`.
 
+For production deployment, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ### 3. Get the trained model (automatic)
 
 The trained model (`document_classifier.pkl` + `tfidf_vectorizer.pkl`) is committed to git — you get it automatically on `git clone` / `git pull`. No training step needed.
@@ -178,6 +180,12 @@ npm run dev
 | GET | `/api/admin/stats` | Admin dashboard statistics |
 | PATCH | `/api/admin/users/{id}/role` | Update user role |
 | PATCH | `/api/admin/users/{id}/status` | Update user status |
+
+### Audit (requires admin role)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/admin/audit` | Query audit logs (filterable by user, action, resource, date range) |
 
 ### ML (requires `Authorization: Bearer <token>`)
 
@@ -301,7 +309,7 @@ docker-compose.yml           # Redis, Backend, Celery, Frontend
 | Auth & Login Fixes | 11 bugs fixed (March 2026) | ✅ Done |
 | Security Hardening | 25 fixes across 14 files + all tests green | ✅ Done |
 | 7 | UI & Analytics | ✅ Done |
-| 8 | Production Deployment | Next |
+| 8 | Production Readiness | ✅ Done |
 
 ### Completed
 
@@ -326,6 +334,8 @@ docker-compose.yml           # Redis, Backend, Celery, Frontend
 **Phase 7 — UI & Analytics (March 25, 2026)** — Full recharts analytics dashboard (area chart for upload trends, donut chart for category distribution, stat cards, processing status bar). In-browser document preview (react-pdf for PDFs with page nav + zoom, image viewer with zoom/pan, DOCX extracted text). Document version control (auto-versioning on re-upload, version history, rollback). Shared component library (ConfidenceBadge, StatusBadge, CategoryBadge, LoadingSpinner). Responsive sidebar with hamburger menu on mobile/tablet.
 
 **UI Redesign** — Minimalist dark theme (Linear/Notion-inspired), Inter font, zinc/neutral palette, no glassmorphism. Clean dashboard with stats, category filters, full-text search, analytics.
+
+**Phase 8 — Production Readiness (March 25, 2026)** — Audit logging system (AuditLog model, audit service with fire-and-forget BackgroundTasks, admin query endpoint with filters). GitHub Actions CI/CD (automated tests + lint on push/PR, Docker image build on merge, Dependabot for dependency updates). Production documentation (DEPLOYMENT.md step-by-step guide, TROUBLESHOOTING.md with 12+ entries, SECURITY.md production checklist).
 
 ---
 

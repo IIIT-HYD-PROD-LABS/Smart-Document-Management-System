@@ -65,3 +65,43 @@ Please include:
 - Steps to reproduce the issue
 - Expected vs. actual behavior
 - Any relevant logs or screenshots
+
+## Production Security Checklist
+
+Before deploying to production, ensure all items are completed:
+
+### Secrets & Configuration
+- [ ] Generate a cryptographically random SECRET_KEY (64+ chars): `python -c "import secrets; print(secrets.token_urlsafe(64))"`
+- [ ] Set `DEBUG=false` in .env
+- [ ] Set `ALLOWED_ORIGINS` to exact production domain(s) only
+- [ ] Set strong `REDIS_PASSWORD` (not the default)
+- [ ] Ensure `.env` files are in `.gitignore` and never committed
+
+### Network & Transport
+- [ ] Enable HTTPS via reverse proxy (nginx/Caddy with Let's Encrypt)
+- [ ] Verify HSTS header is present (`Strict-Transport-Security`)
+- [ ] Verify all security headers present (X-Frame-Options, CSP, etc.)
+- [ ] Restrict database access to application servers only
+
+### Database
+- [ ] Use SSL for database connections (`sslmode=require` — automatic for non-localhost)
+- [ ] Enable connection pooling (Supabase pooler on port 6543)
+- [ ] Set up regular database backups
+- [ ] Rotate database password periodically
+
+### Authentication
+- [ ] Verify rate limiting is active on all endpoints
+- [ ] Test that weak passwords are rejected
+- [ ] Verify OAuth redirect URIs match production domain
+- [ ] Confirm token expiry settings are appropriate (30min access, 7d refresh)
+
+### File Storage
+- [ ] For production, enable S3 storage (`USE_S3=true`) instead of local filesystem
+- [ ] Ensure uploaded files have restrictive permissions
+- [ ] Verify magic bytes validation is active (file type spoofing prevention)
+
+### Monitoring
+- [ ] Set up log aggregation for structured JSON logs
+- [ ] Monitor health endpoint (`/api/health`)
+- [ ] Set up alerts for high error rates and health check failures
+- [ ] Review audit logs regularly (`GET /api/admin/audit`)

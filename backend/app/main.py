@@ -10,6 +10,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from sqlalchemy import text
+
 from app.config import settings
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -110,4 +112,32 @@ def root():
 
 @app.get("/api/health", tags=["Health"])
 def health_check():
-    return {"status": "healthy", "version": settings.APP_VERSION}
+    """Detailed health check for monitoring."""
+    import redis
+
+    health = {
+        "status": "healthy",
+        "version": settings.APP_VERSION,
+        "debug": settings.DEBUG,
+    }
+
+    # Check database
+    try:
+        from app.database import engine
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        health["database"] = "connected"
+    except Exception:
+        health["database"] = "disconnected"
+        health["status"] = "degraded"
+
+    # Check Redis
+    try:
+        r = redis.from_url(settings.REDIS_URL)
+        r.ping()
+        health["redis"] = "connected"
+    except Exception:
+        health["redis"] = "disconnected"
+        health["status"] = "degraded"
+
+    return health

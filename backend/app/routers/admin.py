@@ -1,9 +1,9 @@
 """Admin API routes - User management and system stats."""
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Query, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path as PathParam, Query, Request, Response, status
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.user import User
 from app.models.document import Document, DocumentStatus
+from app.models.audit_log import AuditLog
 from app.schemas.admin import (
     AdminUserResponse,
     AdminUserListResponse,
@@ -19,7 +20,9 @@ from app.schemas.admin import (
     StatusUpdateRequest,
     AdminStatsResponse,
 )
+from app.schemas.audit import AuditLogListResponse, AuditLogResponse
 from app.utils.security import require_admin
+from app.services.audit_service import log_audit_event
 from app.utils.rate_limiter import limiter
 
 logger = structlog.stdlib.get_logger()
@@ -131,6 +134,7 @@ def update_user_role(
     request: Request,
     response: Response,
     payload: RoleUpdateRequest,
+    background_tasks: BackgroundTasks,
     user_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
@@ -167,6 +171,13 @@ def update_user_role(
 
     logger.info("role_changed", user_id=user_id, old_role=old_role, new_role=payload.role, changed_by=current_user.id)
 
+    background_tasks.add_task(
+        log_audit_event, user_id=current_user.id, action="role_change",
+        resource_type="user", resource_id=user_id,
+        details={"old_role": old_role, "new_role": payload.role},
+        ip_address=request.client.host if request.client else None,
+    )
+
     return {"detail": f"Role updated from {old_role} to {payload.role}", "user_id": user_id}
 
 
@@ -176,6 +187,7 @@ def update_user_status(
     request: Request,
     response: Response,
     payload: StatusUpdateRequest,
+    background_tasks: BackgroundTasks,
     user_id: int = PathParam(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
@@ -226,6 +238,13 @@ def update_user_status(
     status_str = "activated" if payload.is_active else "deactivated"
     logger.info("user_status_changed", user_id=user_id, status=status_str, changed_by=current_user.id)
 
+    background_tasks.add_task(
+        log_audit_event, user_id=current_user.id, action="status_change",
+        resource_type="user", resource_id=user_id,
+        details={"new_status": "activated" if payload.is_active else "deactivated"},
+        ip_address=request.client.host if request.client else None,
+    )
+
     return {"detail": f"User {status_str}", "user_id": user_id}
 
 
@@ -265,4 +284,54 @@ def get_admin_stats(
         users_by_role=users_by_role,
         total_documents=total_documents,
         documents_by_status=docs_by_status,
+    )
+
+
+@router.get("/audit", response_model=AuditLogListResponse)
+@limiter.limit("30/minute")
+def list_audit_logs(
+    request: Request,
+    response: Response,
+    user_id: int | None = Query(None, ge=1),
+    action: str | None = Query(None, max_length=100),
+    resource_type: str | None = Query(None, max_length=100),
+    resource_id: int | None = Query(None, ge=1),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    page: int = Query(1, ge=1, le=10000),
+    per_page: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Query audit logs with optional filters (admin only)."""
+    query = db.query(AuditLog)
+
+    if user_id is not None:
+        query = query.filter(AuditLog.user_id == user_id)
+    if action is not None:
+        query = query.filter(AuditLog.action == action)
+    if resource_type is not None:
+        query = query.filter(AuditLog.resource_type == resource_type)
+    if resource_id is not None:
+        query = query.filter(AuditLog.resource_id == resource_id)
+    if date_from is not None:
+        query = query.filter(AuditLog.created_at >= datetime.combine(date_from, datetime.min.time(), tzinfo=timezone.utc))
+    if date_to is not None:
+        query = query.filter(AuditLog.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc))
+
+    total = query.count()
+
+    items = (
+        query
+        .order_by(AuditLog.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    return AuditLogListResponse(
+        items=[AuditLogResponse.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        per_page=per_page,
     )
