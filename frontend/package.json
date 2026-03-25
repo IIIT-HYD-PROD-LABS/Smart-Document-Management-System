@@ -13,7 +13,7 @@
     "date-fns": "^3.6.0",
     "framer-motion": "^11.2.12",
     "js-cookie": "^3.0.5",
-    "next": "^15.5.14",
+    "next": "^16.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.2.3",
