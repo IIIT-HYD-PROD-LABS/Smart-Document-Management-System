@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { oauthApi } from "@/lib/api";
+import { oauthApi, extractErrorMessage } from "@/lib/api";
 import toast from "react-hot-toast";
 import Link from "next/link";
 
@@ -36,8 +36,7 @@ export default function RegisterPage() {
             await register(form);
             toast.success("Account created");
         } catch (err: unknown) {
-            const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-            toast.error(message || "Registration failed");
+            toast.error(extractErrorMessage(err, "Registration failed"));
         } finally {
             setLoading(false);
         }

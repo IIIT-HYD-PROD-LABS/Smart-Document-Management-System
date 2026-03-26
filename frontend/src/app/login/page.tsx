@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { oauthApi } from "@/lib/api";
+import { oauthApi, extractErrorMessage } from "@/lib/api";
 import { LoadingSpinner } from "@/components";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -40,11 +40,11 @@ function LoginInner() {
             await login(email, password);
             toast.success("Welcome back");
         } catch (err: unknown) {
-            const resp = err as { response?: { status?: number; data?: { detail?: string } } };
+            const resp = err as { response?: { status?: number } };
             if (resp?.response?.status === 429) {
                 toast.error("Too many attempts. Please wait a minute and try again.");
             } else {
-                toast.error(resp?.response?.data?.detail || "Login failed");
+                toast.error(extractErrorMessage(err, "Login failed"));
             }
         } finally {
             setLoading(false);
