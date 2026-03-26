@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { oauthApi } from "@/lib/api";
+import { oauthApi, extractErrorMessage } from "@/lib/api";
 import { LoadingSpinner } from "@/components";
 import toast from "react-hot-toast";
 
@@ -41,9 +41,9 @@ function OAuthCallbackInner() {
                 router.replace("/dashboard");
             })
             .catch((err) => {
-                const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-                setError(message || "OAuth sign-in failed");
-                toast.error(message || "OAuth sign-in failed");
+                const message = extractErrorMessage(err, "OAuth sign-in failed");
+                setError(message);
+                toast.error(message);
             });
     }, [searchParams, setTokensFromOAuth, router]);
 

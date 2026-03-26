@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { adminApi } from "@/lib/api";
+import { adminApi, extractErrorMessage } from "@/lib/api";
 import { LoadingSpinner } from "@/components";
 import toast from "react-hot-toast";
 import { FiUsers, FiFileText, FiSearch, FiChevronLeft, FiChevronRight } from "react-icons/fi";
@@ -114,8 +114,7 @@ export default function AdminPage() {
             fetchUsers();
             fetchStats();
         } catch (err: unknown) {
-            const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-            toast.error(message || "Failed to update role");
+            toast.error(extractErrorMessage(err, "Failed to update role"));
             fetchUsers();
         }
     };
@@ -132,8 +131,7 @@ export default function AdminPage() {
             fetchUsers();
             fetchStats();
         } catch (err: unknown) {
-            const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-            toast.error(message || "Failed to update status");
+            toast.error(extractErrorMessage(err, "Failed to update status"));
         }
     };
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { documentsApi, sharingApi } from "@/lib/api";
+import { documentsApi, sharingApi, extractErrorMessage } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import toast from "react-hot-toast";
 import { ConfidenceBadge, StatusBadge, LoadingSpinner } from "@/components";
@@ -181,8 +181,7 @@ export default function DocumentDetailPage() {
             setShareEmail("");
             loadPermissions();
         } catch (err: unknown) {
-            const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-            toast.error(message || "Failed to share");
+            toast.error(extractErrorMessage(err, "Failed to share"));
         } finally {
             setSharingLoading(false);
         }
@@ -225,8 +224,7 @@ export default function DocumentDetailPage() {
             setHighlights(res.data.highlighted_text || []);
             loadVersions();
         } catch (err: unknown) {
-            const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-            toast.error(message || "Rollback failed");
+            toast.error(extractErrorMessage(err, "Rollback failed"));
         } finally {
             setRollingBack(false);
         }

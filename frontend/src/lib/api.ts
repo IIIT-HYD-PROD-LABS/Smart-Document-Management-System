@@ -265,4 +265,17 @@ export const oauthApi = {
         api.post("/auth/oauth/exchange", { code, token }),
 };
 
+// Extract a human-readable error message from FastAPI error responses.
+// FastAPI returns `detail` as a string for custom errors, but as an array
+// of {loc, msg, type} objects for Pydantic validation errors (422).
+export function extractErrorMessage(err: unknown, fallback: string): string {
+    const resp = err as { response?: { data?: { detail?: unknown } } };
+    const detail = resp?.response?.data?.detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+        return detail.map((e: { msg?: string }) => e.msg || "").filter(Boolean).join(", ") || fallback;
+    }
+    return fallback;
+}
+
 export default api;

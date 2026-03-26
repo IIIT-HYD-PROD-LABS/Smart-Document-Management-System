@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
-import { documentsApi } from "@/lib/api";
+import { documentsApi, extractErrorMessage } from "@/lib/api";
 import { ConfidenceBadge } from "@/components";
 import { FiUploadCloud, FiFile, FiCheckCircle, FiX, FiLoader } from "react-icons/fi";
 
@@ -96,8 +96,7 @@ export default function UploadPage() {
                 updateItem(item.file, { status: "uploaded", uploadProgress: 100, documentId: id, taskId: task_id });
                 pollProcessingStatus(item.file, id);
             } catch (err: unknown) {
-                const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-                updateItem(item.file, { status: "error", error: message || "Upload failed" });
+                updateItem(item.file, { status: "error", error: extractErrorMessage(err, "Upload failed") });
             }
         }
         setUploading(false);
