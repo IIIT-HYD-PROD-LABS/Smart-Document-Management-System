@@ -303,14 +303,17 @@ def google_auth_url(request: Request, response: Response):
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Google OAuth not configured")
     from app.services.oauth_service import GoogleOAuth
-    state = secrets.token_urlsafe(32)
-    url = GoogleOAuth.get_auth_url(state)
-    resp = JSONResponse(content={"url": url})
-    resp.set_cookie(
-        "oauth_state", state, max_age=600, httponly=True,
-        samesite="lax", secure=not settings.DEBUG,
+    # Sign the state as a JWT so the callback can verify it without cookies.
+    # Cross-origin API calls (frontend on :3000, backend on :8000) can't
+    # reliably share cookies, so cookie-based CSRF doesn't work here.
+    nonce = secrets.token_urlsafe(16)
+    state = jwt.encode(
+        {"nonce": nonce, "exp": datetime.now(timezone.utc) + timedelta(minutes=10)},
+        settings.SECRET_KEY,
+        algorithm="HS256",
     )
-    return resp
+    url = GoogleOAuth.get_auth_url(state)
+    return JSONResponse(content={"url": url})
 
 
 @router.get("/callback/google")
@@ -335,9 +338,14 @@ async def google_callback(
     if not code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing authorization code")
 
-    # Validate CSRF state parameter
-    stored_state = request.cookies.get("oauth_state")
-    if not stored_state or not state or not secrets.compare_digest(stored_state, state):
+    # Validate CSRF state by verifying the signed JWT
+    if not state:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing OAuth state")
+    try:
+        jwt.decode(state, settings.SECRET_KEY, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state expired -- please try again")
+    except jwt.InvalidTokenError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state -- possible CSRF")
 
     from app.services.oauth_service import GoogleOAuth
@@ -424,9 +432,7 @@ async def google_callback(
     )
 
     frontend_url = settings.FRONTEND_URL
-    redirect = RedirectResponse(url=f"{frontend_url}/oauth/callback?code={exchange_code}&token={exchange_token}")
-    redirect.delete_cookie("oauth_state")
-    return redirect
+    return RedirectResponse(url=f"{frontend_url}/oauth/callback?code={exchange_code}&token={exchange_token}")
 
 
 @router.get("/oauth/microsoft")
@@ -436,14 +442,14 @@ def microsoft_auth_url(request: Request, response: Response):
     if not settings.MICROSOFT_CLIENT_ID:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Microsoft OAuth not configured")
     from app.services.oauth_service import MicrosoftOAuth
-    state = secrets.token_urlsafe(32)
-    url = MicrosoftOAuth.get_auth_url(state)
-    resp = JSONResponse(content={"url": url})
-    resp.set_cookie(
-        "oauth_state", state, max_age=600, httponly=True,
-        samesite="lax", secure=not settings.DEBUG,
+    nonce = secrets.token_urlsafe(16)
+    state = jwt.encode(
+        {"nonce": nonce, "exp": datetime.now(timezone.utc) + timedelta(minutes=10)},
+        settings.SECRET_KEY,
+        algorithm="HS256",
     )
-    return resp
+    url = MicrosoftOAuth.get_auth_url(state)
+    return JSONResponse(content={"url": url})
 
 
 @router.get("/callback/microsoft")
@@ -467,8 +473,13 @@ async def microsoft_callback(
     if not code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing authorization code")
 
-    stored_state = request.cookies.get("oauth_state")
-    if not stored_state or not state or not secrets.compare_digest(stored_state, state):
+    if not state:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing OAuth state")
+    try:
+        jwt.decode(state, settings.SECRET_KEY, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state expired -- please try again")
+    except jwt.InvalidTokenError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state -- possible CSRF")
 
     from app.services.oauth_service import MicrosoftOAuth
@@ -552,9 +563,7 @@ async def microsoft_callback(
     )
 
     frontend_url = settings.FRONTEND_URL
-    redirect = RedirectResponse(url=f"{frontend_url}/oauth/callback?code={exchange_code}&token={exchange_token}")
-    redirect.delete_cookie("oauth_state")
-    return redirect
+    return RedirectResponse(url=f"{frontend_url}/oauth/callback?code={exchange_code}&token={exchange_token}")
 
 
 @router.post("/oauth/exchange", response_model=TokenPairResponse)
