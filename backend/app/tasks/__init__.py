@@ -12,8 +12,13 @@ celery_app = Celery(
 
 # Handle rediss:// (TLS) connections for managed Redis (e.g. Render)
 if settings.CELERY_BROKER_URL.startswith("rediss://"):
-    celery_app.conf.broker_use_ssl = {"ssl_cert_reqs": False}
-    celery_app.conf.redis_backend_use_ssl = {"ssl_cert_reqs": False}
+    import ssl
+    celery_app.conf.broker_use_ssl = {
+        "ssl_cert_reqs": ssl.CERT_NONE,
+    }
+    celery_app.conf.redis_backend_use_ssl = {
+        "ssl_cert_reqs": ssl.CERT_NONE,
+    }
 
 celery_app.conf.update(
     task_serializer="json",
