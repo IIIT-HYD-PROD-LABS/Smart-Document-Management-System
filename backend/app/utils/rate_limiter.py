@@ -39,7 +39,11 @@ def _get_storage_uri() -> str:
     redis_url = settings.REDIS_URL
     safe_url = _redact_url(redis_url)
     try:
-        r = Redis.from_url(redis_url, socket_connect_timeout=2)
+        redis_kwargs = {"socket_connect_timeout": 2}
+        if redis_url.startswith("rediss://"):
+            import ssl
+            redis_kwargs["ssl_cert_reqs"] = ssl.CERT_NONE
+        r = Redis.from_url(redis_url, **redis_kwargs)
         r.ping()
         logger.info("Rate limiter connected to Redis at %s", safe_url)
         return redis_url

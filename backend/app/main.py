@@ -133,7 +133,11 @@ def health_check():
 
     # Check Redis
     try:
-        r = redis.from_url(settings.REDIS_URL)
+        redis_kwargs = {}
+        if settings.REDIS_URL.startswith("rediss://"):
+            import ssl
+            redis_kwargs["ssl_cert_reqs"] = ssl.CERT_NONE
+        r = redis.from_url(settings.REDIS_URL, **redis_kwargs)
         r.ping()
         health["redis"] = "connected"
     except Exception:
