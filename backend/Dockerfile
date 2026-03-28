@@ -27,5 +27,5 @@ USER appuser
 # Expose port
 EXPOSE 8000
 
-# Run server
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run server (start.sh runs combined celery+uvicorn when RENDER=true)
+CMD ["bash", "start.sh"]
