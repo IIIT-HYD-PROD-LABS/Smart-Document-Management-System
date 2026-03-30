@@ -11,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-    title: "SmartDocs",
-    description: "AI-powered document management with intelligent classification, OCR, and search",
+    title: "TaxSync",
+    description: "AI-powered tax compliance intelligence — classify notices, track deadlines, draft responses",
     icons: {
         icon: "/favicon.svg",
     },
