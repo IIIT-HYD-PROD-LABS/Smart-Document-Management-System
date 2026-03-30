@@ -401,15 +401,15 @@ class TestProgressReporting:
         with patch("builtins.open", MagicMock()), _TaskSelfContext():
             process_document_task.run(1)
 
-        # Collect every stage name reported to update_state.
-        actual_stages = []
-        for call in process_document_task.update_state.call_args_list:
-            meta = call.kwargs.get("meta")
-            if meta and "stage" in meta:
-                actual_stages.append(meta["stage"])
+            # Collect stages INSIDE the context (before mocks are restored).
+            actual_stages = []
+            for call in process_document_task.update_state.call_args_list:
+                meta = call.kwargs.get("meta")
+                if meta and "stage" in meta:
+                    actual_stages.append(meta["stage"])
 
-        assert "reading_file" in actual_stages
-        assert "extracting_text" in actual_stages
-        assert "extracting_metadata" in actual_stages
-        assert "ai_extraction" in actual_stages
-        assert "saving_results" in actual_stages
+            assert "reading_file" in actual_stages
+            assert "extracting_text" in actual_stages
+            assert "extracting_metadata" in actual_stages
+            assert "ai_extraction" in actual_stages
+            assert "saving_results" in actual_stages
