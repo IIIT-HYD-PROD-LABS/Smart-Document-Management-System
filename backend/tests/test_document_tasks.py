@@ -20,19 +20,36 @@ from app.tasks.document_tasks import process_document_task
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _patch_task_self(retries: int = 0, max_retries: int = 3):
-    """Patch the task object's attributes to mimic bound-task `self`.
+class _TaskSelfContext:
+    """Context manager that patches the bound Celery task's attributes.
 
-    For bound Celery tasks, `.run(arg)` passes the task instance as self.
-    We mock properties on the actual task object rather than passing a
-    separate mock_self.
+    `process_document_task.request` is a property and cannot be set directly.
+    We use `patch.object` to override it for the duration of each test.
     """
-    process_document_task.update_state = MagicMock()
-    process_document_task.request = MagicMock()
-    process_document_task.request.retries = retries
-    process_document_task.max_retries = max_retries
-    process_document_task.retry = MagicMock(side_effect=Exception("retry called"))
-    process_document_task.MaxRetriesExceededError = Exception
+
+    def __init__(self, retries: int = 0, max_retries: int = 3):
+        self.retries = retries
+        self.max_retries = max_retries
+        self._patches = []
+
+    def __enter__(self):
+        mock_request = MagicMock()
+        mock_request.retries = self.retries
+
+        p1 = patch.object(process_document_task, "request", mock_request)
+        p2 = patch.object(process_document_task, "update_state", MagicMock())
+        p3 = patch.object(process_document_task, "max_retries", self.max_retries)
+        p4 = patch.object(process_document_task, "retry", MagicMock(side_effect=Exception("retry called")))
+        p5 = patch.object(process_document_task, "MaxRetriesExceededError", Exception)
+
+        self._patches = [p1, p2, p3, p4, p5]
+        for p in self._patches:
+            p.start()
+        return self
+
+    def __exit__(self, *args):
+        for p in reversed(self._patches):
+            p.stop()
 
 
 def _make_mock_document(**overrides):
@@ -75,14 +92,14 @@ class TestInvalidDocumentId:
 
     @pytest.mark.parametrize("bad_id", [0, -1, -999])
     def test_non_positive_integer(self, bad_id):
-        _patch_task_self()
-        result = process_document_task.run(bad_id)
+        with _TaskSelfContext():
+            result = process_document_task.run(bad_id)
         assert result == {"error": "Invalid document_id"}
 
     @pytest.mark.parametrize("bad_id", ["abc", None, 3.14, []])
     def test_non_integer_type(self, bad_id):
-        _patch_task_self()
-        result = process_document_task.run(bad_id)
+        with _TaskSelfContext():
+            result = process_document_task.run(bad_id)
         assert result == {"error": "Invalid document_id"}
 
 
@@ -98,8 +115,8 @@ class TestDocumentNotFound:
         mock_db = _make_mock_db(doc=None)
         mock_session_cls.return_value = mock_db
 
-        _patch_task_self()
-        result = process_document_task.run(999)
+        with _TaskSelfContext():
+            result = process_document_task.run(999)
 
         assert result == {"error": "Document not found"}
         mock_db.close.assert_called_once()
@@ -120,8 +137,8 @@ class TestFileNotFound:
         mock_db = _make_mock_db(doc)
         mock_session_cls.return_value = mock_db
 
-        _patch_task_self()
-        result = process_document_task.run(1)
+        with _TaskSelfContext():
+            result = process_document_task.run(1)
 
         assert result == {"error": "File not found"}
         assert doc.status == DocumentStatus.FAILED
@@ -135,8 +152,8 @@ class TestFileNotFound:
         mock_db = _make_mock_db(doc)
         mock_session_cls.return_value = mock_db
 
-        _patch_task_self()
-        result = process_document_task.run(1)
+        with _TaskSelfContext():
+            result = process_document_task.run(1)
 
         assert result == {"error": "File not found"}
         assert doc.status == DocumentStatus.FAILED
@@ -169,8 +186,8 @@ class TestSuccessfulProcessing:
         mock_session_cls.return_value = mock_db
 
         with patch("builtins.open", MagicMock()):
-            _patch_task_self()
-            result = process_document_task.run(1)
+            with _TaskSelfContext():
+                result = process_document_task.run(1)
 
         assert result["status"] == "completed"
         assert result["document_id"] == 1
@@ -207,8 +224,8 @@ class TestSuccessfulProcessing:
         mock_session_cls.return_value = mock_db
 
         with patch("builtins.open", MagicMock()):
-            _patch_task_self()
-            result = process_document_task.run(1)
+            with _TaskSelfContext():
+                result = process_document_task.run(1)
 
         assert doc.category == DocumentCategory.UNKNOWN
         assert result["status"] == "completed"
@@ -247,8 +264,8 @@ class TestAIExtractionSuccess:
         mock_session_cls.return_value = mock_db
 
         with patch("builtins.open", MagicMock()):
-            _patch_task_self()
-            result = process_document_task.run(1)
+            with _TaskSelfContext():
+                result = process_document_task.run(1)
 
         assert doc.ai_summary == "Tax document summary"
         assert doc.ai_extracted_fields == {"tax_year": "2024", "amount_due": "5000"}
@@ -287,8 +304,8 @@ class TestAIExtractionFailure:
         mock_session_cls.return_value = mock_db
 
         with patch("builtins.open", MagicMock()):
-            _patch_task_self()
-            result = process_document_task.run(1)
+            with _TaskSelfContext():
+                result = process_document_task.run(1)
 
         # AI fields should reflect the failure gracefully.
         assert doc.ai_extraction_status == "skipped"
@@ -320,8 +337,7 @@ class TestAIExtractionFailure:
         mock_db = _make_mock_db(doc)
         mock_session_cls.return_value = mock_db
 
-        with patch("builtins.open", MagicMock()):
-            _patch_task_self()
+        with patch("builtins.open", MagicMock()), _TaskSelfContext():
             process_document_task.run(1)
 
         assert doc.ai_extraction_status == "skipped"
@@ -343,8 +359,8 @@ class TestPathTraversalBlocked:
         mock_db = _make_mock_db(doc)
         mock_session_cls.return_value = mock_db
 
-        _patch_task_self()
-        result = process_document_task.run(1)
+        with _TaskSelfContext():
+            result = process_document_task.run(1)
 
         assert result == {"error": "Invalid file path"}
         assert doc.status == DocumentStatus.FAILED
@@ -378,8 +394,7 @@ class TestProgressReporting:
         mock_db = _make_mock_db(doc)
         mock_session_cls.return_value = mock_db
 
-        with patch("builtins.open", MagicMock()):
-            _patch_task_self()
+        with patch("builtins.open", MagicMock()), _TaskSelfContext():
             process_document_task.run(1)
 
         # Collect every stage name reported to update_state.
