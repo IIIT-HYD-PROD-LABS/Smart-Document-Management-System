@@ -12,11 +12,9 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
+from celery.app.task import Task as _CeleryBaseTask
 from app.models.document import DocumentStatus, DocumentCategory
 from app.tasks.document_tasks import process_document_task
-
-# The Task *class* that our task instance belongs to.
-_TaskClass = type(process_document_task)
 
 
 # ---------------------------------------------------------------------------
@@ -24,12 +22,12 @@ _TaskClass = type(process_document_task)
 # ---------------------------------------------------------------------------
 
 class _TaskSelfContext:
-    """Context manager that patches the bound Celery task's attributes.
+    """Context manager that patches bound Celery task internals for testing.
 
-    ``Task.request`` is a **property descriptor** on the class — it cannot be
-    set on an instance.  We patch it on the *class* via ``PropertyMock``.
-    Other attributes (``update_state``, ``max_retries``, …) *can* be set on
-    the instance so we use plain ``patch.object``.
+    ``Task.request`` is a **property descriptor** defined on
+    ``celery.app.task.Task``.  The decorator wraps the function with a
+    ``PromiseProxy`` whose ``type()`` is *not* ``Task``.  We patch the
+    property on the real base class.
     """
 
     def __init__(self, retries: int = 0, max_retries: int = 3):
@@ -41,9 +39,8 @@ class _TaskSelfContext:
         mock_request = MagicMock()
         mock_request.retries = self.retries
 
-        # Patch 'request' at the CLASS level (property descriptor).
-        p1 = patch.object(_TaskClass, "request", new_callable=PropertyMock, return_value=mock_request)
-        # The rest can be patched on the instance.
+        # Patch 'request' on the real Celery Task base class.
+        p1 = patch.object(_CeleryBaseTask, "request", new_callable=PropertyMock, return_value=mock_request)
         p2 = patch.object(process_document_task, "update_state", MagicMock())
         p3 = patch.object(process_document_task, "max_retries", self.max_retries)
         p4 = patch.object(process_document_task, "retry", MagicMock(side_effect=Exception("retry called")))
