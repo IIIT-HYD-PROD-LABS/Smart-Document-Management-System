@@ -55,7 +55,7 @@ function LoginInner() {
         <div className="min-h-screen bg-[#09090b] flex items-center justify-center px-6">
             <div className="w-full max-w-sm">
                 <div className="text-center mb-8">
-                    <Link href="/" className="text-sm font-semibold text-white tracking-tight">SmartDocs</Link>
+                    <Link href="/" className="text-sm font-semibold text-white tracking-tight">TaxSync</Link>
                     <h1 className="text-xl font-semibold text-white mt-6">Sign in</h1>
                     <p className="text-sm text-[#71717a] mt-1">Welcome back to your account</p>
                 </div>

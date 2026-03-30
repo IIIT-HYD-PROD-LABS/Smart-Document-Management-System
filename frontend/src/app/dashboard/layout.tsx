@@ -54,7 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <button onClick={() => setSidebarOpen(true)} className="text-[#a1a1aa] hover:text-white p-1">
                     <FiMenu className="w-5 h-5" />
                 </button>
-                <span className="ml-3 text-sm font-semibold text-white tracking-tight">SmartDocs</span>
+                <span className="ml-3 text-sm font-semibold text-white tracking-tight">TaxSync</span>
             </div>
 
             {/* Sidebar backdrop (mobile) */}
@@ -74,7 +74,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             `}>
                 <div className="px-5 h-14 flex items-center justify-between border-b border-[#1f1f23]">
                     <Link href="/dashboard" className="text-sm font-semibold text-white tracking-tight">
-                        SmartDocs
+                        TaxSync
                     </Link>
                     <button onClick={() => setSidebarOpen(false)} className="text-[#71717a] hover:text-white md:hidden">
                         <FiX className="w-4 h-4" />

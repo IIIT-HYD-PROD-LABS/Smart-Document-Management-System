@@ -4,7 +4,7 @@ set -euo pipefail
 # Start script for deployment (runs both Celery worker and Uvicorn in one container)
 # For Docker Compose, the services are split into separate containers
 
-if [ "$RENDER" = "true" ] || [ "${COMBINED_MODE:-}" = "true" ]; then
+if [ "${RENDER:-}" = "true" ] || [ "${COMBINED_MODE:-}" = "true" ]; then
     echo "Starting in combined mode (Celery + Uvicorn)..."
     celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 --pool=prefork --max-memory-per-child=256000 &
     CELERY_PID=$!
