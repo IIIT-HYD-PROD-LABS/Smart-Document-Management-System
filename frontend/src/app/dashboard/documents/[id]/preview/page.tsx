@@ -108,7 +108,7 @@ export default function PreviewPage() {
 
         el.addEventListener("wheel", onWheel, { passive: false });
         return () => el.removeEventListener("wheel", onWheel);
-    });
+    }, []);
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         setIsDragging(true);

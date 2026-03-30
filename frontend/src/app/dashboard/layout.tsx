@@ -14,6 +14,7 @@ const allNavItems = [
     { href: "/dashboard/shared", icon: FiShare2, label: "Shared with me", roles: ["admin", "editor", "viewer"] },
     { href: "/dashboard/search", icon: FiSearch, label: "Search", roles: ["admin", "editor", "viewer"] },
     { href: "/dashboard/analytics", icon: FiBarChart2, label: "Analytics", roles: ["admin", "editor", "viewer"] },
+    { href: "/dashboard/model-evaluation", label: "Model Eval", icon: FiBarChart2, roles: ["admin"] },
     { href: "/dashboard/admin", icon: FiShield, label: "Admin", roles: ["admin"] },
 ];
 

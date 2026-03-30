@@ -55,6 +55,11 @@ class UserLogin(BaseModel):
     email: str = Field(..., min_length=1, examples=["user@example.com"])
     password: str = Field(..., min_length=1)
 
+    @field_validator("email")
+    @classmethod
+    def normalize_login_email(cls, v: str) -> str:
+        return v.strip().lower()
+
 
 # --- Response Schemas ---
 

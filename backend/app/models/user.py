@@ -25,10 +25,10 @@ class User(Base):
     role = Column(String(20), default="editor", index=True, nullable=False)
     auth_provider = Column(String(20), default="local", nullable=False)
     oauth_id = Column(String(255), unique=True, nullable=True)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )

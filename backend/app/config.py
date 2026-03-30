@@ -61,6 +61,8 @@ class Settings(BaseSettings):
 
     # Redis & Celery
     REDIS_URL: str = "redis://localhost:6379/0"
+    # Redis SSL verification (set to false only for managed Redis with self-signed certs)
+    REDIS_SSL_VERIFY: bool = True
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
 

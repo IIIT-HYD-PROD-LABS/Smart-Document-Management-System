@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.gzip import GZipMiddleware
 
 from sqlalchemy import text
 
@@ -59,7 +60,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
     allow_headers=["Authorization", "Content-Type"],
+    max_age=600,
 )
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(SecurityHeadersMiddleware)
 
@@ -137,8 +141,9 @@ def health_check():
         if settings.REDIS_URL.startswith("rediss://"):
             import ssl
             ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
+            if not settings.REDIS_SSL_VERIFY:
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
             redis_kwargs["ssl"] = ctx
         r = redis.from_url(settings.REDIS_URL, **redis_kwargs)
         r.ping()
@@ -147,4 +152,6 @@ def health_check():
         health["redis"] = "disconnected"
         health["status"] = "degraded"
 
+    if health["status"] == "degraded":
+        return JSONResponse(status_code=503, content=health)
     return health
