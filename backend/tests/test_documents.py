@@ -9,6 +9,7 @@ from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+from app.models.document import DocumentCategory, DocumentStatus
 
 
 # ---------------------------------------------------------------------------
@@ -51,14 +52,12 @@ def _make_mock_document(**kwargs):
     doc.search_vector = None
     doc.current_version = kwargs.get("current_version", 1)
 
-    # Enum-like status and category
-    status_mock = MagicMock()
-    status_mock.value = kwargs.get("status", "completed")
-    doc.status = status_mock
+    # Use real enum values so Pydantic from_attributes serialization works correctly
+    status_val = kwargs.get("status", "completed")
+    doc.status = DocumentStatus(status_val) if isinstance(status_val, str) else status_val
 
-    category_mock = MagicMock()
-    category_mock.value = kwargs.get("category", "bills")
-    doc.category = category_mock
+    category_val = kwargs.get("category", "bills")
+    doc.category = DocumentCategory(category_val) if isinstance(category_val, str) else category_val
 
     doc.confidence_score = kwargs.get("confidence_score", 0.95)
     doc.created_at = kwargs.get("created_at", datetime(2025, 1, 15, 12, 0, 0, tzinfo=timezone.utc))
@@ -97,6 +96,7 @@ def _build_client(user=None, db=None):
     from app.main import app
     from app.database import get_db
     from app.utils.security import get_current_user, require_editor
+    from app.utils.rate_limiter import limiter
 
     if user is None:
         user = _make_mock_user()
@@ -106,6 +106,7 @@ def _build_client(user=None, db=None):
     app.dependency_overrides[get_current_user] = lambda: user
     app.dependency_overrides[require_editor] = lambda: user
     app.dependency_overrides[get_db] = lambda: db
+    limiter.enabled = False
 
     client = TestClient(app, raise_server_exceptions=False)
     return client, app, user, db
@@ -115,10 +116,12 @@ def _cleanup_overrides(app):
     """Remove all dependency overrides to avoid test pollution."""
     from app.database import get_db
     from app.utils.security import get_current_user, require_editor
+    from app.utils.rate_limiter import limiter
 
     app.dependency_overrides.pop(get_current_user, None)
     app.dependency_overrides.pop(require_editor, None)
     app.dependency_overrides.pop(get_db, None)
+    limiter.enabled = True
 
 
 # =========================================================================
@@ -378,6 +381,7 @@ class TestGetDocumentById:
         client, app, user, db = _build_client()
 
         mock_query = MagicMock()
+        mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.first.return_value = doc
         db.query.return_value = mock_query
@@ -396,6 +400,7 @@ class TestGetDocumentById:
         client, app, user, db = _build_client()
 
         mock_query = MagicMock()
+        mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.first.return_value = None  # document not found
         db.query.return_value = mock_query
@@ -429,6 +434,7 @@ class TestGetDocumentById:
 
         def query_side_effect(model):
             q = MagicMock()
+            q.options.return_value = q
             q.filter.return_value = q
             if model is Document:
                 q.first.return_value = other_user_doc

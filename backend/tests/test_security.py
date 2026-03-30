@@ -3,7 +3,6 @@
 All tests run without a database connection.
 """
 
-import re
 import string
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch

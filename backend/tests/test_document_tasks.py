@@ -69,7 +69,7 @@ class TestInvalidDocumentId:
         from app.tasks.document_tasks import process_document_task
 
         mock_self = _make_mock_self()
-        result = process_document_task.__wrapped__(mock_self, bad_id)
+        result = process_document_task.run(mock_self, bad_id)
 
         assert result == {"error": "Invalid document_id"}
 
@@ -78,7 +78,7 @@ class TestInvalidDocumentId:
         from app.tasks.document_tasks import process_document_task
 
         mock_self = _make_mock_self()
-        result = process_document_task.__wrapped__(mock_self, bad_id)
+        result = process_document_task.run(mock_self, bad_id)
 
         assert result == {"error": "Invalid document_id"}
 
@@ -97,7 +97,7 @@ class TestDocumentNotFound:
         mock_session_cls.return_value = mock_db
 
         mock_self = _make_mock_self()
-        result = process_document_task.__wrapped__(mock_self, 999)
+        result = process_document_task.run(mock_self, 999)
 
         assert result == {"error": "Document not found"}
         mock_db.close.assert_called_once()
@@ -120,7 +120,7 @@ class TestFileNotFound:
         mock_session_cls.return_value = mock_db
 
         mock_self = _make_mock_self()
-        result = process_document_task.__wrapped__(mock_self, 1)
+        result = process_document_task.run(mock_self, 1)
 
         assert result == {"error": "File not found"}
         assert doc.status == DocumentStatus.FAILED
@@ -136,7 +136,7 @@ class TestFileNotFound:
         mock_session_cls.return_value = mock_db
 
         mock_self = _make_mock_self()
-        result = process_document_task.__wrapped__(mock_self, 1)
+        result = process_document_task.run(mock_self, 1)
 
         assert result == {"error": "File not found"}
         assert doc.status == DocumentStatus.FAILED
@@ -171,7 +171,7 @@ class TestSuccessfulProcessing:
 
         with patch("builtins.open", MagicMock()):
             mock_self = _make_mock_self()
-            result = process_document_task.__wrapped__(mock_self, 1)
+            result = process_document_task.run(mock_self, 1)
 
         assert result["status"] == "completed"
         assert result["document_id"] == 1
@@ -210,7 +210,7 @@ class TestSuccessfulProcessing:
 
         with patch("builtins.open", MagicMock()):
             mock_self = _make_mock_self()
-            result = process_document_task.__wrapped__(mock_self, 1)
+            result = process_document_task.run(mock_self, 1)
 
         assert doc.category == DocumentCategory.UNKNOWN
         assert result["status"] == "completed"
@@ -251,7 +251,7 @@ class TestAIExtractionSuccess:
 
         with patch("builtins.open", MagicMock()):
             mock_self = _make_mock_self()
-            result = process_document_task.__wrapped__(mock_self, 1)
+            result = process_document_task.run(mock_self, 1)
 
         assert doc.ai_summary == "Tax document summary"
         assert doc.ai_extracted_fields == {"tax_year": "2024", "amount_due": "5000"}
@@ -292,7 +292,7 @@ class TestAIExtractionFailure:
 
         with patch("builtins.open", MagicMock()):
             mock_self = _make_mock_self()
-            result = process_document_task.__wrapped__(mock_self, 1)
+            result = process_document_task.run(mock_self, 1)
 
         # AI fields should reflect the failure gracefully.
         assert doc.ai_extraction_status == "skipped"
@@ -327,7 +327,7 @@ class TestAIExtractionFailure:
 
         with patch("builtins.open", MagicMock()):
             mock_self = _make_mock_self()
-            result = process_document_task.__wrapped__(mock_self, 1)
+            process_document_task.run(mock_self, 1)
 
         assert doc.ai_extraction_status == "skipped"
         assert doc.status == DocumentStatus.COMPLETED
@@ -350,7 +350,7 @@ class TestPathTraversalBlocked:
         mock_session_cls.return_value = mock_db
 
         mock_self = _make_mock_self()
-        result = process_document_task.__wrapped__(mock_self, 1)
+        result = process_document_task.run(mock_self, 1)
 
         assert result == {"error": "Invalid file path"}
         assert doc.status == DocumentStatus.FAILED
@@ -387,7 +387,7 @@ class TestProgressReporting:
 
         with patch("builtins.open", MagicMock()):
             mock_self = _make_mock_self()
-            process_document_task.__wrapped__(mock_self, 1)
+            process_document_task.run(mock_self, 1)
 
         # Collect every stage name reported to update_state.
         actual_stages = []
