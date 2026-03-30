@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, model_validator
 from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, Float
 from sqlalchemy.exc import IntegrityError, OperationalError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
 from app.utils.rate_limiter import limiter
@@ -21,7 +21,7 @@ from app.models.document import Document, DocumentCategory, DocumentStatus
 from app.models.document_permission import DocumentPermission
 from app.models.document_version import DocumentVersion
 from app.schemas.document import (
-    DocumentResponse, DocumentListResponse, DocumentUploadResponse,
+    DocumentResponse, DocumentListItem, DocumentListResponse, DocumentUploadResponse,
     DocumentStats, DocumentTrends, TrendPoint,
     DocumentVersionResponse, DocumentVersionListResponse, RollbackRequest,
 )
@@ -274,7 +274,7 @@ def get_shared_documents(
         .all()
     )
     return DocumentListResponse(
-        documents=[DocumentResponse.model_validate(d) for d in documents],
+        documents=[DocumentListItem.model_validate(d) for d in documents],
         total=total,
         page=page,
         per_page=per_page,
@@ -395,7 +395,7 @@ def search_documents(
         )
 
     return DocumentListResponse(
-        documents=[DocumentResponse.model_validate(d) for d in documents],
+        documents=[DocumentListItem.model_validate(d) for d in documents],
         total=total,
         page=page,
         per_page=per_page,
@@ -437,7 +437,7 @@ def get_documents_by_category(
     )
 
     return DocumentListResponse(
-        documents=[DocumentResponse.model_validate(d) for d in documents],
+        documents=[DocumentListItem.model_validate(d) for d in documents],
         total=total,
         page=page,
         per_page=per_page,
@@ -560,7 +560,7 @@ def get_all_documents(
     )
 
     return DocumentListResponse(
-        documents=[DocumentResponse.model_validate(d) for d in documents],
+        documents=[DocumentListItem.model_validate(d) for d in documents],
         total=total,
         page=page,
         per_page=per_page,
@@ -912,7 +912,10 @@ def preview_document(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     media_type = mimetypes.guess_type(doc.original_filename)[0] or "application/octet-stream"
-    return FileResponse(path=real_path, media_type=media_type)
+    response = FileResponse(path=real_path, media_type=media_type)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
+    return response
 
 
 class HighlightItem(BaseModel):
@@ -963,7 +966,26 @@ def get_document(
     current_user: User = Depends(get_current_user),
 ):
     """Get a single document by ID."""
-    doc = _get_accessible_document(document_id, current_user, db)
+    # Eager-load versions to avoid N+1 lazy load when DocumentResponse
+    # computes total_versions via the versions relationship.
+    doc = (
+        db.query(Document)
+        .options(selectinload(Document.versions))
+        .filter(Document.id == document_id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    # Reuse existing access-control logic: owner, admin, or shared permission
+    if doc.user_id != current_user.id and current_user.role != "admin":
+        perm = db.query(DocumentPermission).filter(
+            DocumentPermission.document_id == document_id,
+            DocumentPermission.user_id == current_user.id,
+        ).first()
+        if not perm:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
     return DocumentResponse.model_validate(doc)
 
 

@@ -42,9 +42,14 @@ def _cleanup_file(file_path: str | None) -> None:
     if not file_path:
         return
     try:
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-            logger.info("orphan_file_cleaned", filename=os.path.basename(file_path))
+        from app.services.storage_service import _validate_path_inside_upload_dir
+        real_path = _validate_path_inside_upload_dir(file_path)
+        os.remove(real_path)
+        logger.info("orphan_file_cleaned", filename=os.path.basename(real_path))
+    except ValueError:
+        logger.warning("cleanup_blocked_path_traversal", path=file_path)
+    except FileNotFoundError:
+        pass
     except Exception as err:
         logger.warning("orphan_file_cleanup_failed", error=str(err))
 

@@ -62,12 +62,12 @@ function LoginInner() {
                 <div className="bg-[#111113] border border-[#27272a] rounded-lg p-6">
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
-                            <label className="text-xs font-medium text-[#a1a1aa] mb-1.5 block">Email</label>
-                            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors" placeholder="you@example.com" required />
+                            <label htmlFor="login-email" className="text-xs font-medium text-[#a1a1aa] mb-1.5 block">Email</label>
+                            <input id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors" placeholder="you@example.com" required />
                         </div>
                         <div>
-                            <label className="text-xs font-medium text-[#a1a1aa] mb-1.5 block">Password</label>
-                            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors" placeholder="Enter your password" required />
+                            <label htmlFor="login-password" className="text-xs font-medium text-[#a1a1aa] mb-1.5 block">Password</label>
+                            <input id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors" placeholder="Enter your password" required />
                         </div>
                         <button type="submit" disabled={loading} className="w-full py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors disabled:opacity-50 cursor-pointer mt-2">
                             {loading ? "Signing in..." : "Sign in"}

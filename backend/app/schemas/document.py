@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Any
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class DocumentResponse(BaseModel):
@@ -47,8 +47,27 @@ class DocumentResponse(BaseModel):
         from_attributes = True
 
 
+class DocumentListItem(BaseModel):
+    """Slim document representation for list endpoints — excludes heavy text fields."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    filename: str
+    original_filename: str
+    file_type: str
+    file_size: int
+    category: str
+    confidence_score: float
+    status: str
+    ai_extraction_status: str | None = None
+    ai_provider: str | None = None
+    current_version: int = 1
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
 class DocumentListResponse(BaseModel):
-    documents: list[DocumentResponse]
+    documents: list[DocumentListItem]
     total: int
     page: int = 1
     per_page: int = 20

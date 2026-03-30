@@ -43,10 +43,10 @@ export default function RegisterPage() {
     };
 
     const fields = [
-        { name: "full_name", label: "Full name", type: "text", placeholder: "John Doe", required: false },
-        { name: "username", label: "Username", type: "text", placeholder: "johndoe", required: true },
-        { name: "email", label: "Email", type: "email", placeholder: "you@example.com", required: true },
-        { name: "password", label: "Password", type: "password", placeholder: "Min 6 characters", required: true },
+        { name: "full_name", label: "Full name", type: "text", placeholder: "John Doe", required: false, id: "register-full-name" },
+        { name: "username", label: "Username", type: "text", placeholder: "johndoe", required: true, id: "register-username" },
+        { name: "email", label: "Email", type: "email", placeholder: "you@example.com", required: true, id: "register-email" },
+        { name: "password", label: "Password", type: "password", placeholder: "Min 8 characters", required: true, id: "register-password" },
     ];
 
     return (
@@ -61,8 +61,8 @@ export default function RegisterPage() {
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {fields.map((f) => (
                             <div key={f.name}>
-                                <label className="text-xs font-medium text-[#a1a1aa] mb-1.5 block">{f.label}</label>
-                                <input type={f.type} name={f.name} value={form[f.name as keyof typeof form]} onChange={handleChange} className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors" placeholder={f.placeholder} required={f.required} />
+                                <label htmlFor={f.id} className="text-xs font-medium text-[#a1a1aa] mb-1.5 block">{f.label}</label>
+                                <input id={f.id} type={f.type} name={f.name} value={form[f.name as keyof typeof form]} onChange={handleChange} className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors" placeholder={f.placeholder} required={f.required} />
                             </div>
                         ))}
                         <button type="submit" disabled={loading} className="w-full py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors disabled:opacity-50 cursor-pointer mt-2">

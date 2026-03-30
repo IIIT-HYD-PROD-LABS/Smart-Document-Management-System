@@ -114,7 +114,7 @@ docker compose exec backend python -m app.ml.train --full-pipeline
 docker compose exec backend python -m app.ml.train --combined
 ```
 
-### 4. Local development (without Docker)
+### 5. Local development (without Docker)
 
 **Backend:**
 ```bash

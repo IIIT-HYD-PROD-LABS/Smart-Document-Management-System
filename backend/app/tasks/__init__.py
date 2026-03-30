@@ -11,14 +11,15 @@ celery_app = Celery(
 )
 
 # Handle rediss:// (TLS) connections for managed Redis (e.g. Render)
-if settings.CELERY_BROKER_URL.startswith("rediss://"):
-    import ssl
-    celery_app.conf.broker_use_ssl = {
-        "ssl_cert_reqs": ssl.CERT_NONE,
-    }
-    celery_app.conf.redis_backend_use_ssl = {
-        "ssl_cert_reqs": ssl.CERT_NONE,
-    }
+broker_url = settings.CELERY_BROKER_URL
+if broker_url.startswith("rediss://"):
+    import ssl as _ssl
+    _verify = settings.REDIS_SSL_VERIFY if hasattr(settings, 'REDIS_SSL_VERIFY') else True
+    _ssl_mode = _ssl.CERT_REQUIRED if _verify else _ssl.CERT_NONE
+    celery_app.conf.update(
+        broker_use_ssl={"ssl_cert_reqs": _ssl_mode},
+        redis_backend_use_ssl={"ssl_cert_reqs": _ssl_mode},
+    )
 
 celery_app.conf.update(
     task_serializer="json",
@@ -44,3 +45,11 @@ celery_app.conf.update(
         "app.tasks.document_tasks.process_document_task": {"rate_limit": "20/m"},
     },
 )
+
+from celery.signals import worker_process_init
+
+@worker_process_init.connect
+def dispose_db_pool(**kwargs):
+    """Dispose SQLAlchemy connection pool after fork to prevent connection sharing."""
+    from app.database import engine
+    engine.dispose()

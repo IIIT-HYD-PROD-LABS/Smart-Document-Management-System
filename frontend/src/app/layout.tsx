@@ -1,17 +1,27 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "@/context/AuthContext";
 import "./globals.css";
 
+const inter = Inter({
+    subsets: ["latin"],
+    display: "swap",
+    variable: "--font-inter",
+});
+
 export const metadata: Metadata = {
     title: "SmartDocs",
     description: "AI-powered document management with intelligent classification, OCR, and search",
+    icons: {
+        icon: "/favicon.svg",
+    },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="en">
-            <body>
+            <body className={inter.className}>
                 <AuthProvider>
                     {children}
                     <Toaster

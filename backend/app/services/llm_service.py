@@ -34,6 +34,9 @@ Rules:
 
 
 def _build_extraction_prompt(text: str, category: str) -> str:
+    # Validate category to prevent prompt injection via category string
+    if category not in CATEGORY_FIELDS:
+        category = "unknown"
     fields = CATEGORY_FIELDS.get(category, CATEGORY_FIELDS["unknown"])
     fields_str = ", ".join(fields)
     return f"""Extract the following fields from this {category} document: {fields_str}
@@ -60,13 +63,24 @@ def _parse_llm_response(raw: str | None) -> dict:
     text = raw.strip()
     if not text:
         raise ValueError("LLM returned whitespace-only response")
+    # Limit response size to prevent memory issues
+    if len(text) > 65536:
+        raise ValueError("LLM response too large (>64KB)")
     if text.startswith("```"):
         lines = text.split("\n")
         lines = [ln for ln in lines if not ln.strip().startswith("```")]
         text = "\n".join(lines).strip()
     if not text:
         raise ValueError("LLM response contained only code fences")
-    return json.loads(text)
+    result = json.loads(text)
+    # Basic schema validation
+    if not isinstance(result, dict):
+        raise ValueError("LLM response is not a JSON object")
+    if "fields" in result and not isinstance(result["fields"], dict):
+        raise ValueError("LLM response 'fields' is not a dict")
+    if "summary" in result and not isinstance(result["summary"], str):
+        raise ValueError("LLM response 'summary' is not a string")
+    return result
 
 
 class LLMProvider(ABC):
@@ -202,14 +216,26 @@ def _get_provider_chain() -> list[tuple[str, LLMProvider]]:
     chain: list[tuple[str, LLMProvider]] = []
 
     if provider == "ollama+gemini" or provider == "ollama":
-        chain.append(("ollama", OllamaProvider()))
+        try:
+            chain.append(("ollama", OllamaProvider()))
+        except Exception as e:
+            logger.warning("provider_init_failed", provider="ollama", error=str(e))
     if provider == "ollama+gemini" or provider == "gemini":
         if settings.GEMINI_API_KEY:
-            chain.append(("gemini", GeminiProvider()))
+            try:
+                chain.append(("gemini", GeminiProvider()))
+            except Exception as e:
+                logger.warning("provider_init_failed", provider="gemini", error=str(e))
     if provider == "anthropic" and settings.ANTHROPIC_API_KEY:
-        chain.append(("anthropic", AnthropicProvider()))
+        try:
+            chain.append(("anthropic", AnthropicProvider()))
+        except Exception as e:
+            logger.warning("provider_init_failed", provider="anthropic", error=str(e))
     if provider == "openai" and settings.OPENAI_API_KEY:
-        chain.append(("openai", OpenAIProvider()))
+        try:
+            chain.append(("openai", OpenAIProvider()))
+        except Exception as e:
+            logger.warning("provider_init_failed", provider="openai", error=str(e))
 
     # Always have local as final fallback
     chain.append(("local", LocalProvider()))

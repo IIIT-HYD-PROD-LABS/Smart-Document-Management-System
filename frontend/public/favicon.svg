@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#09090b"/>
+  <path d="M9 7h10l4 4v14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" fill="none" stroke="#10b981" stroke-width="1.5"/>
+  <polyline points="19,7 19,11 23,11" fill="none" stroke="#10b981" stroke-width="1.5"/>
+  <line x1="10" y1="16" x2="22" y2="16" stroke="#10b981" stroke-width="1.5" opacity="0.5"/>
+  <line x1="10" y1="20" x2="18" y2="20" stroke="#10b981" stroke-width="1.5" opacity="0.5"/>
+</svg>

@@ -23,7 +23,7 @@ class DocumentPermission(Base):
     permission = Column(String(20), nullable=False, default="view")  # "view" or "edit"
     granted_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
     )
 

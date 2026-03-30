@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The Smart Document Management System (SmartDocs) is an AI-powered document management platform that automatically classifies, extracts, and searches personal and business documents. The system has completed 6 of 8 phases: security hardening, document processing pipeline, ML classification (85.06% accuracy), full-text search, LLM smart extraction, multi-user RBAC with OAuth SSO, and a comprehensive end-to-end security audit with 21 fixes across 17 files.
+The Smart Document Management System (SmartDocs) is an AI-powered document management platform that automatically classifies, extracts, and searches personal and business documents. The system has completed 8 of 8 phases: security hardening, document processing pipeline, ML classification (85.06% accuracy), full-text search, LLM smart extraction, multi-user RBAC with OAuth SSO, UI & analytics, production readiness, and a comprehensive end-to-end security audit with 21 fixes across 17 files.
 
 ---
 
@@ -303,7 +303,7 @@ docker compose up --build
 | Frontend | http://localhost:3000 |
 | Backend API | http://localhost:8000 |
 | API Docs | http://localhost:8000/docs (debug only) |
-| PostgreSQL | localhost:5432 |
+| PostgreSQL | Supabase Cloud (via DATABASE_URL) |
 | Redis | localhost:6379 |
 
 **Trained model** is included in git — no retraining needed on first run.

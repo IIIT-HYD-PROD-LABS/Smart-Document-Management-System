@@ -30,7 +30,7 @@ class DocumentVersion(Base):
     highlighted_text = Column(JSON, nullable=True)  # user-highlighted text selections
 
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     change_reason = Column(String(500), nullable=True)
 
     document = relationship("Document", back_populates="versions")

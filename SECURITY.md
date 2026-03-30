@@ -38,7 +38,9 @@
 - Pydantic v2 schema validation on all request bodies
 - Email regex validation + lowercase normalization
 - Username restricted to `[a-zA-Z0-9_-]`
+- Passwords require minimum 8 characters with at least one uppercase letter, one lowercase letter, one digit, and one special character.
 - File upload: extension whitelist, size limit (50 MB)
+- Uploaded files are validated against magic byte signatures to prevent disguised file uploads.
 - SQL injection prevented by SQLAlchemy ORM parameterized queries
 - Path traversal prevented by `realpath` + prefix validation in storage service
 
@@ -47,6 +49,10 @@
 - Explicit origin allowlist (not wildcard)
 - Credentials enabled for cookie-based auth
 - Restricted headers: `Authorization`, `Content-Type` only
+
+### Audit Logging
+
+All state-changing operations (upload, download, delete, share, role changes, status changes) are logged to the audit_logs table with user ID, action, resource info, IP address, and timestamp.
 
 ## Recent Security Fixes (March 2026)
 
