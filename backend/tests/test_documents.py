@@ -256,8 +256,8 @@ class TestUploadValidation:
                 "/api/documents/upload",
                 files={"file": ("", file_data, "application/pdf")},
             )
-            # FastAPI treats empty filename as missing - expect 400
-            assert resp.status_code == 400
+            # FastAPI returns 422 for validation errors on empty filename
+            assert resp.status_code == 422
         finally:
             _cleanup_overrides(app)
 
