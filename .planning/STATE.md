@@ -1,137 +1,55 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: complete
-stopped_at: "All 8 phases complete. System is production-ready."
+milestone: v2.0
+milestone_name: Compliance Management System
+status: planning
 last_updated: "2026-03-30"
-last_activity: "2026-03-30 -- All 8 phases complete, production-ready"
+last_activity: "2026-03-30 -- v1.0 milestone completed and archived"
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 13
-  completed_plans: 13
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-17)
+See: .planning/PROJECT.md (updated 2026-03-30)
 
-**Core value:** Automated classification and intelligent organization of personal and business documents -- upload any document and the system automatically identifies its type, extracts key data, and makes it instantly searchable.
-**Current focus:** All 8 phases complete. System is production-ready.
+**Core value:** Automated classification and intelligent organization of personal and business documents with compliance management
+**Current focus:** Planning v2.0 Compliance Management System
 
 ## Current Position
 
-Phase: 8 of 8 -- ALL PHASES COMPLETE
-Plan: All plans complete
-Status: All 8 phases delivered. The Smart Document Management System is production-ready.
-Last activity: 2026-03-30 -- All 8 phases complete, production-ready
+Milestone: v2.0 Compliance Management System
+Phase: Not started
+Status: Planning -- run `/gsd:new-milestone` to define requirements and roadmap
 
-Progress: [████████████████████████████] 100%
+Progress: [                              ] 0%
 
-## Performance Metrics
+## Shipped Milestones
 
-**Velocity:**
-- Total plans completed: 13
-- Average duration: ~8min
-- Total execution time: ~112min
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 01-foundation-security-hardening | 4/4 | 41min | 10min |
-| 02-document-processing-pipeline | 4/4 | ~24min | ~6min |
-| 03-ml-classification-upgrade | 2/2 | 19min | ~10min |
-| 04-search-retrieval | 3/3 | ~28min | ~9min |
-
-**Recent Trend:**
-- Last 5 plans: 03-01 (13min), 03-02 (6min), 04-01 (15min), 04-02 (8min), 04-03 (5min)
-- Trend: Stable
-
-*Updated after each plan completion*
+- **v1.0** (2026-03-30): Smart Document Management System -- 8 phases, 42 requirements, 127 commits
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [Roadmap]: 8-phase structure derived from 42 requirements across 8 categories
-- [Roadmap]: Security hardening first (Phase 1) before any feature work
-- [Roadmap]: Celery async wiring grouped with document processing (Phase 2), not infrastructure
-- [01-01]: SECRET_KEY and DATABASE_URL have no defaults -- app crashes on startup if missing
-- [01-01]: SECRET_KEY validator rejects 4 known-insecure values and keys <32 chars
-- [01-01]: ACCESS_TOKEN_EXPIRE_MINUTES default reduced from 1440 to 30 minutes
-- [01-01]: CORS restricted to explicit origins from ALLOWED_ORIGINS env var
-- [01-01]: Rate limiter module created early for Wave 2 plans to import
-- [01-02]: Opaque refresh tokens (not JWT) for server-side revocability
-- [01-02]: Token rotation on every refresh; reuse detection revokes ALL user tokens
-- [01-02]: Queue pattern in frontend prevents concurrent refresh requests
-- [01-02]: sameSite: "Strict" on all auth cookies for CSRF protection
-- [01-03]: HSTS max-age 2 years with preload, only in production (DEBUG=False)
-- [01-03]: CSP unsafe-inline for style-src only; scripts remain strict 'self'
-- [01-03]: Middleware order: CORS > SecurityHeaders > RequestLogging > CorrelationId
-- [01-03]: Swagger/ReDoc disabled in production (docs_url=None when DEBUG=False)
-- [01-04]: Manual migration used when autogenerate fails (no live DB required)
-- [01-04]: alembic.ini sqlalchemy.url overridden by env.py using settings.DATABASE_URL
-- [02-01]: JSONB column for extracted_metadata (flexible schema over separate columns)
-- [02-01]: python-docx for DOCX text extraction from paragraphs + tables
-- [02-01]: Morphological open/close in OCR pipeline for noise removal
-- [02-01]: Multi-PSM retry (psm 6 -> psm 3) for sparse OCR results
-- [02-02]: Upload returns 202 Accepted with Celery task dispatch (non-blocking)
-- [02-02]: Celery progress stages: reading (10%) -> extracting (30%) -> metadata (60%) -> saving (80%)
-- [02-02]: Exponential backoff retry: 60s * 2^retries on task failure
-- [02-03]: Frontend polls /status every 2.5s after upload completes
-- [02-04]: dateutil.parse(fuzzy=True, dayfirst=True) for Indian date formats
-- [02-04]: Amount extraction validates 0.01-10M range to filter false positives
-- [03-01]: LinearSVC with CalibratedClassifierCV for probability-calibrated SVM classification
-- [03-01]: Manual C-value search over nested GridSearchCV for small-class CV stability
-- [03-01]: TF-IDF (1,3) ngrams with 15K features and class_weight='balanced' on LR
-- [03-01]: Synthetic augmentation factor=10 in combined mode to boost underrepresented categories
-- [03-02]: ConfidenceBadge duplicated per-page (not shared component) to minimize file additions
-- [03-02]: ML router at /api/ml prefix, separate from /api/documents
-- [03-02]: Confusion matrix uses intensity-based red shading for off-diagonal errors
-- [Phase 04-search-retrieval]: Stored TSVECTOR column + trigger over functional index to avoid Alembic autogenerate false-diff bug (issue #1390)
-- [Phase 04-search-retrieval]: GIN index for search_vector created via op.execute() only (not SQLAlchemy Index in __table_args__) to prevent Alembic false diffs
-- [Phase 04-search-retrieval]: FTS with q > 3 char threshold: ILIKE fallback for 1-3 char queries; trigram handles typo tolerance in 04-03
-- [Phase 04-search-retrieval]: NULL guard on extracted_metadata: isnot(None) before astext.cast(Float) prevents 500 on docs without amount metadata
-- [Phase 04-search-retrieval]: OR-combine (not trigram-only): FTS handles exact/stemmed matches; trigram adds typo tolerance as supplemental path via or_(search_vector @@, extracted_text %)
-- [Phase 04-search-retrieval]: pg_trgm threshold 0.3 preserved globally; threshold change from >3 to >2 chars corrects ILIKE fallback boundary so 3-char tokens (UPI, GST) get trigram path
-- [Phase 06-auth-login-fixes]: Rate limiter Redis fallback to memory:// when Redis unavailable
-- [Phase 06-auth-login-fixes]: Supabase pooler port 6543 (not 5432) for connection pooling
-- [Phase 06-auth-login-fixes]: Cookie expiry alignment across all auth paths for consistent session handling
+See .planning/milestones/v1.0-ROADMAP.md for v1.0 decisions.
 
 ### Pending Todos
 
 None.
 
-### Dataset Pipeline (Phase 3 Groundwork)
-
-- 7 Kaggle datasets downloaded (~28 GB raw data) inside Docker container
-- Dataset download script: `python -m app.ml.datasets.download`
-- Data preparation pipeline: `python -m app.ml.datasets.prepare`
-- Training supports 4 modes: auto, synthetic, real, combined
-- Combined training: 85.06% accuracy (Linear SVC, 15K vocab, 2,050 samples)
-- Per-category: UPI 100%, tickets 100%, tax 95%, bank 79%, bills 72%, invoices 67%
-- Achieved >85% target via LinearSVC + augmentation_factor=10 + TF-IDF (1,3) ngrams
-
 ### Blockers/Concerns
 
-- Research flagged LLM hallucination risk (69-88%) for Phase 5 -- will need validation with real documents
-- ~~Hardcoded SECRET_KEY is a critical security issue to resolve immediately in Phase 1~~ RESOLVED in 01-01
-- ~~Rate limiter requires Redis to be running; without Redis, rate limits won't persist across restarts~~ RESOLVED: in-memory fallback added (Phase 6)
-- ~~No Alembic migrations yet; table creation relies on SQLAlchemy auto-create~~ RESOLVED in 01-04
-- New models in future phases must be imported in backend/alembic/env.py for autogenerate to work
-- Metadata extraction is regex-based v1 -- Phase 5 LLM will improve accuracy significantly
-- ~~ML classifier trained on synthetic data only~~ RESOLVED: real dataset pipeline operational
+None.
 
 ## Session Continuity
 
-Last session: 2026-03-23
-Stopped at: Auth & login fixes complete. All auth flows verified working end-to-end.
+Last session: 2026-03-30
+Stopped at: v1.0 milestone completed. Ready for v2.0 planning.
 Resume file: None
