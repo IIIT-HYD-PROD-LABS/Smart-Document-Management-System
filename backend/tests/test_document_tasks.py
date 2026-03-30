@@ -2,6 +2,10 @@
 
 All tests call the task function directly with mocked dependencies --
 no Celery broker, database, or filesystem required.
+
+For bound Celery tasks (bind=True), `task.run(document_id)` calls the
+original function with `self=task_instance`. We patch the task object's
+attributes (update_state, request, max_retries) directly.
 """
 
 from unittest.mock import MagicMock, patch
@@ -9,21 +13,26 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.models.document import DocumentStatus, DocumentCategory
+from app.tasks.document_tasks import process_document_task
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_mock_self(retries: int = 0, max_retries: int = 3):
-    """Build a mock ``self`` that mimics a bound Celery task instance."""
-    mock_self = MagicMock()
-    mock_self.request.retries = retries
-    mock_self.max_retries = max_retries
-    mock_self.update_state = MagicMock()
-    mock_self.retry = MagicMock(side_effect=Exception("retry called"))
-    mock_self.MaxRetriesExceededError = Exception
-    return mock_self
+def _patch_task_self(retries: int = 0, max_retries: int = 3):
+    """Patch the task object's attributes to mimic bound-task `self`.
+
+    For bound Celery tasks, `.run(arg)` passes the task instance as self.
+    We mock properties on the actual task object rather than passing a
+    separate mock_self.
+    """
+    process_document_task.update_state = MagicMock()
+    process_document_task.request = MagicMock()
+    process_document_task.request.retries = retries
+    process_document_task.max_retries = max_retries
+    process_document_task.retry = MagicMock(side_effect=Exception("retry called"))
+    process_document_task.MaxRetriesExceededError = Exception
 
 
 def _make_mock_document(**overrides):
@@ -66,20 +75,14 @@ class TestInvalidDocumentId:
 
     @pytest.mark.parametrize("bad_id", [0, -1, -999])
     def test_non_positive_integer(self, bad_id):
-        from app.tasks.document_tasks import process_document_task
-
-        mock_self = _make_mock_self()
-        result = process_document_task.run(mock_self, bad_id)
-
+        _patch_task_self()
+        result = process_document_task.run(bad_id)
         assert result == {"error": "Invalid document_id"}
 
     @pytest.mark.parametrize("bad_id", ["abc", None, 3.14, []])
     def test_non_integer_type(self, bad_id):
-        from app.tasks.document_tasks import process_document_task
-
-        mock_self = _make_mock_self()
-        result = process_document_task.run(mock_self, bad_id)
-
+        _patch_task_self()
+        result = process_document_task.run(bad_id)
         assert result == {"error": "Invalid document_id"}
 
 
@@ -91,13 +94,12 @@ class TestDocumentNotFound:
 
     @patch(f"{_TASK}.SessionLocal")
     def test_returns_error_when_missing(self, mock_session_cls):
-        from app.tasks.document_tasks import process_document_task
 
         mock_db = _make_mock_db(doc=None)
         mock_session_cls.return_value = mock_db
 
-        mock_self = _make_mock_self()
-        result = process_document_task.run(mock_self, 999)
+        _patch_task_self()
+        result = process_document_task.run(999)
 
         assert result == {"error": "Document not found"}
         mock_db.close.assert_called_once()
@@ -113,14 +115,13 @@ class TestFileNotFound:
     @patch(f"{_STORAGE}._validate_path_inside_upload_dir", return_value="/uploads/test.pdf")
     @patch(f"{_TASK}.os.path.exists", return_value=False)
     def test_marks_document_failed(self, _mock_exists, _mock_validate, mock_session_cls):
-        from app.tasks.document_tasks import process_document_task
 
         doc = _make_mock_document()
         mock_db = _make_mock_db(doc)
         mock_session_cls.return_value = mock_db
 
-        mock_self = _make_mock_self()
-        result = process_document_task.run(mock_self, 1)
+        _patch_task_self()
+        result = process_document_task.run(1)
 
         assert result == {"error": "File not found"}
         assert doc.status == DocumentStatus.FAILED
@@ -129,14 +130,13 @@ class TestFileNotFound:
 
     @patch(f"{_TASK}.SessionLocal")
     def test_no_file_path_marks_failed(self, mock_session_cls):
-        from app.tasks.document_tasks import process_document_task
 
         doc = _make_mock_document(file_path=None)
         mock_db = _make_mock_db(doc)
         mock_session_cls.return_value = mock_db
 
-        mock_self = _make_mock_self()
-        result = process_document_task.run(mock_self, 1)
+        _patch_task_self()
+        result = process_document_task.run(1)
 
         assert result == {"error": "File not found"}
         assert doc.status == DocumentStatus.FAILED
@@ -161,7 +161,6 @@ class TestSuccessfulProcessing:
         mock_settings, _mock_getsize, _mock_exists,
         _mock_validate, mock_session_cls,
     ):
-        from app.tasks.document_tasks import process_document_task
 
         mock_settings.MAX_FILE_SIZE_MB = 50
 
@@ -170,8 +169,8 @@ class TestSuccessfulProcessing:
         mock_session_cls.return_value = mock_db
 
         with patch("builtins.open", MagicMock()):
-            mock_self = _make_mock_self()
-            result = process_document_task.run(mock_self, 1)
+            _patch_task_self()
+            result = process_document_task.run(1)
 
         assert result["status"] == "completed"
         assert result["document_id"] == 1
@@ -200,7 +199,6 @@ class TestSuccessfulProcessing:
         self, _mock_metadata, _mock_classify, mock_settings,
         _mock_getsize, _mock_exists, _mock_validate, mock_session_cls,
     ):
-        from app.tasks.document_tasks import process_document_task
 
         mock_settings.MAX_FILE_SIZE_MB = 50
 
@@ -209,8 +207,8 @@ class TestSuccessfulProcessing:
         mock_session_cls.return_value = mock_db
 
         with patch("builtins.open", MagicMock()):
-            mock_self = _make_mock_self()
-            result = process_document_task.run(mock_self, 1)
+            _patch_task_self()
+            result = process_document_task.run(1)
 
         assert doc.category == DocumentCategory.UNKNOWN
         assert result["status"] == "completed"
@@ -241,7 +239,6 @@ class TestAIExtractionSuccess:
         mock_settings, _mock_getsize, _mock_exists,
         _mock_validate, mock_session_cls,
     ):
-        from app.tasks.document_tasks import process_document_task
 
         mock_settings.MAX_FILE_SIZE_MB = 50
 
@@ -250,8 +247,8 @@ class TestAIExtractionSuccess:
         mock_session_cls.return_value = mock_db
 
         with patch("builtins.open", MagicMock()):
-            mock_self = _make_mock_self()
-            result = process_document_task.run(mock_self, 1)
+            _patch_task_self()
+            result = process_document_task.run(1)
 
         assert doc.ai_summary == "Tax document summary"
         assert doc.ai_extracted_fields == {"tax_year": "2024", "amount_due": "5000"}
@@ -282,7 +279,6 @@ class TestAIExtractionFailure:
         mock_settings, _mock_getsize, _mock_exists,
         _mock_validate, mock_session_cls,
     ):
-        from app.tasks.document_tasks import process_document_task
 
         mock_settings.MAX_FILE_SIZE_MB = 50
 
@@ -291,8 +287,8 @@ class TestAIExtractionFailure:
         mock_session_cls.return_value = mock_db
 
         with patch("builtins.open", MagicMock()):
-            mock_self = _make_mock_self()
-            result = process_document_task.run(mock_self, 1)
+            _patch_task_self()
+            result = process_document_task.run(1)
 
         # AI fields should reflect the failure gracefully.
         assert doc.ai_extraction_status == "skipped"
@@ -317,7 +313,6 @@ class TestAIExtractionFailure:
         _mock_getsize, _mock_exists, _mock_validate, mock_session_cls,
     ):
         """AI extraction is skipped when extracted_text has <= 20 chars."""
-        from app.tasks.document_tasks import process_document_task
 
         mock_settings.MAX_FILE_SIZE_MB = 50
 
@@ -326,8 +321,8 @@ class TestAIExtractionFailure:
         mock_session_cls.return_value = mock_db
 
         with patch("builtins.open", MagicMock()):
-            mock_self = _make_mock_self()
-            process_document_task.run(mock_self, 1)
+            _patch_task_self()
+            process_document_task.run(1)
 
         assert doc.ai_extraction_status == "skipped"
         assert doc.status == DocumentStatus.COMPLETED
@@ -343,14 +338,13 @@ class TestPathTraversalBlocked:
     @patch(f"{_STORAGE}._validate_path_inside_upload_dir",
            side_effect=ValueError("Path traversal detected"))
     def test_path_traversal_marks_failed(self, _mock_validate, mock_session_cls):
-        from app.tasks.document_tasks import process_document_task
 
         doc = _make_mock_document(file_path="/uploads/../../etc/passwd")
         mock_db = _make_mock_db(doc)
         mock_session_cls.return_value = mock_db
 
-        mock_self = _make_mock_self()
-        result = process_document_task.run(mock_self, 1)
+        _patch_task_self()
+        result = process_document_task.run(1)
 
         assert result == {"error": "Invalid file path"}
         assert doc.status == DocumentStatus.FAILED
@@ -377,7 +371,6 @@ class TestProgressReporting:
         self, _mock_metadata, _mock_classify, mock_settings,
         _mock_getsize, _mock_exists, _mock_validate, mock_session_cls,
     ):
-        from app.tasks.document_tasks import process_document_task
 
         mock_settings.MAX_FILE_SIZE_MB = 50
 
@@ -386,12 +379,12 @@ class TestProgressReporting:
         mock_session_cls.return_value = mock_db
 
         with patch("builtins.open", MagicMock()):
-            mock_self = _make_mock_self()
-            process_document_task.run(mock_self, 1)
+            _patch_task_self()
+            process_document_task.run(1)
 
         # Collect every stage name reported to update_state.
         actual_stages = []
-        for call in mock_self.update_state.call_args_list:
+        for call in process_document_task.update_state.call_args_list:
             meta = call.kwargs.get("meta")
             if meta and "stage" in meta:
                 actual_stages.append(meta["stage"])
