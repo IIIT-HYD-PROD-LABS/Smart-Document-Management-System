@@ -1,7 +1,7 @@
 """Tests for the LLM service (llm_service.py)."""
 
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -99,8 +99,9 @@ class TestBuildExtractionPrompt:
     def test_text_is_truncated_to_4000_chars(self):
         long_text = "A" * 8000
         prompt = _build_extraction_prompt(long_text, "bills")
-        # The prompt should contain at most 4000 A's from the truncation
-        assert prompt.count("A") == 4000
+        # The document text section between --- delimiters should be truncated to 4000 chars
+        text_section = prompt.split("---\n")[1].split("\n---")[0]
+        assert len(text_section) == 4000
 
     def test_prompt_contains_json_structure_hint(self):
         prompt = _build_extraction_prompt("text", "bills")

@@ -6,7 +6,7 @@ patched out so no Redis connection is needed.
 """
 
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, PropertyMock, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException, status

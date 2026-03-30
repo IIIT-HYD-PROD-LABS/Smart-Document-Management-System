@@ -90,6 +90,7 @@ def client():
     """Yield a (TestClient, mock_db) tuple with proper cleanup."""
     from app.main import app
     from app.database import get_db
+    from app.utils.rate_limiter import limiter
 
     mock_db = MagicMock()
 
@@ -97,8 +98,10 @@ def client():
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
+    limiter.enabled = False
     test_client = TestClient(app)
     yield test_client, mock_db
+    limiter.enabled = True
     app.dependency_overrides.pop(get_db, None)
 
 
@@ -749,7 +752,6 @@ class TestInputValidation:
         # let it fail on duplicate check -- we just inspect the call.
         existing = _make_mock_user(email="alice@example.com")
 
-        call_count = 0
         captured_filter_args = []
 
         class _CapturingQueryChain:

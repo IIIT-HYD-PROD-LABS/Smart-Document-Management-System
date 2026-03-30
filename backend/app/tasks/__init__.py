@@ -1,6 +1,7 @@
 """Celery application configuration."""
 
 from celery import Celery
+from celery.signals import worker_process_init
 from app.config import settings
 
 celery_app = Celery(
@@ -45,8 +46,6 @@ celery_app.conf.update(
         "app.tasks.document_tasks.process_document_task": {"rate_limit": "20/m"},
     },
 )
-
-from celery.signals import worker_process_init
 
 @worker_process_init.connect
 def dispose_db_pool(**kwargs):
