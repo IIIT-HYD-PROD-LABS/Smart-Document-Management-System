@@ -116,7 +116,7 @@ function LoginInner() {
                     )}
                 </div>
                 <p className="text-center text-xs text-[#52525b] mt-5">
-                    No account?{" "}<Link href="/register" className="text-[#a1a1aa] hover:text-white transition-colors">Create one</Link>
+                    No account?{" "}<Link href="/" className="text-[#a1a1aa] hover:text-white transition-colors">Request early access</Link>
                 </p>
             </div>
         </div>

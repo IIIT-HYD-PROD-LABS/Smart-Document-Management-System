@@ -233,6 +233,31 @@ export const adminApi = {
 
     getStats: () =>
         api.get("/admin/stats"),
+
+    // Early Access management
+    getEarlyAccess: (page = 1, perPage = 20, statusFilter?: string, search?: string) => {
+        const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+        if (statusFilter) params.append("status_filter", statusFilter);
+        if (search) params.append("search", search);
+        return api.get(`/admin/early-access?${params.toString()}`);
+    },
+
+    reviewEarlyAccess: (id: number, status: string, adminNote?: string) =>
+        api.patch(`/admin/early-access/${id}`, { status, admin_note: adminNote }),
+
+    getEarlyAccessStats: () =>
+        api.get("/admin/early-access/stats"),
+};
+
+// ──── Early Access API (public, no auth) ────
+const API_URL_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+export const earlyAccessApi = {
+    submit: (data: { full_name: string; email: string; company?: string; reason?: string }) =>
+        axios.post(`${API_URL_BASE}/api/early-access`, data),
+
+    validateInvite: (token: string) =>
+        axios.get(`${API_URL_BASE}/api/early-access/validate-invite`, { params: { token } }),
 };
 
 // ──── Sharing API ────

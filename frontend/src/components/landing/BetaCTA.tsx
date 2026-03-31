@@ -1,12 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { FiArrowRight } from "react-icons/fi";
 import AnimatedSection from "./AnimatedSection";
 
-export default function BetaCTA() {
-    const router = useRouter();
-
+export default function BetaCTA({ onRequestAccess }: { onRequestAccess: () => void }) {
     return (
         <section className="pb-24 px-6">
             <div className="max-w-2xl mx-auto text-center">
@@ -27,7 +24,7 @@ export default function BetaCTA() {
 
                 <AnimatedSection delay={0.2}>
                     <button
-                        onClick={() => router.push("/register")}
+                        onClick={onRequestAccess}
                         className="px-8 py-3 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors flex items-center gap-2 mx-auto cursor-pointer"
                     >
                         Join Early Access <FiArrowRight className="w-3.5 h-3.5" />

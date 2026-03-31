@@ -1,23 +1,55 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { oauthApi, extractErrorMessage } from "@/lib/api";
+import { oauthApi, earlyAccessApi, extractErrorMessage } from "@/lib/api";
+import { LoadingSpinner } from "@/components";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import { FiShield } from "react-icons/fi";
 
-export default function RegisterPage() {
+function RegisterInner() {
     const [form, setForm] = useState({ email: "", username: "", password: "", full_name: "" });
     const [loading, setLoading] = useState(false);
     const [providers, setProviders] = useState<string[]>([]);
     const { register, user, isLoading } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
+
+    // Invite token from URL
+    const inviteToken = searchParams.get("token");
+    const [tokenValid, setTokenValid] = useState<boolean | null>(null);
+    const [tokenError, setTokenError] = useState<string | null>(null);
 
     // Redirect already logged-in users to dashboard
     useEffect(() => {
         if (!isLoading && user) router.replace("/dashboard");
     }, [user, isLoading, router]);
+
+    // Validate invite token on mount
+    useEffect(() => {
+        if (!inviteToken) {
+            setTokenValid(false);
+            return;
+        }
+
+        earlyAccessApi
+            .validateInvite(inviteToken)
+            .then((res) => {
+                setTokenValid(true);
+                // Pre-fill form from invite data
+                setForm((prev) => ({
+                    ...prev,
+                    email: res.data.email || prev.email,
+                    full_name: res.data.full_name || prev.full_name,
+                }));
+            })
+            .catch((err) => {
+                setTokenValid(false);
+                setTokenError(extractErrorMessage(err, "Invalid or expired invitation link."));
+            });
+    }, [inviteToken]);
 
     useEffect(() => {
         oauthApi.getProviders().then((res) => setProviders(res.data.providers)).catch(() => {});
@@ -43,12 +75,62 @@ export default function RegisterPage() {
     };
 
     const fields = [
-        { name: "full_name", label: "Full name", type: "text", placeholder: "John Doe", required: false, id: "register-full-name" },
-        { name: "username", label: "Username", type: "text", placeholder: "johndoe", required: true, id: "register-username" },
-        { name: "email", label: "Email", type: "email", placeholder: "you@example.com", required: true, id: "register-email" },
-        { name: "password", label: "Password", type: "password", placeholder: "Min 8 characters", required: true, id: "register-password" },
+        { name: "full_name", label: "Full name", type: "text", placeholder: "John Doe", required: false, id: "register-full-name", readOnly: false },
+        { name: "username", label: "Username", type: "text", placeholder: "johndoe", required: true, id: "register-username", readOnly: false },
+        { name: "email", label: "Email", type: "email", placeholder: "you@example.com", required: true, id: "register-email", readOnly: tokenValid === true },
+        { name: "password", label: "Password", type: "password", placeholder: "Min 8 characters", required: true, id: "register-password", readOnly: false },
     ];
 
+    // Still validating token
+    if (inviteToken && tokenValid === null) {
+        return (
+            <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+                <LoadingSpinner />
+            </div>
+        );
+    }
+
+    // No token or invalid token — show gated message
+    if (!tokenValid) {
+        return (
+            <div className="min-h-screen bg-[#09090b] flex items-center justify-center px-6">
+                <div className="w-full max-w-sm text-center">
+                    <div className="text-center mb-8">
+                        <Link href="/" className="text-sm font-semibold text-white tracking-tight">TaxSync</Link>
+                    </div>
+                    <div className="bg-[#111113] border border-[#27272a] rounded-lg p-8">
+                        <div className="w-12 h-12 rounded-full bg-[#27272a] flex items-center justify-center mx-auto mb-5">
+                            <FiShield className="w-5 h-5 text-[#71717a]" />
+                        </div>
+                        <h1 className="text-lg font-semibold text-white mb-2">Early Access Only</h1>
+                        {tokenError ? (
+                            <p className="text-sm text-[#ef4444] mb-4">{tokenError}</p>
+                        ) : (
+                            <p className="text-sm text-[#71717a] mb-4 leading-relaxed">
+                                Registration is currently invite-only. Request early access from our homepage and we&apos;ll send you an invitation link once approved.
+                            </p>
+                        )}
+                        <div className="flex flex-col gap-2">
+                            <Link
+                                href="/"
+                                className="w-full py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors text-center"
+                            >
+                                Request Early Access
+                            </Link>
+                            <Link
+                                href="/login"
+                                className="w-full py-2 text-sm font-medium text-[#a1a1aa] hover:text-white transition-colors text-center"
+                            >
+                                Already have an account? Sign in
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Valid token — show registration form
     return (
         <div className="min-h-screen bg-[#09090b] flex items-center justify-center px-6">
             <div className="w-full max-w-sm">
@@ -57,12 +139,27 @@ export default function RegisterPage() {
                     <h1 className="text-xl font-semibold text-white mt-6">Create account</h1>
                     <p className="text-sm text-[#71717a] mt-1">AI-powered tax compliance intelligence</p>
                 </div>
+
+                <div className="bg-[#10b981]/5 border border-[#10b981]/20 rounded-md px-3 py-2 mb-4">
+                    <p className="text-xs text-[#10b981]">Your invitation has been verified. Complete the form below to create your account.</p>
+                </div>
+
                 <div className="bg-[#111113] border border-[#27272a] rounded-lg p-6">
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {fields.map((f) => (
                             <div key={f.name}>
                                 <label htmlFor={f.id} className="text-xs font-medium text-[#a1a1aa] mb-1.5 block">{f.label}</label>
-                                <input id={f.id} type={f.type} name={f.name} value={form[f.name as keyof typeof form]} onChange={handleChange} className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors" placeholder={f.placeholder} required={f.required} />
+                                <input
+                                    id={f.id}
+                                    type={f.type}
+                                    name={f.name}
+                                    value={form[f.name as keyof typeof form]}
+                                    onChange={handleChange}
+                                    className={`w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors ${f.readOnly ? "opacity-60 cursor-not-allowed" : ""}`}
+                                    placeholder={f.placeholder}
+                                    required={f.required}
+                                    readOnly={f.readOnly}
+                                />
                             </div>
                         ))}
                         <button type="submit" disabled={loading} className="w-full py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors disabled:opacity-50 cursor-pointer mt-2">
@@ -116,5 +213,19 @@ export default function RegisterPage() {
                 </p>
             </div>
         </div>
+    );
+}
+
+export default function RegisterPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+                    <LoadingSpinner />
+                </div>
+            }
+        >
+            <RegisterInner />
+        </Suspense>
     );
 }

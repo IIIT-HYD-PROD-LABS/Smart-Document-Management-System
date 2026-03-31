@@ -5,3 +5,4 @@ export { default as ProcessFlow } from "./ProcessFlow";
 export { default as DemoWorkspace } from "./DemoWorkspace";
 export { default as BetaCTA } from "./BetaCTA";
 export { default as Footer } from "./Footer";
+export { default as EarlyAccessModal } from "./EarlyAccessModal";

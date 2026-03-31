@@ -1,17 +1,20 @@
-"""Admin API routes - User management and system stats."""
+"""Admin API routes - User management, system stats, and early access management."""
 
 from datetime import date, datetime, timedelta, timezone
 
+import jwt
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path as PathParam, Query, Request, Response, status
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models.user import User
 from app.models.document import Document
 from app.models.audit_log import AuditLog
+from app.models.early_access import EarlyAccessRequest
 from app.schemas.admin import (
     AdminUserResponse,
     AdminUserListResponse,
@@ -20,7 +23,9 @@ from app.schemas.admin import (
     AdminStatsResponse,
 )
 from app.schemas.audit import AuditLogListResponse, AuditLogResponse
+from app.schemas.early_access import EarlyAccessResponse, EarlyAccessListResponse, EarlyAccessReviewRequest
 from app.utils.security import require_admin
+from app.utils.email import send_approval_email, send_rejection_email
 from app.services.audit_service import log_audit_event
 from app.utils.rate_limiter import limiter
 
@@ -334,3 +339,147 @@ def list_audit_logs(
         page=page,
         per_page=per_page,
     )
+
+
+# ──── Early Access Management ────
+
+
+@router.get("/early-access", response_model=EarlyAccessListResponse)
+@limiter.limit("30/minute")
+def list_early_access(
+    request: Request,
+    response: Response,
+    status_filter: str | None = Query(None, alias="status_filter", pattern=r"^(pending|approved|rejected)$"),
+    search: str | None = Query(None, max_length=200),
+    page: int = Query(1, ge=1, le=10000),
+    per_page: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """List early access requests (admin only)."""
+    query = db.query(EarlyAccessRequest)
+
+    if status_filter:
+        query = query.filter(EarlyAccessRequest.status == status_filter)
+
+    if search:
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        search_term = f"%{escaped}%"
+        query = query.filter(
+            (EarlyAccessRequest.email.ilike(search_term))
+            | (EarlyAccessRequest.full_name.ilike(search_term))
+            | (EarlyAccessRequest.company.ilike(search_term))
+        )
+
+    total = query.count()
+    items = (
+        query
+        .order_by(EarlyAccessRequest.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    return EarlyAccessListResponse(
+        items=[EarlyAccessResponse.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
+
+
+@router.get("/early-access/stats")
+@limiter.limit("30/minute")
+def get_early_access_stats(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Get early access request counts by status (admin only)."""
+    rows = (
+        db.query(EarlyAccessRequest.status, func.count(EarlyAccessRequest.id))
+        .group_by(EarlyAccessRequest.status)
+        .all()
+    )
+    counts = {s: c for s, c in rows}
+    return {
+        "pending": counts.get("pending", 0),
+        "approved": counts.get("approved", 0),
+        "rejected": counts.get("rejected", 0),
+        "total": sum(counts.values()),
+    }
+
+
+@router.patch("/early-access/{request_id}")
+@limiter.limit("10/minute")
+def review_early_access(
+    request: Request,
+    response: Response,
+    payload: EarlyAccessReviewRequest,
+    background_tasks: BackgroundTasks,
+    request_id: int = PathParam(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Approve or reject an early access request (admin only)."""
+    ea_request = db.query(EarlyAccessRequest).filter(EarlyAccessRequest.id == request_id).first()
+    if not ea_request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Early access request not found")
+
+    if ea_request.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Request has already been {ea_request.status}",
+        )
+
+    ea_request.status = payload.status
+    ea_request.admin_note = payload.admin_note
+    ea_request.reviewed_at = datetime.now(timezone.utc)
+    ea_request.reviewed_by = current_user.id
+
+    invitation_token = None
+    if payload.status == "approved":
+        invitation_token = jwt.encode(
+            {
+                "type": "invitation",
+                "email": ea_request.email,
+                "ea_id": ea_request.id,
+                "exp": datetime.now(timezone.utc) + timedelta(days=7),
+            },
+            settings.SECRET_KEY,
+            algorithm=settings.ALGORITHM,
+        )
+        ea_request.invitation_token = invitation_token
+
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to update request",
+        )
+
+    logger.info("early_access_reviewed", request_id=request_id, status=payload.status, admin=current_user.id)
+
+    if payload.status == "approved" and invitation_token:
+        background_tasks.add_task(send_approval_email, ea_request.email, ea_request.full_name, invitation_token)
+    elif payload.status == "rejected":
+        background_tasks.add_task(send_rejection_email, ea_request.email, ea_request.full_name, payload.admin_note)
+
+    background_tasks.add_task(
+        log_audit_event,
+        user_id=current_user.id,
+        action=f"early_access_{payload.status}",
+        resource_type="early_access",
+        resource_id=request_id,
+        details={"email": ea_request.email, "admin_note": payload.admin_note},
+        ip_address=request.client.host if request.client else None,
+    )
+
+    return {
+        "detail": f"Early access request {payload.status}",
+        "request_id": request_id,
+        "email": ea_request.email,
+    }
