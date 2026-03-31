@@ -3,7 +3,11 @@
 import { FiArrowRight } from "react-icons/fi";
 import AnimatedSection from "./AnimatedSection";
 
-export default function BetaCTA({ onRequestAccess }: { onRequestAccess: () => void }) {
+interface BetaCTAProps {
+    onRequestAccess: () => void;
+}
+
+export default function BetaCTA({ onRequestAccess }: BetaCTAProps) {
     return (
         <section className="pb-24 px-6">
             <div className="max-w-2xl mx-auto text-center">
@@ -15,10 +19,10 @@ export default function BetaCTA({ onRequestAccess }: { onRequestAccess: () => vo
 
                 <AnimatedSection delay={0.1}>
                     <h2 className="text-2xl md:text-3xl font-semibold text-white tracking-tight mb-4">
-                        Be the first to never miss a deadline
+                        Be the first to automate your document workflow
                     </h2>
                     <p className="text-sm text-[#71717a] mb-8 max-w-sm mx-auto">
-                        Join compliance teams already using TaxSync to automate notice tracking across GST, IT, MCA, RBI & SEBI.
+                        AI-powered document classification and compliance tracking, built for teams managing GST, IT, MCA, RBI and SEBI filings.
                     </p>
                 </AnimatedSection>
 

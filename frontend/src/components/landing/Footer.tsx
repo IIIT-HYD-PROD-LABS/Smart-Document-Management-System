@@ -12,7 +12,7 @@ export default function Footer() {
                     <div className="col-span-2 md:col-span-1">
                         <span className="text-sm font-semibold text-white tracking-tight">TaxSync</span>
                         <p className="text-xs text-[#52525b] mt-2 leading-relaxed">
-                            AI-powered tax compliance intelligence for Indian businesses.
+                            AI-powered document intelligence and compliance automation for Indian businesses.
                         </p>
                     </div>
                     {Object.entries(footerLinks).map(([category, links]) => (
