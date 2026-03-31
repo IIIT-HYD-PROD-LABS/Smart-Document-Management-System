@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    output: "standalone",
+    output: process.env.VERCEL ? undefined : "standalone",
     poweredByHeader: false,
     webpack: (config) => {
         // react-pdf requires canvas to be aliased to false for SSR

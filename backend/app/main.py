@@ -16,7 +16,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
-from app.routers import auth, documents, ml, admin
+from app.routers import auth, documents, ml, admin, early_access
 from app.utils.logging import setup_logging
 from app.utils.rate_limiter import limiter
 
@@ -76,6 +76,7 @@ app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(ml.router)
 app.include_router(admin.router)
+app.include_router(early_access.router)
 
 
 _logger = structlog.stdlib.get_logger()

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { FiMenu, FiX } from "react-icons/fi";
 
 const links = [
@@ -10,8 +9,7 @@ const links = [
     { label: "Demo", href: "#demo" },
 ];
 
-export default function Navbar() {
-    const router = useRouter();
+export default function Navbar({ onRequestAccess }: { onRequestAccess: () => void }) {
     const [open, setOpen] = useState(false);
 
     return (
@@ -27,9 +25,10 @@ export default function Navbar() {
                     ))}
                 </div>
 
-                <div className="hidden md:flex items-center gap-2">
-                    <button onClick={() => router.push("/login")} className="px-3 py-1.5 text-sm text-[#a1a1aa] hover:text-white transition-colors cursor-pointer">Sign in</button>
-                    <button onClick={() => router.push("/register")} className="px-4 py-1.5 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors cursor-pointer">Get started</button>
+                <div className="hidden md:flex items-center">
+                    <button onClick={onRequestAccess} className="px-4 py-1.5 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors cursor-pointer">
+                        Request Access
+                    </button>
                 </div>
 
                 <button onClick={() => setOpen(!open)} className="md:hidden text-[#a1a1aa] hover:text-white cursor-pointer" aria-label="Toggle menu">
@@ -45,9 +44,10 @@ export default function Navbar() {
                                 {l.label}
                             </a>
                         ))}
-                        <div className="flex flex-col gap-2 pt-3 border-t border-[#27272a]">
-                            <button onClick={() => router.push("/login")} className="px-3 py-2 text-sm text-[#a1a1aa] hover:text-white transition-colors cursor-pointer text-left">Sign in</button>
-                            <button onClick={() => router.push("/register")} className="px-4 py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors cursor-pointer">Get started</button>
+                        <div className="pt-3 border-t border-[#27272a]">
+                            <button onClick={() => { onRequestAccess(); setOpen(false); }} className="w-full px-4 py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors cursor-pointer">
+                                Request Access
+                            </button>
                         </div>
                     </div>
                 </div>

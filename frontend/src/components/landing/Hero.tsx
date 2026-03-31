@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { FiArrowRight, FiLock, FiActivity, FiShield } from "react-icons/fi";
 import AnimatedSection from "./AnimatedSection";
 
@@ -10,9 +9,7 @@ const trustItems = [
     { icon: FiShield, label: "SOC 2 Ready" },
 ];
 
-export default function Hero() {
-    const router = useRouter();
-
+export default function Hero({ onRequestAccess }: { onRequestAccess: () => void }) {
     return (
         <section className="pt-32 pb-20 px-6">
             <div className="max-w-2xl mx-auto text-center">
@@ -38,7 +35,7 @@ export default function Hero() {
 
                 <AnimatedSection delay={0.3}>
                     <div className="flex items-center justify-center gap-3 mb-12">
-                        <button onClick={() => router.push("/register")} className="px-6 py-2.5 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors flex items-center gap-2 cursor-pointer">
+                        <button onClick={onRequestAccess} className="px-6 py-2.5 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors flex items-center gap-2 cursor-pointer">
                             Join Early Access <FiArrowRight className="w-3.5 h-3.5" />
                         </button>
                         <a href="#process" className="px-6 py-2.5 text-sm text-[#a1a1aa] hover:text-white border border-[#27272a] rounded-md hover:border-[#3f3f46] transition-colors cursor-pointer">

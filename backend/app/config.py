@@ -100,6 +100,14 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     BACKEND_URL: str = ""  # e.g. "http://localhost:8000" - used for OAuth redirects
 
+    # Email (SMTP) - optional, used for early access approval emails
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = "noreply@taxsync.in"
+    SMTP_USE_TLS: bool = True
+
     @field_validator("SECRET_KEY")
     @classmethod
     def secret_key_must_be_strong(cls, v: str) -> str:
