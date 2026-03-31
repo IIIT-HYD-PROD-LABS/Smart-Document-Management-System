@@ -16,29 +16,37 @@ export default function Hero({ onRequestAccess }: { onRequestAccess: () => void 
                 <AnimatedSection>
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#27272a] text-[#a1a1aa] text-xs mb-8">
                         <div className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
-                        AI-powered compliance
+                        AI-powered document intelligence
                     </div>
                 </AnimatedSection>
 
                 <AnimatedSection delay={0.1}>
                     <h1 className="text-4xl md:text-5xl font-semibold leading-tight tracking-tight text-white mb-5">
-                        Stop Missing Deadlines.<br />
-                        <span className="text-[#10b981]">Master Every Notice.</span>
+                        Classify Documents. Track Compliance.{" "}
+                        <span className="text-[#10b981]">Miss Nothing.</span>
                     </h1>
                 </AnimatedSection>
 
                 <AnimatedSection delay={0.2}>
                     <p className="text-base text-[#71717a] max-w-md mx-auto mb-10 leading-relaxed">
-                        AI classifies compliance notices, tracks deadlines across GST, IT, MCA, RBI & SEBI, and drafts responses — so no penalty slips through.
+                        AI that classifies invoices, contracts and tax forms instantly
+                        — then tracks every notice from GST, IT, MCA, RBI & SEBI so
+                        no deadline or penalty slips through.
                     </p>
                 </AnimatedSection>
 
                 <AnimatedSection delay={0.3}>
                     <div className="flex items-center justify-center gap-3 mb-12">
-                        <button onClick={onRequestAccess} className="px-6 py-2.5 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors flex items-center gap-2 cursor-pointer">
+                        <button
+                            onClick={onRequestAccess}
+                            className="px-6 py-2.5 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors flex items-center gap-2 cursor-pointer"
+                        >
                             Join Early Access <FiArrowRight className="w-3.5 h-3.5" />
                         </button>
-                        <a href="#process" className="px-6 py-2.5 text-sm text-[#a1a1aa] hover:text-white border border-[#27272a] rounded-md hover:border-[#3f3f46] transition-colors cursor-pointer">
+                        <a
+                            href="#process"
+                            className="px-6 py-2.5 text-sm text-[#a1a1aa] hover:text-white border border-[#27272a] rounded-md hover:border-[#3f3f46] transition-colors cursor-pointer"
+                        >
                             See how it works
                         </a>
                     </div>

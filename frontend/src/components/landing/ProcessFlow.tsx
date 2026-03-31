@@ -13,10 +13,12 @@ export default function ProcessFlow() {
                 <AnimatedSection>
                     <div className="text-center mb-12">
                         <h2 className="text-2xl md:text-3xl font-semibold text-white tracking-tight mb-3">
-                            Built for Compliance Reality
+                            From Upload to Action
                         </h2>
-                        <p className="text-sm text-[#71717a] max-w-md mx-auto">
-                            From notice upload to resolution — a four-step workflow that leaves nothing to chance.
+                        <p className="text-sm text-[#71717a] max-w-lg mx-auto leading-relaxed">
+                            One workflow for documents and compliance. Upload
+                            anything, let AI classify and extract, then search,
+                            track, and act before deadlines hit.
                         </p>
                     </div>
                 </AnimatedSection>
@@ -26,13 +28,24 @@ export default function ProcessFlow() {
                         const Icon = icons[i];
                         return (
                             <AnimatedSection key={step.number} delay={i * 0.1}>
-                                <div className="bg-[#111113] border border-[#27272a] rounded-lg p-6 h-full">
+                                <div className="bg-[#111113] border border-[#27272a] rounded-lg p-6 h-full relative">
                                     <div className="flex items-center gap-3 mb-4">
-                                        <span className="text-xs font-mono font-semibold text-[#10b981]">{step.number}</span>
-                                        <Icon className="w-4 h-4 text-[#a1a1aa]" />
+                                        <span className="text-xs font-mono font-semibold text-[#10b981]">
+                                            {step.number}
+                                        </span>
+                                        <div className="w-7 h-7 rounded-md bg-[#10b981]/10 flex items-center justify-center">
+                                            <Icon className="w-3.5 h-3.5 text-[#10b981]" />
+                                        </div>
                                     </div>
-                                    <h3 className="text-sm font-medium text-white mb-2">{step.title}</h3>
-                                    <p className="text-sm text-[#71717a] leading-relaxed">{step.description}</p>
+                                    <h3 className="text-sm font-medium text-white mb-2">
+                                        {step.title}
+                                    </h3>
+                                    <p className="text-sm text-[#71717a] leading-relaxed">
+                                        {step.description}
+                                    </p>
+                                    {i < processSteps.length - 1 && (
+                                        <div className="hidden lg:block absolute top-1/2 -right-2.5 w-1.5 h-1.5 rounded-full bg-[#27272a]" />
+                                    )}
                                 </div>
                             </AnimatedSection>
                         );
