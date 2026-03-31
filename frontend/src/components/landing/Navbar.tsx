@@ -4,8 +4,8 @@ import { useState } from "react";
 import { FiMenu, FiX } from "react-icons/fi";
 
 const links = [
-    { label: "Features", href: "#features" },
-    { label: "How it works", href: "#process" },
+    { label: "The Problem", href: "#problem" },
+    { label: "What It Does", href: "#solution" },
     { label: "Demo", href: "#demo" },
 ];
 
@@ -19,7 +19,11 @@ export default function Navbar({ onRequestAccess }: { onRequestAccess: () => voi
 
                 <div className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
                     {links.map((l) => (
-                        <a key={l.href} href={l.href} className="text-sm text-[#71717a] hover:text-white transition-colors">
+                        <a
+                            key={l.href}
+                            href={l.href}
+                            className="text-sm text-[#71717a] hover:text-white transition-colors"
+                        >
                             {l.label}
                         </a>
                     ))}
@@ -30,7 +34,7 @@ export default function Navbar({ onRequestAccess }: { onRequestAccess: () => voi
                         onClick={onRequestAccess}
                         className="px-4 py-1.5 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors cursor-pointer"
                     >
-                        Request Access
+                        Start Beta Trial
                     </button>
                 </div>
 
@@ -61,7 +65,7 @@ export default function Navbar({ onRequestAccess }: { onRequestAccess: () => voi
                                 onClick={() => { onRequestAccess(); setOpen(false); }}
                                 className="w-full px-4 py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors cursor-pointer"
                             >
-                                Request Access
+                                Start Beta Trial
                             </button>
                         </div>
                     </div>

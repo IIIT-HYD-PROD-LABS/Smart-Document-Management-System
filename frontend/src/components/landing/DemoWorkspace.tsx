@@ -22,20 +22,22 @@ export default function DemoWorkspace() {
     return (
         <section id="demo" className="pb-24 px-6 scroll-mt-20">
             <div className="max-w-4xl mx-auto">
+                {/* ---- Section heading ---- */}
                 <AnimatedSection>
                     <div className="text-center mb-8">
                         <h2 className="text-2xl md:text-3xl font-semibold text-white tracking-tight mb-3">
-                            Your Intelligent Workspace
+                            The Workspace
                         </h2>
-                        <p className="text-sm text-[#71717a]">
-                            AI-classified documents and compliance notices — unified in one view.
+                        <p className="text-sm text-[#71717a] max-w-lg mx-auto leading-relaxed">
+                            Full visibility for your team. Every document classified,
+                            every notice tracked.
                         </p>
                     </div>
                 </AnimatedSection>
 
                 <AnimatedSection delay={0.15}>
                     <div className="bg-[#111113] border border-[#27272a] rounded-lg overflow-hidden">
-                        {/* Tab bar */}
+                        {/* ---- Tab bar ---- */}
                         <div className="flex items-center justify-between px-5 py-3 border-b border-[#1f1f23]">
                             <div className="flex items-center gap-2">
                                 <button
@@ -84,42 +86,55 @@ export default function DemoWorkspace() {
                             </div>
                         </div>
 
-                        {/* Subheader count */}
+                        {/* ---- Subheader count ---- */}
                         <div className="px-5 py-2.5 border-b border-[#1f1f23]">
                             {activeTab === "documents" ? (
                                 <span className="text-xs text-[#a1a1aa]">
-                                    Showing <span className="text-white font-medium">5</span> of 2,384 documents
+                                    Showing{" "}
+                                    <span className="text-white font-medium">5</span> of
+                                    2,384 documents
                                 </span>
                             ) : (
                                 <span className="text-xs text-[#a1a1aa]">
-                                    Showing <span className="text-white font-medium">5</span> of 1,247 notices
+                                    Showing{" "}
+                                    <span className="text-white font-medium">5</span> of
+                                    1,247 notices
                                 </span>
                             )}
                         </div>
 
-                        {/* Documents table */}
+                        {/* ---- Documents table ---- */}
                         {activeTab === "documents" && (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left">
                                     <thead>
                                         <tr className="border-b border-[#1f1f23]">
-                                            {["Date", "Name", "Category", "Confidence", "Amount", "Status"].map(
-                                                (h) => (
-                                                    <th
-                                                        key={h}
-                                                        className="px-5 py-3 text-[11px] font-medium text-[#52525b] uppercase tracking-wider"
-                                                    >
-                                                        {h}
-                                                    </th>
-                                                )
-                                            )}
+                                            {[
+                                                "Date",
+                                                "Name",
+                                                "Category",
+                                                "Confidence",
+                                                "Amount",
+                                                "Status",
+                                            ].map((h) => (
+                                                <th
+                                                    key={h}
+                                                    className="px-5 py-3 text-[11px] font-medium text-[#52525b] uppercase tracking-wider"
+                                                >
+                                                    {h}
+                                                </th>
+                                            ))}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {demoDocuments.map((doc, i) => {
-                                            const cat = categoryColors[doc.category];
-                                            const conf = getConfidenceColor(doc.confidence);
-                                            const status = docStatusColors[doc.status];
+                                            const cat =
+                                                categoryColors[doc.category];
+                                            const conf = getConfidenceColor(
+                                                doc.confidence,
+                                            );
+                                            const status =
+                                                docStatusColors[doc.status];
                                             return (
                                                 <tr
                                                     key={i}
@@ -165,29 +180,36 @@ export default function DemoWorkspace() {
                             </div>
                         )}
 
-                        {/* Compliance table */}
+                        {/* ---- Compliance table ---- */}
                         {activeTab === "compliance" && (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left">
                                     <thead>
                                         <tr className="border-b border-[#1f1f23]">
-                                            {["Date", "Authority", "Type", "Risk", "Status", "Deadline"].map(
-                                                (h) => (
-                                                    <th
-                                                        key={h}
-                                                        className="px-5 py-3 text-[11px] font-medium text-[#52525b] uppercase tracking-wider"
-                                                    >
-                                                        {h}
-                                                    </th>
-                                                )
-                                            )}
+                                            {[
+                                                "Date",
+                                                "Authority",
+                                                "Type",
+                                                "Risk",
+                                                "Status",
+                                                "Deadline",
+                                            ].map((h) => (
+                                                <th
+                                                    key={h}
+                                                    className="px-5 py-3 text-[11px] font-medium text-[#52525b] uppercase tracking-wider"
+                                                >
+                                                    {h}
+                                                </th>
+                                            ))}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {demoNotices.map((n, i) => {
-                                            const auth = authorityColors[n.authority];
+                                            const auth =
+                                                authorityColors[n.authority];
                                             const risk = riskColors[n.risk];
-                                            const status = statusColors[n.status];
+                                            const status =
+                                                statusColors[n.status];
                                             return (
                                                 <tr
                                                     key={i}
@@ -236,7 +258,7 @@ export default function DemoWorkspace() {
                             </div>
                         )}
 
-                        {/* Footer */}
+                        {/* ---- Footer ---- */}
                         <div className="flex items-center justify-between px-5 py-3 border-t border-[#1f1f23]">
                             {activeTab === "documents" ? (
                                 <>

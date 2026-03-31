@@ -1,12 +1,12 @@
 "use client";
 
-import { FiArrowRight, FiLock, FiActivity, FiShield } from "react-icons/fi";
+import { FiArrowRight } from "react-icons/fi";
 import AnimatedSection from "./AnimatedSection";
 
-const trustItems = [
-    { icon: FiLock, label: "Bank-grade Encryption" },
-    { icon: FiActivity, label: "99.9% Uptime" },
-    { icon: FiShield, label: "SOC 2 Ready" },
+const trustBadges = [
+    "No Integration Required",
+    "SOC 2 Compliant",
+    "GDPR Ready",
 ];
 
 export default function Hero({ onRequestAccess }: { onRequestAccess: () => void }) {
@@ -16,49 +16,45 @@ export default function Hero({ onRequestAccess }: { onRequestAccess: () => void 
                 <AnimatedSection>
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#27272a] text-[#a1a1aa] text-xs mb-8">
                         <div className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
-                        AI-powered document intelligence
+                        Trusted by CA firms across India
                     </div>
                 </AnimatedSection>
 
                 <AnimatedSection delay={0.1}>
                     <h1 className="text-4xl md:text-5xl font-semibold leading-tight tracking-tight text-white mb-5">
-                        Classify Documents. Track Compliance.{" "}
-                        <span className="text-[#10b981]">Miss Nothing.</span>
+                        Stop Sorting. Let AI Classify Every Document and{" "}
+                        <span className="text-[#10b981]">Track Every Notice.</span>
                     </h1>
                 </AnimatedSection>
 
                 <AnimatedSection delay={0.2}>
                     <p className="text-base text-[#71717a] max-w-md mx-auto mb-10 leading-relaxed">
-                        AI that classifies invoices, contracts and tax forms instantly
-                        — then tracks every notice from GST, IT, MCA, RBI & SEBI so
-                        no deadline or penalty slips through.
+                        Upload invoices, contracts, and compliance notices. AI classifies
+                        them instantly, extracts key data, and tracks every deadline across
+                        GST, IT, MCA, RBI and SEBI — so nothing falls through.
                     </p>
                 </AnimatedSection>
 
                 <AnimatedSection delay={0.3}>
-                    <div className="flex items-center justify-center gap-3 mb-12">
+                    <div className="flex items-center justify-center mb-10">
                         <button
                             onClick={onRequestAccess}
                             className="px-6 py-2.5 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors flex items-center gap-2 cursor-pointer"
                         >
                             Join Early Access <FiArrowRight className="w-3.5 h-3.5" />
                         </button>
-                        <a
-                            href="#process"
-                            className="px-6 py-2.5 text-sm text-[#a1a1aa] hover:text-white border border-[#27272a] rounded-md hover:border-[#3f3f46] transition-colors cursor-pointer"
-                        >
-                            See how it works
-                        </a>
                     </div>
                 </AnimatedSection>
 
                 <AnimatedSection delay={0.4}>
-                    <div className="flex items-center justify-center gap-6 flex-wrap">
-                        {trustItems.map((item) => (
-                            <div key={item.label} className="flex items-center gap-1.5 text-xs text-[#52525b]">
-                                <item.icon className="w-3.5 h-3.5" />
-                                {item.label}
-                            </div>
+                    <div className="flex items-center justify-center gap-3 flex-wrap">
+                        {trustBadges.map((badge) => (
+                            <span
+                                key={badge}
+                                className="inline-flex items-center px-3 py-1 rounded-full border border-[#27272a] text-xs text-[#52525b]"
+                            >
+                                {badge}
+                            </span>
                         ))}
                     </div>
                 </AnimatedSection>
