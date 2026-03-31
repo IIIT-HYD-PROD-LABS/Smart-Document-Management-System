@@ -179,13 +179,114 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| *(populated by roadmapper)* | | |
+| LIFE-01 | Phase 9 | Pending |
+| LIFE-02 | Phase 9 | Pending |
+| LIFE-03 | Phase 9 | Pending |
+| LIFE-04 | Phase 9 | Pending |
+| LIFE-05 | Phase 9 | Pending |
+| LIFE-06 | Phase 9 | Pending |
+| LIFE-07 | Phase 9 | Pending |
+| LIFE-08 | Phase 9 | Pending |
+| AUDIT-01 | Phase 9 | Pending |
+| AUDIT-02 | Phase 9 | Pending |
+| RBAC-01 | Phase 9 | Pending |
+| RBAC-02 | Phase 9 | Pending |
+| RBAC-03 | Phase 9 | Pending |
+| RBAC-04 | Phase 9 | Pending |
+| RBAC-05 | Phase 9 | Pending |
+| RBAC-06 | Phase 9 | Pending |
+| CLIENT-01 | Phase 9 | Pending |
+| CLIENT-02 | Phase 9 | Pending |
+| CLIENT-03 | Phase 9 | Pending |
+| CLIENT-04 | Phase 9 | Pending |
+| CLIENT-05 | Phase 9 | Pending |
+| CLIENT-06 | Phase 9 | Pending |
+| CLIENT-07 | Phase 9 | Pending |
+| INFRA-05 | Phase 9 | Pending |
+| INFRA-06 | Phase 9 | Pending |
+| INFRA-07 | Phase 9 | Pending |
+| CLASS-01 | Phase 10 | Pending |
+| CLASS-02 | Phase 10 | Pending |
+| CLASS-03 | Phase 10 | Pending |
+| CLASS-04 | Phase 10 | Pending |
+| CLASS-05 | Phase 10 | Pending |
+| CLASS-06 | Phase 10 | Pending |
+| CLASS-07 | Phase 10 | Pending |
+| CLASS-08 | Phase 10 | Pending |
+| RISK-01 | Phase 10 | Pending |
+| RISK-02 | Phase 10 | Pending |
+| RISK-03 | Phase 10 | Pending |
+| RISK-04 | Phase 10 | Pending |
+| RISK-05 | Phase 10 | Pending |
+| INFRA-01 | Phase 10 | Pending |
+| ALERT-01 | Phase 11 | Pending |
+| ALERT-02 | Phase 11 | Pending |
+| ALERT-03 | Phase 11 | Pending |
+| ALERT-04 | Phase 11 | Pending |
+| ALERT-05 | Phase 11 | Pending |
+| ALERT-06 | Phase 11 | Pending |
+| ALERT-07 | Phase 11 | Pending |
+| ALERT-08 | Phase 11 | Pending |
+| ALERT-09 | Phase 11 | Pending |
+| ALERT-10 | Phase 11 | Pending |
+| CAL-01 | Phase 11 | Pending |
+| CAL-02 | Phase 11 | Pending |
+| CAL-03 | Phase 11 | Pending |
+| CAL-04 | Phase 11 | Pending |
+| CAL-05 | Phase 11 | Pending |
+| CAL-06 | Phase 11 | Pending |
+| INFRA-03 | Phase 11 | Pending |
+| INFRA-04 | Phase 11 | Pending |
+| RESP-01 | Phase 12 | Pending |
+| RESP-02 | Phase 12 | Pending |
+| RESP-03 | Phase 12 | Pending |
+| RESP-04 | Phase 12 | Pending |
+| RESP-05 | Phase 12 | Pending |
+| RESP-06 | Phase 12 | Pending |
+| EVID-01 | Phase 12 | Pending |
+| EVID-02 | Phase 12 | Pending |
+| EVID-03 | Phase 12 | Pending |
+| EVID-04 | Phase 12 | Pending |
+| RECON-01 | Phase 12 | Pending |
+| RECON-02 | Phase 12 | Pending |
+| RECON-03 | Phase 12 | Pending |
+| RECON-04 | Phase 12 | Pending |
+| RECON-05 | Phase 12 | Pending |
+| REG-01 | Phase 12 | Pending |
+| REG-02 | Phase 12 | Pending |
+| REG-03 | Phase 12 | Pending |
+| REG-04 | Phase 12 | Pending |
+| AUDIT-03 | Phase 13 | Pending |
+| AUDIT-04 | Phase 13 | Pending |
+| AUDIT-05 | Phase 13 | Pending |
+| AUDIT-06 | Phase 13 | Pending |
+| AUDIT-07 | Phase 13 | Pending |
+| EVID-05 | Phase 13 | Pending |
+| INFRA-02 | Phase 13 | Pending |
+| PORT-01 | Phase 14 | Pending |
+| PORT-02 | Phase 14 | Pending |
+| PORT-03 | Phase 14 | Pending |
+| PORT-04 | Phase 14 | Pending |
+| PORT-05 | Phase 14 | Pending |
+| PORT-06 | Phase 14 | Pending |
+| PORT-07 | Phase 14 | Pending |
+| PORT-08 | Phase 14 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 92 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 92
+- Mapped to phases: 92
+- Unmapped: 0
+
+| Phase | Requirements | Count |
+|-------|-------------|-------|
+| Phase 9: Compliance Foundation | LIFE-01..08, AUDIT-01..02, RBAC-01..06, CLIENT-01..07, INFRA-05..07 | 26 |
+| Phase 10: ML Classification + Risk Scoring | CLASS-01..08, RISK-01..05, INFRA-01 | 14 |
+| Phase 11: Alert System + Compliance Calendar | ALERT-01..10, CAL-01..06, INFRA-03..04 | 18 |
+| Phase 12: Response Drafting + Evidence Management | RESP-01..06, EVID-01..04, RECON-01..05, REG-01..04 | 19 |
+| Phase 13: Elasticsearch + Cross-Entity Search + Reporting | AUDIT-03..07, EVID-05, INFRA-02 | 7 |
+| Phase 14: Government Portal Integration | PORT-01..08 | 8 |
+| **Total** | | **92** |
 
 ---
 *Requirements defined: 2026-03-30*
-*Last updated: 2026-03-30 after initial definition*
+*Last updated: 2026-03-30 — traceability populated by roadmapper (92/92 mapped)*
