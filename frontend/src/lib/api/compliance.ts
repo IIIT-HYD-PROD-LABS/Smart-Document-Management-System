@@ -13,6 +13,7 @@ import type {
     BulkUpdateResult,
     NoticeType,
     AuditLogEntry,
+    Authority,
 } from "@/types/compliance";
 
 /**
@@ -87,7 +88,7 @@ export interface ListNoticesParams {
 export interface CreateNoticePayload extends Partial<ComplianceNotice> {
     client_id: number;
     notice_number: string;
-    authority: string;
+    authority: Authority;
     received_date: string;
     legal_sections?: string[];
     tags?: string[];
