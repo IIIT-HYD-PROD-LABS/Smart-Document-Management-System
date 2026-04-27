@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LoadingSpinner } from "@/components";
-import { FiHome, FiUpload, FiSearch, FiBarChart2, FiLogOut, FiFileText, FiShield, FiShare2, FiMenu, FiX } from "react-icons/fi";
+import { FiHome, FiUpload, FiSearch, FiBarChart2, FiLogOut, FiFileText, FiShield, FiShare2, FiMenu, FiX, FiBriefcase } from "react-icons/fi";
 
 const allNavItems = [
     { href: "/dashboard", icon: FiHome, label: "Overview", roles: ["admin", "editor", "viewer"] },
@@ -16,6 +16,12 @@ const allNavItems = [
     { href: "/dashboard/analytics", icon: FiBarChart2, label: "Analytics", roles: ["admin", "editor", "viewer"] },
     { href: "/dashboard/model-evaluation", label: "Model Eval", icon: FiBarChart2, roles: ["admin"] },
     { href: "/dashboard/admin", icon: FiShield, label: "Admin", roles: ["admin"] },
+    // ──── Phase 9 — Compliance Foundation ────
+    // Compliance pages are visible to all v1.0 roles in the sidebar; actual API
+    // access is gated server-side by ClientMembership (Plan 04). A v1.0 user
+    // with no compliance membership will see an empty state on these pages.
+    { href: "/dashboard/compliance", icon: FiShield, label: "Compliance", roles: ["admin", "editor", "viewer"] },
+    { href: "/dashboard/compliance/clients", icon: FiBriefcase, label: "Clients", roles: ["admin", "editor"] },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
