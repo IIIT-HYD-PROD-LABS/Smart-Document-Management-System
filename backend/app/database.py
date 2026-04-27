@@ -35,3 +35,14 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+# Phase 9: Register tenant_context listener so every cursor.execute sets
+# app.current_client_id, app.cross_client_mode, app.user_id from ContextVars
+# (populated by TenantContextMiddleware). RLS policies on compliance_* tables
+# automatically filter rows per these vars. The import is deferred to module
+# bottom so app.compliance.middleware can import from app.database without
+# triggering a circular import.
+from app.compliance.middleware.tenant_context import register_tenant_listener  # noqa: E402
+
+register_tenant_listener(engine)
