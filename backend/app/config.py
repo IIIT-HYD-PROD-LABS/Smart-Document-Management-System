@@ -108,6 +108,24 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = "noreply@taxsync.in"
     SMTP_USE_TLS: bool = True
 
+    # ===========================================================
+    # Phase 9: Compliance Foundation (INFRA-06, CLIENT-04)
+    # ===========================================================
+    # PII encryption — Fernet symmetric. Generate via:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    FERNET_KEY: str = ""
+    FERNET_KEY_OLD: str = ""  # Optional rotation key
+
+    # PostgreSQL roles created by migration 0017_db_roles
+    APP_RUNTIME_PASSWORD: str = ""
+    APP_MIGRATOR_PASSWORD: str = ""
+
+    # Connection strings for the two roles. Migrations use DATABASE_URL_MIGRATOR
+    # (or DATABASE_URL fallback); FastAPI process uses DATABASE_URL_RUNTIME so
+    # RLS policies apply.
+    DATABASE_URL_RUNTIME: str = ""
+    DATABASE_URL_MIGRATOR: str = ""
+
     @field_validator("SECRET_KEY")
     @classmethod
     def secret_key_must_be_strong(cls, v: str) -> str:
