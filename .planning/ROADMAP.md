@@ -43,7 +43,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 **Plans**: 7 plans
 - [x] 09-01-PLAN.md — Wave 0 test infrastructure (RLS isolation, audit immutability, RBAC matrix, fixtures, validation contract)
 - [x] 09-02-PLAN.md — Wave 1 DB foundations (5 migrations: schema/audit-immutability/RLS/calendar-seed/DB-roles + Indian validators + PII encryption + permission registry + state machine)
-- [ ] 09-03-PLAN.md — Wave 2 backend models + services (5 ORM modules, 4 schemas, 4 services)
+- [x] 09-03-PLAN.md — Wave 2 backend models + services (5 ORM modules, 4 schemas, 4 services + migration 0018 RLS recursion fix)
 - [ ] 09-04-PLAN.md — Wave 3 backend middleware + RBAC dependencies (tenant context, auditor expiry, require_compliance_permission)
 - [ ] 09-05-PLAN.md — Wave 4 backend routers (7 routers under /api/compliance)
 - [ ] 09-06-PLAN.md — Wave 5 frontend foundation (client switcher, 4-step onboarding wizard, team management)
@@ -121,7 +121,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 9. Compliance Foundation | v2.0 | 1/7 | In Progress | - |
+| 9. Compliance Foundation | v2.0 | 3/7 | In Progress | - |
 | 10. ML Classification + Risk Scoring | v2.0 | 0/TBD | Not started | - |
 | 11. Alert System + Compliance Calendar | v2.0 | 0/TBD | Not started | - |
 | 12. Response Drafting + Evidence Management | v2.0 | 0/TBD | Not started | - |
@@ -129,4 +129,4 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 | 14. Government Portal Integration | v2.0 | 0/TBD | Not started | - |
 
 ---
-*Last updated: 2026-04-27 — Phase 9 in progress (1/7 plans complete: 09-01 Wave 0 test infrastructure); phases 10-14 unchanged*
+*Last updated: 2026-04-27 — Phase 9 in progress (3/7 plans complete: 09-01 Wave 0 + 09-02 Wave 1 + 09-03 Wave 2); phases 10-14 unchanged*
