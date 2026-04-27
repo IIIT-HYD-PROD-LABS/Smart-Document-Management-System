@@ -111,15 +111,21 @@ def app_runtime_engine():
 def _set_tenant_context(session, *, client_id: int = 0, user_id: int = 1):
     """Helper: install the per-request tenant context expected by RLS policies.
 
-    Plan 04 will land an HTTP middleware that calls these set_config()s on
-    every request. Until then, fixtures call this helper directly.
+    Plan 04 lands the HTTP middleware that wires these via ContextVars +
+    SQLAlchemy before_cursor_execute listener for production. In the test
+    environment we set the same PG session vars directly so the test body
+    is subjected to the same RLS policies as production.
+
+    Uses is_local=false (session scope) — matches the Plan 04 middleware's
+    listener (set_config(..., false) for durability across commits) so that
+    test transactions which commit mid-body do not lose the tenant context.
     """
     session.execute(
-        text("SELECT set_config('app.current_client_id', :cid, true)"),
+        text("SELECT set_config('app.current_client_id', :cid, false)"),
         {"cid": str(client_id)},
     )
     session.execute(
-        text("SELECT set_config('app.user_id', :uid, true)"),
+        text("SELECT set_config('app.user_id', :uid, false)"),
         {"uid": str(user_id)},
     )
 
@@ -186,7 +192,7 @@ def _create_client_with_rls_bypass(db, name: str):
     db.commit()
     db.refresh(c)  # eagerly reload attrs while still bypassing RLS
     client_id = c.id
-    db.execute(text("SET LOCAL ROLE app_runtime"))
+    db.execute(text("SET ROLE app_runtime"))
     _set_tenant_context(db, client_id=client_id, user_id=1)
     return c
 
@@ -204,7 +210,7 @@ def _delete_with_rls_bypass(db, *objs):
         db.commit()
     except Exception:
         db.rollback()
-    db.execute(text("SET LOCAL ROLE app_runtime"))
+    db.execute(text("SET ROLE app_runtime"))
 
 
 @pytest.fixture()
@@ -300,7 +306,7 @@ def auditor_membership(db_as_app_runtime, client_a):
     db_as_app_runtime.add(m)
     db_as_app_runtime.commit()
     db_as_app_runtime.refresh(m)
-    db_as_app_runtime.execute(text("SET LOCAL ROLE app_runtime"))
+    db_as_app_runtime.execute(text("SET ROLE app_runtime"))
     _set_tenant_context(db_as_app_runtime, client_id=client_a_id, user_id=2)
     yield m
     _delete_with_rls_bypass(db_as_app_runtime, m)
@@ -337,7 +343,7 @@ def client_with_membership(db_as_app_runtime):
         )
         db_as_app_runtime.add(m)
         db_as_app_runtime.commit()
-        db_as_app_runtime.execute(text("SET LOCAL ROLE app_runtime"))
+        db_as_app_runtime.execute(text("SET ROLE app_runtime"))
         _set_tenant_context(db_as_app_runtime, client_id=c.id, user_id=u.id)
         created.extend([u, c, m])
         return u

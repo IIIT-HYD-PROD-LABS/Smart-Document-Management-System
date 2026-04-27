@@ -101,7 +101,10 @@ def test_all_client_tables_have_force_rls(db_as_app_runtime):
 def test_cross_client_mode_eligible(db_as_app_runtime, client_a, client_b):
     """'All Clients' mode returns rows from all clients for eligible roles."""
     from app.compliance.models.notice import ComplianceNotice
-    # Seed both
+    # Seed both. Flush after each add so the per-iteration set_config is in
+    # effect when the INSERT actually runs against RLS WITH CHECK; otherwise
+    # SQLAlchemy buffers all adds and only the LAST set_config is in effect
+    # at commit-time flush.
     for client in (client_a, client_b):
         db_as_app_runtime.execute(
             text("SELECT set_config('app.current_client_id', :cid, true)"),
@@ -115,6 +118,7 @@ def test_cross_client_mode_eligible(db_as_app_runtime, client_a, client_b):
                 status="received",
             )
         )
+        db_as_app_runtime.flush()
     db_as_app_runtime.commit()
 
     # Enable cross-client mode + simulate compliance_head user
