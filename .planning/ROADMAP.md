@@ -45,7 +45,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 - [x] 09-02-PLAN.md — Wave 1 DB foundations (5 migrations: schema/audit-immutability/RLS/calendar-seed/DB-roles + Indian validators + PII encryption + permission registry + state machine)
 - [x] 09-03-PLAN.md — Wave 2 backend models + services (5 ORM modules, 4 schemas, 4 services + migration 0018 RLS recursion fix)
 - [x] 09-04-PLAN.md — Wave 3 backend middleware + RBAC dependencies (tenant context, auditor expiry, require_compliance_permission)
-- [ ] 09-05-PLAN.md — Wave 4 backend routers (7 routers under /api/compliance)
+- [x] 09-05-PLAN.md — Wave 4 backend routers (7 routers under /api/compliance)
 - [ ] 09-06-PLAN.md — Wave 5 frontend foundation (client switcher, 4-step onboarding wizard, team management)
 - [ ] 09-07-PLAN.md — Wave 6 frontend notice surfaces (dashboard, detail, bulk actions, audit viewer, reports, README)
 **UI hint**: yes

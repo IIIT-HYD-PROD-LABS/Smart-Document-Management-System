@@ -73,9 +73,10 @@ updated: 2026-04-27
 | 09-04 | T4 (wire middleware in main.py + user_id ContextVar in security.py) | 3 | CLIENT-04, RBAC-01..06 | integration | `docker compose exec backend python -c "from app.main import app; assert 'TenantContextMiddleware' in [m.cls.__name__ for m in app.user_middleware]"` | ✅ Plan 01 | ✅ green |
 | 09-04 | T5 (Wave 0 merge gates GREEN) | 3 | CLIENT-04, RBAC-01..06, AUDIT-01 | integration | `docker compose exec backend pytest tests/test_compliance_endpoints.py tests/test_rls_isolation.py tests/test_auditor_expiry.py tests/test_audit_immutability.py` | ✅ Plan 01 | ✅ green (98/98) |
 | 09-04 | DEVIATION (mig 0019 — fail-closed on empty tenant) | 3 | CLIENT-04 (defense) | DDL fix | `docker compose exec backend alembic current` | new file | ✅ green (head=0019) |
-| 09-05 | T1 (clients + memberships routers) | 4 | CLIENT-01, CLIENT-05 | integration | `docker compose exec backend pytest -x tests/test_client_management.py tests/test_client_onboarding.py` | ✅ Plan 01 | ⬜ pending |
-| 09-05 | T2 (notices + bulk router) | 4 | LIFE-01, LIFE-07, LIFE-08 | integration | `docker compose exec backend pytest -x tests/test_compliance_notices.py tests/test_notice_query.py` | ✅ Plan 01 | ⬜ pending |
-| 09-05 | T3 (reports + audit viewer router) | 4 | CLIENT-07, AUDIT-01 | integration | `docker compose exec backend pytest -x tests/test_reports.py` | ✅ Plan 01 | ⬜ pending |
+| 09-05 | T1 (clients + memberships routers) | 4 | CLIENT-01, CLIENT-05 | integration | `docker compose exec backend pytest -x tests/test_client_management.py tests/test_client_onboarding.py` | ✅ Plan 01 | ✅ green |
+| 09-05 | T2 (notices + bulk router) | 4 | LIFE-01, LIFE-07, LIFE-08 | integration | `docker compose exec backend pytest -x tests/test_compliance_notices.py tests/test_notice_query.py` | ✅ Plan 01 | ✅ green |
+| 09-05 | T3 (reports + audit viewer router) | 4 | CLIENT-07, AUDIT-01 | integration | `docker compose exec backend pytest -x tests/test_reports.py` | ✅ Plan 01 | ✅ green |
+| 09-05 | T4 (mount routers in main.py) | 4 | LIFE-01..08, AUDIT-01, CLIENT-01..07 | integration | `docker compose exec backend python -c "from app.main import app; assert any('/api/compliance' in getattr(r, 'path', '') for r in app.routes)"` | self | ✅ green |
 | 09-06 | T1-T4 (frontend client switcher + onboarding wizard) | 5 | CLIENT-05, CLIENT-04 (UI part) | manual smoke | manual click-through, lint: `docker compose exec frontend npm run lint` | n/a (manual) | ⬜ pending |
 | 09-07 | T1-T5 (frontend notice surfaces) | 6 | LIFE-01..08, AUDIT-01 (UI part) | manual smoke + lint | manual click-through, lint: `docker compose exec frontend npm run lint` | n/a (manual) | ⬜ pending |
 

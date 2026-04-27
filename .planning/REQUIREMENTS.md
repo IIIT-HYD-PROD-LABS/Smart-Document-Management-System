@@ -10,11 +10,11 @@ Requirements for the Compliance Management System milestone. Each maps to roadma
 ### Notice Lifecycle
 
 - [x] **LIFE-01**: User can upload a compliance notice (PDF, JPG, PNG) via drag-and-drop
-- [ ] **LIFE-02**: System extracts text from uploaded notices via OCR (reuses existing pipeline)
+- [x] **LIFE-02**: System extracts text from uploaded notices via OCR (reuses existing pipeline)
 - [x] **LIFE-03**: User can manually enter notice metadata (number, authority, date, deadline, penalty)
 - [x] **LIFE-04**: User can transition notice through status workflow (Received → Under Review → Response Drafted → Submitted → Resolved/Dismissed)
 - [x] **LIFE-05**: User can link related notices in a chain (Show Cause → Assessment Order → Demand)
-- [ ] **LIFE-06**: User can view notice detail page with full activity timeline
+- [x] **LIFE-06**: User can view notice detail page with full activity timeline
 - [x] **LIFE-07**: User can filter/search notices by authority, type, status, risk level, deadline, GSTIN/PAN
 - [x] **LIFE-08**: User can bulk-update notice status for multiple notices
 
@@ -180,11 +180,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | LIFE-01 | Phase 9 | Complete |
-| LIFE-02 | Phase 9 | Pending |
+| LIFE-02 | Phase 9 | Complete |
 | LIFE-03 | Phase 9 | Complete |
 | LIFE-04 | Phase 9 | Complete |
 | LIFE-05 | Phase 9 | Complete |
-| LIFE-06 | Phase 9 | Pending |
+| LIFE-06 | Phase 9 | Complete |
 | LIFE-07 | Phase 9 | Complete |
 | LIFE-08 | Phase 9 | Complete |
 | AUDIT-01 | Phase 9 | Complete |

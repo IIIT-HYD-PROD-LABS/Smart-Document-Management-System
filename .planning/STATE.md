@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
 status: Ready to execute
-stopped_at: "Completed 09-04-PLAN.md (3 Wave 0 merge gates GREEN: CLIENT-04, RBAC-01..06, AUDIT-01)"
-last_updated: "2026-04-27T09:38:52.685Z"
+stopped_at: Completed 09-05-PLAN.md (Wave 4 — 7 FastAPI compliance routers under /api/compliance; 85/85 RBAC matrix GREEN; 18 OpenAPI paths)
+last_updated: "2026-04-27T09:52:45.427Z"
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 09 (compliance-foundation) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 
 ## Shipped Milestones
 
@@ -57,6 +57,10 @@ See .planning/milestones/v1.0-ROADMAP.md for v1.0 decisions.
 - [Phase 09]: Plan 04: before_cursor_execute listener for RLS context — survives intra-request commits where set_config(is_local=true) does not
 - [Phase 09]: Plan 04: Migration 0019 wraps tenant_isolation cast in NULLIF so empty current_setting fails-closed cleanly (no DataError)
 - [Phase 09]: Plan 04: tenant_isolation kept PERMISSIVE — RESTRICTIVE alone would block all writes since cross_client_view PERMISSIVE is SELECT-only
+- [Phase 09-compliance-foundation]: Plan 05: Status-target -> permission dispatcher on PATCH /notices/{id}/status (single endpoint handles all 5 forward + 2 back-edit transitions, dispatches NOTICE_SUBMIT/APPROVE/DRAFT_RESPONSE per target via _permission_for_target_status helper); avoids scattering state machine across 5 separate handlers
+- [Phase 09-compliance-foundation]: Plan 05: First-upload-wins for notice.document_id — first POST /notices/{id}/upload sets the FK; subsequent uploads attach via NoticeActivity 'file_attached' rows but do NOT overwrite the primary, preserving stable deep-links to the original notice document
+- [Phase 09-compliance-foundation]: Plan 05: Read-only audit endpoint (audit.py omits @router.post/put/delete decorators entirely) — DB trigger + REVOKE on app_runtime is the authoritative defense; API surface omission is principle-of-least-surprise so a future maintainer cannot accidentally add a write handler
+- [Phase 09-compliance-foundation]: Plan 05: REPORT_EXPORT (not REPORT_VIEW) on /reports/health-summary — REPORT_EXPORT covers compliance_head/ca_consultant/auditor/cfo (the actual stakeholders) while REPORT_VIEW would over-grant to legal_team + finance_team who view notices but should not extract per-client analytics
 
 ### Pending Todos
 
@@ -72,9 +76,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-27T09:38:52.682Z
+Last session: 2026-04-27T09:52:30.385Z
 Previous session: 2026-03-31T12:30:40.526Z (Phase 9 context gathered)
-Stopped at: Completed 09-04-PLAN.md (3 Wave 0 merge gates GREEN: CLIENT-04, RBAC-01..06, AUDIT-01)
+Stopped at: Completed 09-05-PLAN.md (Wave 4 — 7 FastAPI compliance routers under /api/compliance; 85/85 RBAC matrix GREEN; 18 OpenAPI paths)
 Resume command: /gsd:execute-phase 9 (will detect 09-03 missing SUMMARY.md, resume there)
 
 ## Plan 09-03 Completion (resolved 2026-04-27)
