@@ -41,7 +41,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
   5. A CA/Tax Consultant user can manage multiple client entities (each with distinct GSTINs/PANs) and see a per-client aggregate dashboard with zero cross-client data leakage
   6. All six roles (Compliance Head, Legal Team, Finance Team, Auditor, CA/Consultant, Staff) enforce correct permission boundaries — an Auditor cannot edit, a Staff member cannot approve/submit
 **Plans**: 7 plans
-- [ ] 09-01-PLAN.md — Wave 0 test infrastructure (RLS isolation, audit immutability, RBAC matrix, fixtures, validation contract)
+- [x] 09-01-PLAN.md — Wave 0 test infrastructure (RLS isolation, audit immutability, RBAC matrix, fixtures, validation contract)
 - [ ] 09-02-PLAN.md — Wave 1 DB foundations (5 migrations: schema/audit-immutability/RLS/calendar-seed/DB-roles + Indian validators + PII encryption + permission registry + state machine)
 - [ ] 09-03-PLAN.md — Wave 2 backend models + services (5 ORM modules, 4 schemas, 4 services)
 - [ ] 09-04-PLAN.md — Wave 3 backend middleware + RBAC dependencies (tenant context, auditor expiry, require_compliance_permission)
@@ -121,7 +121,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 9. Compliance Foundation | v2.0 | 0/7 | Planned | - |
+| 9. Compliance Foundation | v2.0 | 1/7 | In Progress | - |
 | 10. ML Classification + Risk Scoring | v2.0 | 0/TBD | Not started | - |
 | 11. Alert System + Compliance Calendar | v2.0 | 0/TBD | Not started | - |
 | 12. Response Drafting + Evidence Management | v2.0 | 0/TBD | Not started | - |
@@ -129,4 +129,4 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 | 14. Government Portal Integration | v2.0 | 0/TBD | Not started | - |
 
 ---
-*Last updated: 2026-04-27 — Phase 9 planned (7 plans across 7 waves); phases 10-14 unchanged*
+*Last updated: 2026-04-27 — Phase 9 in progress (1/7 plans complete: 09-01 Wave 0 test infrastructure); phases 10-14 unchanged*

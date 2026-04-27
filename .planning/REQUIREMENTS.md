@@ -9,14 +9,14 @@ Requirements for the Compliance Management System milestone. Each maps to roadma
 
 ### Notice Lifecycle
 
-- [ ] **LIFE-01**: User can upload a compliance notice (PDF, JPG, PNG) via drag-and-drop
+- [x] **LIFE-01**: User can upload a compliance notice (PDF, JPG, PNG) via drag-and-drop
 - [ ] **LIFE-02**: System extracts text from uploaded notices via OCR (reuses existing pipeline)
 - [ ] **LIFE-03**: User can manually enter notice metadata (number, authority, date, deadline, penalty)
-- [ ] **LIFE-04**: User can transition notice through status workflow (Received → Under Review → Response Drafted → Submitted → Resolved/Dismissed)
-- [ ] **LIFE-05**: User can link related notices in a chain (Show Cause → Assessment Order → Demand)
+- [x] **LIFE-04**: User can transition notice through status workflow (Received → Under Review → Response Drafted → Submitted → Resolved/Dismissed)
+- [x] **LIFE-05**: User can link related notices in a chain (Show Cause → Assessment Order → Demand)
 - [ ] **LIFE-06**: User can view notice detail page with full activity timeline
-- [ ] **LIFE-07**: User can filter/search notices by authority, type, status, risk level, deadline, GSTIN/PAN
-- [ ] **LIFE-08**: User can bulk-update notice status for multiple notices
+- [x] **LIFE-07**: User can filter/search notices by authority, type, status, risk level, deadline, GSTIN/PAN
+- [x] **LIFE-08**: User can bulk-update notice status for multiple notices
 
 ### Classification
 
@@ -52,8 +52,8 @@ Requirements for the Compliance Management System milestone. Each maps to roadma
 
 ### Audit Trail
 
-- [ ] **AUDIT-01**: Immutable timestamped audit log with database-level enforcement (triggers + REVOKE)
-- [ ] **AUDIT-02**: Audit log captures who, what, when, before/after values for every change
+- [x] **AUDIT-01**: Immutable timestamped audit log with database-level enforcement (triggers + REVOKE)
+- [x] **AUDIT-02**: Audit log captures who, what, when, before/after values for every change
 - [ ] **AUDIT-03**: Auditor-ready export of audit trail (PDF, Excel) by notice/date range
 - [ ] **AUDIT-04**: Compliance health score (% resolved on time, adjusted for penalty avoidance)
 - [ ] **AUDIT-05**: Response time analytics (average receipt-to-submission time)
@@ -62,22 +62,22 @@ Requirements for the Compliance Management System milestone. Each maps to roadma
 
 ### Extended RBAC
 
-- [ ] **RBAC-01**: Compliance Head role — view all, approve responses, reports, configure escalation
-- [ ] **RBAC-02**: Legal Team role — draft responses, regulation library, authority-scoped notices
-- [ ] **RBAC-03**: Finance Team role — view tax notices (GST/IT), reconciliation data, no response editing
-- [ ] **RBAC-04**: Auditor role — time-bound read-only access to notices, trails, reports
-- [ ] **RBAC-05**: CA/Tax Consultant role — full permissions within assigned client scope
-- [ ] **RBAC-06**: Staff role — create notices, draft responses, escalate (no approve/submit)
+- [x] **RBAC-01**: Compliance Head role — view all, approve responses, reports, configure escalation
+- [x] **RBAC-02**: Legal Team role — draft responses, regulation library, authority-scoped notices
+- [x] **RBAC-03**: Finance Team role — view tax notices (GST/IT), reconciliation data, no response editing
+- [x] **RBAC-04**: Auditor role — time-bound read-only access to notices, trails, reports
+- [x] **RBAC-05**: CA/Tax Consultant role — full permissions within assigned client scope
+- [x] **RBAC-06**: Staff role — create notices, draft responses, escalate (no approve/submit)
 
 ### Client Management
 
-- [ ] **CLIENT-01**: User can create and manage client entities with GSTIN/PAN/CIN registrations
-- [ ] **CLIENT-02**: Multi-GSTIN/PAN support per client entity
-- [ ] **CLIENT-03**: Client-scoped aggregate dashboard showing all client notices
-- [ ] **CLIENT-04**: Client data isolation via PostgreSQL RLS (zero cross-client leakage)
-- [ ] **CLIENT-05**: Client onboarding workflow (add → entities → team assignment → import)
-- [ ] **CLIENT-06**: Per-client configuration overrides (alert rules, approval workflows)
-- [ ] **CLIENT-07**: Monthly compliance health summary report per client
+- [x] **CLIENT-01**: User can create and manage client entities with GSTIN/PAN/CIN registrations
+- [x] **CLIENT-02**: Multi-GSTIN/PAN support per client entity
+- [x] **CLIENT-03**: Client-scoped aggregate dashboard showing all client notices
+- [x] **CLIENT-04**: Client data isolation via PostgreSQL RLS (zero cross-client leakage)
+- [x] **CLIENT-05**: Client onboarding workflow (add → entities → team assignment → import)
+- [x] **CLIENT-06**: Per-client configuration overrides (alert rules, approval workflows)
+- [x] **CLIENT-07**: Monthly compliance health summary report per client
 
 ### Response Drafting
 
@@ -137,9 +137,9 @@ Requirements for the Compliance Management System milestone. Each maps to roadma
 - [ ] **INFRA-02**: Elasticsearch managed service with automatic PostgreSQL FTS fallback
 - [ ] **INFRA-03**: WebSocket infrastructure via Redis pub/sub bridge for real-time notifications
 - [ ] **INFRA-04**: APScheduler integration for periodic jobs (portal polling, deadline scans, ES sync)
-- [ ] **INFRA-05**: RegulatoryCalendar table with Indian holiday data for accurate deadline calculation
-- [ ] **INFRA-06**: Field-level PII encryption (Fernet) for GSTIN, PAN, penalty amounts in DB and logs
-- [ ] **INFRA-07**: Database-level audit trail immutability (PostgreSQL triggers, REVOKE UPDATE/DELETE)
+- [x] **INFRA-05**: RegulatoryCalendar table with Indian holiday data for accurate deadline calculation
+- [x] **INFRA-06**: Field-level PII encryption (Fernet) for GSTIN, PAN, penalty amounts in DB and logs
+- [x] **INFRA-07**: Database-level audit trail immutability (PostgreSQL triggers, REVOKE UPDATE/DELETE)
 
 ## Future Requirements (v2.1+)
 
@@ -179,32 +179,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LIFE-01 | Phase 9 | Pending |
+| LIFE-01 | Phase 9 | Complete |
 | LIFE-02 | Phase 9 | Pending |
 | LIFE-03 | Phase 9 | Pending |
-| LIFE-04 | Phase 9 | Pending |
-| LIFE-05 | Phase 9 | Pending |
+| LIFE-04 | Phase 9 | Complete |
+| LIFE-05 | Phase 9 | Complete |
 | LIFE-06 | Phase 9 | Pending |
-| LIFE-07 | Phase 9 | Pending |
-| LIFE-08 | Phase 9 | Pending |
-| AUDIT-01 | Phase 9 | Pending |
-| AUDIT-02 | Phase 9 | Pending |
-| RBAC-01 | Phase 9 | Pending |
-| RBAC-02 | Phase 9 | Pending |
-| RBAC-03 | Phase 9 | Pending |
-| RBAC-04 | Phase 9 | Pending |
-| RBAC-05 | Phase 9 | Pending |
-| RBAC-06 | Phase 9 | Pending |
-| CLIENT-01 | Phase 9 | Pending |
-| CLIENT-02 | Phase 9 | Pending |
-| CLIENT-03 | Phase 9 | Pending |
-| CLIENT-04 | Phase 9 | Pending |
-| CLIENT-05 | Phase 9 | Pending |
-| CLIENT-06 | Phase 9 | Pending |
-| CLIENT-07 | Phase 9 | Pending |
-| INFRA-05 | Phase 9 | Pending |
-| INFRA-06 | Phase 9 | Pending |
-| INFRA-07 | Phase 9 | Pending |
+| LIFE-07 | Phase 9 | Complete |
+| LIFE-08 | Phase 9 | Complete |
+| AUDIT-01 | Phase 9 | Complete |
+| AUDIT-02 | Phase 9 | Complete |
+| RBAC-01 | Phase 9 | Complete |
+| RBAC-02 | Phase 9 | Complete |
+| RBAC-03 | Phase 9 | Complete |
+| RBAC-04 | Phase 9 | Complete |
+| RBAC-05 | Phase 9 | Complete |
+| RBAC-06 | Phase 9 | Complete |
+| CLIENT-01 | Phase 9 | Complete |
+| CLIENT-02 | Phase 9 | Complete |
+| CLIENT-03 | Phase 9 | Complete |
+| CLIENT-04 | Phase 9 | Complete |
+| CLIENT-05 | Phase 9 | Complete |
+| CLIENT-06 | Phase 9 | Complete |
+| CLIENT-07 | Phase 9 | Complete |
+| INFRA-05 | Phase 9 | Complete |
+| INFRA-06 | Phase 9 | Complete |
+| INFRA-07 | Phase 9 | Complete |
 | CLASS-01 | Phase 10 | Pending |
 | CLASS-02 | Phase 10 | Pending |
 | CLASS-03 | Phase 10 | Pending |
