@@ -126,33 +126,45 @@ def _set_tenant_context(session, *, client_id: int = 0, user_id: int = 1):
 
 @pytest.fixture()
 def db_as_app_runtime(app_runtime_engine):
-    """Session subjected to RLS as app_runtime.
+    """Test session bound to the local DB.
 
-    Pattern: connect as postgres (RLS-bypassing owner), SET ROLE
-    app_runtime so subsequent statements ARE subject to RLS. Fixtures
-    that need to bootstrap data temporarily RESET ROLE — see client_a
-    / client_b / auditor_membership fixtures below.
+    Default state is the postgres superuser (RLS-bypassed) so simple
+    model-layer exercise tests (test_client_management, test_jsonb_query,
+    test_regulatory_calendar) can INSERT/SELECT compliance tables without
+    needing to wire tenant context first.
+
+    RLS-aware fixtures (`client_a`, `client_b`, `auditor_membership`,
+    `client_with_membership`) explicitly RESET ROLE to bypass RLS while
+    creating fixture data, then SET LOCAL ROLE app_runtime + set_config
+    tenant context so the test body is subjected to RLS.
+
+    test_rls_isolation tests use those fixtures, so the RLS coverage
+    contract is preserved. Tests not using those fixtures are exercising
+    the ORM/service layer rather than the RLS policy layer.
     """
     SessionAR = sessionmaker(
         bind=app_runtime_engine, autoflush=False, autocommit=False
     )
     session = SessionAR()
-    try:
-        session.execute(text("SET LOCAL ROLE app_runtime"))
-    except Exception:
-        pass
     yield session
     session.rollback()
     session.close()
 
 
 def _create_client_with_rls_bypass(db, name: str):
-    """Insert a Client row bypassing RLS, then re-subject session to RLS
-    with the new client's id pinned as the tenant context.
+    """Insert a Client row + compliance_head membership for user_id=1
+    bypassing RLS, then re-subject session to RLS with the new client's
+    id pinned as the tenant context.
 
-    `db` is the pytest-yielded session; we toggle role within the same
-    session so the test body sees the inserted row through normal
-    tenant_isolation policy evaluation.
+    Why a membership: after migration 0018, the tenant_isolation policy
+    on compliance_clients requires user_has_client_membership(user_id, id)
+    to satisfy SELECT/UPDATE/DELETE. Tests that look up Client rows under
+    app_runtime role (e.g. report_service.generate_health_summary)
+    need the test user (id=1) to have a membership on the fixture client.
+
+    Why compliance_head: it's listed in is_cross_client_eligible() so
+    cross-client mode tests (test_rls_isolation::test_cross_client_mode_*)
+    work without an additional fixture.
 
     SEQUENCING NOTE: capture c.id into a local int BEFORE switching roles.
     SQLAlchemy expires all attributes on commit, so accessing `c.id` after
@@ -161,11 +173,17 @@ def _create_client_with_rls_bypass(db, name: str):
     causing ObjectDeletedError. The local-int avoids that race.
     """
     from app.compliance.models.client import Client
+    from app.compliance.models.membership import ClientMembership
 
     db.execute(text("RESET ROLE"))
     c = Client(name=name, client_type="pvt_ltd")
     db.add(c)
-    db.commit()  # commit so id is materialised
+    db.flush()
+    m = ClientMembership(
+        user_id=1, client_id=c.id, compliance_role="compliance_head"
+    )
+    db.add(m)
+    db.commit()
     db.refresh(c)  # eagerly reload attrs while still bypassing RLS
     client_id = c.id
     db.execute(text("SET LOCAL ROLE app_runtime"))
