@@ -15,7 +15,7 @@ import os
 from alembic import op
 
 revision = "0017_db_roles"
-down_revision = "0012_add_early_access_requests"
+down_revision = "0016_regulatory_calendar_seed"
 branch_labels = None
 depends_on = None
 
