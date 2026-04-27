@@ -153,6 +153,12 @@ def _create_client_with_rls_bypass(db, name: str):
     `db` is the pytest-yielded session; we toggle role within the same
     session so the test body sees the inserted row through normal
     tenant_isolation policy evaluation.
+
+    SEQUENCING NOTE: capture c.id into a local int BEFORE switching roles.
+    SQLAlchemy expires all attributes on commit, so accessing `c.id` after
+    `SET LOCAL ROLE app_runtime` would trigger an attribute reload SELECT
+    while RLS is enabled but `app.current_client_id` is not yet set,
+    causing ObjectDeletedError. The local-int avoids that race.
     """
     from app.compliance.models.client import Client
 
@@ -160,8 +166,10 @@ def _create_client_with_rls_bypass(db, name: str):
     c = Client(name=name, client_type="pvt_ltd")
     db.add(c)
     db.commit()  # commit so id is materialised
+    db.refresh(c)  # eagerly reload attrs while still bypassing RLS
+    client_id = c.id
     db.execute(text("SET LOCAL ROLE app_runtime"))
-    _set_tenant_context(db, client_id=c.id, user_id=1)
+    _set_tenant_context(db, client_id=client_id, user_id=1)
     return c
 
 
