@@ -6,6 +6,7 @@ import sys
 
 import structlog
 
+from app.compliance.utils.log_redaction import redact_pii
 from app.config import settings
 
 # Keys whose values must never appear in logs
@@ -54,6 +55,11 @@ def setup_logging() -> None:
         structlog.stdlib.ExtraAdder(),
         drop_color_message_key,
         sanitize_sensitive_data,
+        # Phase 9 INFRA-06: strip Indian-compliance PII fields (GSTIN, PAN,
+        # CIN, DIN, penalty, tax_demand, etc.). Runs after sanitize_sensitive_data
+        # so generic sensitive-key redaction wins for shared keys, then
+        # PII-specific redaction wins for compliance-domain keys.
+        redact_pii,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
     ]

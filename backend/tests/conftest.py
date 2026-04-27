@@ -261,23 +261,47 @@ def auditor_membership(db_as_app_runtime, client_a):
     a fresh client id; tenant_isolation requires the row's client_id to
     match app.current_client_id which is enforced by the surrounding
     client_a fixture.
+
+    NOTE: client_a's _create_client_with_rls_bypass creates a compliance_head
+    membership for user_id=1 (so the test session can satisfy the
+    tenant_isolation policy on compliance_clients). To avoid the
+    uq_client_membership_user_client unique constraint on (user_id, client_id),
+    this fixture uses a DIFFERENT user (id=2) for the auditor membership.
+    User 2 is created on demand if missing.
     """
     try:
         from app.compliance.models.membership import ClientMembership
+        from app.models.user import User
     except ImportError:
         pytest.skip("ClientMembership not yet created — Plan 03")
+    # Capture client_a.id BEFORE any role/commit cycle expires its attrs.
+    # Subsequent attribute access under app_runtime would force a refresh
+    # SELECT against compliance_clients which RLS may block.
+    client_a_id = client_a.id
     db_as_app_runtime.execute(text("RESET ROLE"))
+    if db_as_app_runtime.query(User).filter(User.id == 2).first() is None:
+        db_as_app_runtime.add(
+            User(
+                id=2,
+                email="phase9-auditor@example.com",
+                username="phase9_auditor",
+                hashed_password="x",
+                role="viewer",
+            )
+        )
+        db_as_app_runtime.commit()
     m = ClientMembership(
-        user_id=1,
-        client_id=client_a.id,
+        user_id=2,
+        client_id=client_a_id,
         compliance_role="auditor",
         access_start=None,
         access_end=None,
     )
     db_as_app_runtime.add(m)
     db_as_app_runtime.commit()
+    db_as_app_runtime.refresh(m)
     db_as_app_runtime.execute(text("SET LOCAL ROLE app_runtime"))
-    _set_tenant_context(db_as_app_runtime, client_id=client_a.id, user_id=1)
+    _set_tenant_context(db_as_app_runtime, client_id=client_a_id, user_id=2)
     yield m
     _delete_with_rls_bypass(db_as_app_runtime, m)
 
