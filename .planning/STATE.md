@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
 status: planning
-stopped_at: Phase 9 research + UI-SPEC complete; resuming /gsd:plan-phase 9 (planner stage)
+stopped_at: Phase 9 planning COMPLETE — 7 plans verified, ready for /gsd:execute-phase 9
 last_updated: "2026-04-27T00:00:00.000Z"
-last_activity: 2026-04-27 — Phase 9 UI-SPEC verified 6/6 dimensions (c42efa7); resuming plan-phase
+last_activity: 2026-04-27 — Phase 9 fully planned (research + UI-SPEC + 7 plans), all 26 REQ-IDs covered, 11/11 verification dimensions passed
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
+  total_plans: 7
   completed_plans: 0
   percent: 0
 ---
@@ -67,11 +67,23 @@ None.
 
 Last session: 2026-04-27T00:00:00.000Z
 Previous session: 2026-03-31T12:30:40.526Z (Phase 9 context gathered)
-Stopped at: Resuming plan-phase 9 — research cached, UI-SPEC verified, advancing to planner
-Resume file: .planning/phases/09-compliance-foundation/09-UI-SPEC.md
+Stopped at: Phase 9 planning complete — 7 plans, 7 waves, all checks passed
+Resume file: .planning/phases/09-compliance-foundation/09-01-PLAN.md
+Next command: /gsd:execute-phase 9 (start with Wave 0 test infrastructure)
+
 Artifacts produced this session:
-  - 09-RESEARCH.md (1444 lines, c1cdc63) — 4 open questions with recommendations
-  - 09-VALIDATION.md (stub, 2f71eb5) — Nyquist contract template
+  - 09-RESEARCH.md (1444 lines, c1cdc63) — Validation Architecture, 4 open questions resolved
+  - 09-VALIDATION.md (stub, 2f71eb5) — Nyquist contract; Plan 01 Task 7 will fill it
   - 09-UI-SPEC.md (537 lines, c42efa7) — verified 6/6 dimensions, 3 non-blocking FLAGs
-Drift since last GSD checkpoint: 3 landing-page commits (UI polish only)
-Uncommitted artifacts: .gitignore (+.vercel), vercel.json — non-blocking
+  - 09-01..09-07 PLAN.md (7 plans, 09c4803) — 46 tasks across 7 waves, all 26 REQ-IDs covered
+
+Wave structure (sequential — Wave 0 establishes security gates before any business logic):
+  Wave 0 → Plan 01: Test infrastructure (3 merge-gate tests + 14 stub files + conftest)
+  Wave 1 → Plan 02: DB foundations (5 migrations 0013-0017 + validators + permission registry)
+  Wave 2 → Plan 03: ORM models + services (Client, Membership, Notice, NoticeType, Calendar)
+  Wave 3 → Plan 04: Tenant middleware + RBAC dependency factory
+  Wave 4 → Plan 05: 7 FastAPI routers (clients/memberships/notices/reports/audit/lookups)
+  Wave 5 → Plan 06: Frontend foundation (Zustand stores + ClientSwitcher + 4-step wizard) [checkpoint]
+  Wave 6 → Plan 07: Frontend notice surfaces (12 components + 5 pages + README) [checkpoint]
+
+Uncommitted artifacts: .gitignore (+.vercel), vercel.json — pre-existing, non-blocking
