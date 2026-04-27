@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
-status: Executing Phase 09 — 3/7 plans complete; Plan 04 (Wave 3 middleware) next
-stopped_at: Completed 09-03-PLAN.md (15/15 Wave 2 tests GREEN; ready for Plan 04)
-last_updated: "2026-04-27T09:09:29.256Z"
+status: Ready to execute
+stopped_at: "Completed 09-04-PLAN.md (3 Wave 0 merge gates GREEN: CLIENT-04, RBAC-01..06, AUDIT-01)"
+last_updated: "2026-04-27T09:38:52.685Z"
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 7
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 09 (compliance-foundation) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 
 ## Shipped Milestones
 
@@ -54,6 +54,9 @@ See .planning/milestones/v1.0-ROADMAP.md for v1.0 decisions.
 - [Phase 09]: transition_notice_status writes paired NoticeActivity (timeline, mutable) + AuditLog (immutable, separate session) on every status change — audit failures cannot roll back business operations
 - [Phase 09]: Migration 0018: SECURITY DEFINER helpers (is_cross_client_eligible, user_has_client_membership) break the cross_client_view RLS recursion AND fix the unsatisfiable INSERT WITH CHECK on compliance_clients
 - [Phase 09]: bulk_update_status uses per-row sub-transactions with partial-failure semantics (Pattern 8) — returns {results[], summary{ok,failed}} so the UI renders per-row error indicators
+- [Phase 09]: Plan 04: before_cursor_execute listener for RLS context — survives intra-request commits where set_config(is_local=true) does not
+- [Phase 09]: Plan 04: Migration 0019 wraps tenant_isolation cast in NULLIF so empty current_setting fails-closed cleanly (no DataError)
+- [Phase 09]: Plan 04: tenant_isolation kept PERMISSIVE — RESTRICTIVE alone would block all writes since cross_client_view PERMISSIVE is SELECT-only
 
 ### Pending Todos
 
@@ -69,9 +72,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-27T09:09:17.053Z
+Last session: 2026-04-27T09:38:52.682Z
 Previous session: 2026-03-31T12:30:40.526Z (Phase 9 context gathered)
-Stopped at: Completed 09-03-PLAN.md (15/15 Wave 2 tests GREEN; ready for Plan 04)
+Stopped at: Completed 09-04-PLAN.md (3 Wave 0 merge gates GREEN: CLIENT-04, RBAC-01..06, AUDIT-01)
 Resume command: /gsd:execute-phase 9 (will detect 09-03 missing SUMMARY.md, resume there)
 
 ## Plan 09-03 Completion (resolved 2026-04-27)
@@ -96,6 +99,7 @@ regression tests still GREEN. 4 test_rls_isolation tests + 3 test_auditor_expiry
 errors are explicit Plan 04 responsibility (middleware not yet wired).
 
 **Artifacts:**
+
 - 09-03-SUMMARY.md (this plan's summary)
 
 Wave structure (sequential — Wave 0 establishes security gates before any business logic):
