@@ -13,6 +13,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from sqlalchemy import text
 
+from app.compliance.middleware.tenant_context import TenantContextMiddleware
 from app.config import settings
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -48,10 +49,15 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # ---------------------------------------------------------------------------
 # Middleware stack
 # Order matters: LAST added = FIRST executed on incoming requests.
-#   1. CORSMiddleware          (outermost -- handles preflight early)
-#   2. SecurityHeadersMiddleware
-#   3. RequestLoggingMiddleware
-#   4. CorrelationIdMiddleware  (innermost -- generates request ID first)
+#   1. CORSMiddleware            (outermost -- handles preflight early)
+#   2. GZipMiddleware
+#   3. SecurityHeadersMiddleware
+#   4. RequestLoggingMiddleware
+#   5. CorrelationIdMiddleware
+#   6. TenantContextMiddleware   (innermost -- runs FIRST; resolves X-Client-Id
+#                                 to ContextVars before any route or
+#                                 dependency runs so the SQLAlchemy listener
+#                                 has the values available on first query)
 # ---------------------------------------------------------------------------
 
 app.add_middleware(
@@ -59,7 +65,7 @@ app.add_middleware(
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Client-Id"],
     max_age=600,
 )
 
@@ -70,6 +76,10 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 
 app.add_middleware(CorrelationIdMiddleware)
+
+# Phase 9 CLIENT-04: tenant context for RLS — added LAST so it runs FIRST
+# on incoming requests (before dependencies resolve get_db).
+app.add_middleware(TenantContextMiddleware)
 
 # Include routers
 app.include_router(auth.router)

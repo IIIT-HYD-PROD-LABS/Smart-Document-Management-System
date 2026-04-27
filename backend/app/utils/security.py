@@ -108,6 +108,17 @@ def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is deactivated",
         )
+    # Phase 9: propagate user_id to ContextVar so the SQLAlchemy
+    # before_cursor_execute listener can write it as app.user_id, which
+    # is_cross_client_eligible() reads to authorize the cross_client_view
+    # RLS policy. Compliance package may not be loaded at v1.0 endpoint
+    # time, so swallow ImportError silently.
+    try:
+        from app.compliance.middleware.tenant_context import current_user_id_var
+
+        current_user_id_var.set(user.id)
+    except Exception:
+        pass
     return user
 
 
