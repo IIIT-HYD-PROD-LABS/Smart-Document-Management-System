@@ -11,7 +11,7 @@ Requirements for the Compliance Management System milestone. Each maps to roadma
 
 - [x] **LIFE-01**: User can upload a compliance notice (PDF, JPG, PNG) via drag-and-drop
 - [ ] **LIFE-02**: System extracts text from uploaded notices via OCR (reuses existing pipeline)
-- [ ] **LIFE-03**: User can manually enter notice metadata (number, authority, date, deadline, penalty)
+- [x] **LIFE-03**: User can manually enter notice metadata (number, authority, date, deadline, penalty)
 - [x] **LIFE-04**: User can transition notice through status workflow (Received → Under Review → Response Drafted → Submitted → Resolved/Dismissed)
 - [x] **LIFE-05**: User can link related notices in a chain (Show Cause → Assessment Order → Demand)
 - [ ] **LIFE-06**: User can view notice detail page with full activity timeline
@@ -181,7 +181,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | LIFE-01 | Phase 9 | Complete |
 | LIFE-02 | Phase 9 | Pending |
-| LIFE-03 | Phase 9 | Pending |
+| LIFE-03 | Phase 9 | Complete |
 | LIFE-04 | Phase 9 | Complete |
 | LIFE-05 | Phase 9 | Complete |
 | LIFE-06 | Phase 9 | Pending |

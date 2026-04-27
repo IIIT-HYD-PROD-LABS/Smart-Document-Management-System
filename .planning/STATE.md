@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
 status: Ready to execute
-stopped_at: Plan 09-01 complete — Wave 0 test infrastructure (20 stub files, 6 fixtures, pytest-freezer, 09-VALIDATION.md filled). Resume at Plan 09-02.
-last_updated: "2026-04-27T08:01:30.189Z"
+stopped_at: Plan 09-02 complete — Wave 1 security primitives. 5 migrations (0013-0017), 8 utility/service modules, 22/22 tests GREEN. Resume at Plan 09-03 (ORM models).
+last_updated: "2026-04-27T08:31:18.667Z"
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 7
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 09 (compliance-foundation) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 
 ## Shipped Milestones
 
@@ -47,6 +47,9 @@ See .planning/milestones/v1.0-ROADMAP.md for v1.0 decisions.
 - [Phase 09]: Wave 0 RED state discipline: 17 stub test files reference modules that do not yet exist (Plans 02-05 land them); pytest.skip() guards keep v1.0 suite green
 - [Phase 09]: Five merge gates declared: test_no_cross_client_leakage (CLIENT-04), test_update_raises + test_delete_raises (AUDIT-01), test_app_role_lacks_privilege (INFRA-07), 84-case test_role_permission_matrix (RBAC-01..06)
 - [Phase 09]: Two-layer audit immutability test design: PostgreSQL trigger (raises 'append-only' EXCEPTION on UPDATE/DELETE) + REVOKE on app_runtime role — defense in depth even if a future migration accidentally drops the trigger
+- [Phase 09]: Local Postgres docker service required for Phase 9 RLS testing — Supabase pooler in transaction mode does not support FORCE RLS / role switching / trigger DDL
+- [Phase 09]: Migration chain re-ordered: 0012→0013→0017→0014→0015→0016 (head=0016) because PG CREATE POLICY ... TO role has no IF NOT EXISTS escape hatch; role must exist before REVOKE/POLICY references it
+- [Phase 09]: Two-policy access pattern: tenant_isolation (RESTRICTIVE per-tenant USING+WITH CHECK) + cross_client_view (PERMISSIVE for compliance_head/ca_consultant/cfo) on all 6 client-scoped tables
 
 ### Pending Todos
 
@@ -62,9 +65,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-27T08:01:30.186Z
+Last session: 2026-04-27T08:31:18.664Z
 Previous session: 2026-03-31T12:30:40.526Z (Phase 9 context gathered)
-Stopped at: Plan 09-01 complete — Wave 0 test infrastructure (20 stub files, 6 fixtures, pytest-freezer, 09-VALIDATION.md filled). Resume at Plan 09-02.
+Stopped at: Plan 09-02 complete — Wave 1 security primitives. 5 migrations (0013-0017), 8 utility/service modules, 22/22 tests GREEN. Resume at Plan 09-03 (ORM models).
 Resume file: None
 Next command: /gsd:execute-phase 9 (start with Wave 0 test infrastructure)
 

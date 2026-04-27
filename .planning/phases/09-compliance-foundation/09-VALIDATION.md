@@ -50,14 +50,14 @@ updated: 2026-04-27
 | 09-01 | T5 (RBAC matrix) | 0 | RBAC-01..06 | integration | `python -c "from backend.tests.test_compliance_endpoints import ROLE_PERMISSION_MATRIX; assert len(ROLE_PERMISSION_MATRIX)==84"` | ✅ created in this plan | ⬜ pending |
 | 09-01 | T6 (other test stubs) | 0 | LIFE-01..08, CLIENT-01..07, INFRA-05/06 | integration/unit | `for f in test_notice_state_machine test_indian_validators ...; do python -c "import ast; ast.parse(open(\"backend/tests/$f.py\").read())"; done` | ✅ created in this plan | ⬜ pending |
 | 09-01 | T7 (validation doc) | 0 | INFRA (validation contract) | doc | `grep -E "nyquist_compliant: true" .planning/phases/09-compliance-foundation/09-VALIDATION.md` | self | ⬜ pending |
-| 09-02 | T1 (DB roles) | 1 | CLIENT-04, INFRA-07 | integration | `docker compose exec backend pytest -x tests/test_audit_immutability.py::test_app_role_lacks_privilege` | ✅ Plan 01 | ⬜ pending |
-| 09-02 | T2 (RLS migrations) | 1 | CLIENT-04 | integration | `docker compose exec backend pytest -x tests/test_rls_isolation.py::test_all_client_tables_have_force_rls` | ✅ Plan 01 | ⬜ pending |
-| 09-02 | T3 (audit immutability migration) | 1 | AUDIT-01, AUDIT-02, INFRA-07 | integration | `docker compose exec backend pytest -x tests/test_audit_immutability.py::test_trigger_present tests/test_audit_immutability.py::test_clock_timestamp_default` | ✅ Plan 01 | ⬜ pending |
-| 09-02 | T4 (Indian validators) | 1 | LIFE-03 | unit | `docker compose exec backend pytest -x tests/test_indian_validators.py` | ✅ Plan 01 | ⬜ pending |
-| 09-02 | T5 (PII encryption + log redaction) | 1 | INFRA-06 | unit | `docker compose exec backend pytest -x tests/test_pii_encryption.py tests/test_log_redaction.py` | ✅ Plan 01 | ⬜ pending |
-| 09-02 | T6 (permission registry) | 1 | RBAC-01..06 | unit | `docker compose exec backend pytest -x tests/test_permission_registry.py` | ✅ Plan 01 | ⬜ pending |
-| 09-02 | T7 (state machine) | 1 | LIFE-04 | unit | `docker compose exec backend pytest -x tests/test_notice_state_machine.py` | ✅ Plan 01 | ⬜ pending |
-| 09-02 | T8 (regulatory calendar seed) | 1 | INFRA-05 | integration | `docker compose exec backend pytest -x tests/test_regulatory_calendar.py` | ✅ Plan 01 | ⬜ pending |
+| 09-02 | T1 (DB roles) | 1 | CLIENT-04, INFRA-07 | integration | `docker compose exec backend pytest -x tests/test_audit_immutability.py::test_app_role_lacks_privilege` | ✅ Plan 01 | ✅ green |
+| 09-02 | T2 (RLS migrations) | 1 | CLIENT-04 | integration | `docker compose exec backend pytest -x tests/test_rls_isolation.py::test_all_client_tables_have_force_rls` | ✅ Plan 01 | ✅ green |
+| 09-02 | T3 (audit immutability migration) | 1 | AUDIT-01, AUDIT-02, INFRA-07 | integration | `docker compose exec backend pytest -x tests/test_audit_immutability.py::test_trigger_present tests/test_audit_immutability.py::test_clock_timestamp_default` | ✅ Plan 01 | ✅ green |
+| 09-02 | T4 (Indian validators) | 1 | LIFE-03 | unit | `docker compose exec backend pytest -x tests/test_indian_validators.py` | ✅ Plan 01 | ✅ green |
+| 09-02 | T5 (PII encryption + log redaction) | 1 | INFRA-06 | unit | `docker compose exec backend pytest -x tests/test_pii_encryption.py tests/test_log_redaction.py` | ✅ Plan 01 | ✅ green |
+| 09-02 | T6 (permission registry) | 1 | RBAC-01..06 | unit | `docker compose exec backend pytest -x tests/test_permission_registry.py` | ✅ Plan 01 | ✅ green |
+| 09-02 | T7 (state machine) | 1 | LIFE-04 | unit | `docker compose exec backend pytest -x tests/test_notice_state_machine.py` | ✅ Plan 01 | ✅ green |
+| 09-02 | T8 (regulatory calendar seed) | 1 | INFRA-05 | integration | `docker compose exec backend pytest -x tests/test_regulatory_calendar.py` | ✅ Plan 01 | ⚠️ partial — 12 rows seeded; ORM model from Plan 03 needed for test |
 | 09-03 | T1 (Client + Registration models) | 2 | CLIENT-01, CLIENT-02, CLIENT-06 | integration | `docker compose exec backend pytest -x tests/test_client_management.py tests/test_jsonb_query.py` | ✅ Plan 01 | ⬜ pending |
 | 09-03 | T2 (Membership model) | 2 | RBAC-04, CLIENT-04 | integration | `docker compose exec backend pytest -x tests/test_auditor_expiry.py` | ✅ Plan 01 | ⬜ pending |
 | 09-03 | T3 (Notice + activity + tags) | 2 | LIFE-01, LIFE-04, LIFE-05, LIFE-09 | integration | `docker compose exec backend pytest -x tests/test_compliance_notices.py tests/test_notice_chain.py` | ✅ Plan 01 | ⬜ pending |

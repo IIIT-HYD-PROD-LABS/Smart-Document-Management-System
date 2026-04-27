@@ -42,7 +42,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
   6. All six roles (Compliance Head, Legal Team, Finance Team, Auditor, CA/Consultant, Staff) enforce correct permission boundaries — an Auditor cannot edit, a Staff member cannot approve/submit
 **Plans**: 7 plans
 - [x] 09-01-PLAN.md — Wave 0 test infrastructure (RLS isolation, audit immutability, RBAC matrix, fixtures, validation contract)
-- [ ] 09-02-PLAN.md — Wave 1 DB foundations (5 migrations: schema/audit-immutability/RLS/calendar-seed/DB-roles + Indian validators + PII encryption + permission registry + state machine)
+- [x] 09-02-PLAN.md — Wave 1 DB foundations (5 migrations: schema/audit-immutability/RLS/calendar-seed/DB-roles + Indian validators + PII encryption + permission registry + state machine)
 - [ ] 09-03-PLAN.md — Wave 2 backend models + services (5 ORM modules, 4 schemas, 4 services)
 - [ ] 09-04-PLAN.md — Wave 3 backend middleware + RBAC dependencies (tenant context, auditor expiry, require_compliance_permission)
 - [ ] 09-05-PLAN.md — Wave 4 backend routers (7 routers under /api/compliance)
