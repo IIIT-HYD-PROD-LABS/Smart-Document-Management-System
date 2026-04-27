@@ -173,6 +173,97 @@ def require_compliance_permission(perm: CompliancePermission):
     return _check
 
 
+def require_client_create_or_first_onboard(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Optional[ClientMembership]:
+    """Onboarding gate for POST /compliance/clients.
+
+    Bootstrap rule: a user with zero existing compliance memberships may
+    self-service create their first client (no X-Client-Id required). The
+    onboarding payload's `team` array MUST place that user into a role on
+    the new client — that membership grant is what permits them to operate
+    afterwards.
+
+    Once the user has any membership, normal CLIENT_CREATE enforcement
+    applies: they need an active membership with the `client:create`
+    permission (only `ca_consultant` per the registry), via either a
+    specific X-Client-Id or cross-client mode. This is the same code path
+    require_compliance_permission(CLIENT_CREATE) would have run, inlined so
+    the bootstrap exemption can short-circuit before the X-Client-Id check
+    raises 400.
+    """
+    # Bootstrap path — user has no memberships at all
+    has_existing = (
+        db.query(ClientMembership)
+        .filter(ClientMembership.user_id == current_user.id)
+        .first()
+        is not None
+    )
+    if not has_existing:
+        return None
+
+    # Existing-user path — replicate get_active_membership + permission check
+    cross = cross_client_mode_var.get()
+    cid = current_client_id_var.get()
+
+    if cross:
+        now = datetime.now(timezone.utc)
+        candidates = (
+            db.query(ClientMembership)
+            .filter(
+                ClientMembership.user_id == current_user.id,
+                ClientMembership.compliance_role.in_(_CROSS_CLIENT_ELIGIBLE_ROLES),
+            )
+            .all()
+        )
+        active = [m for m in candidates if is_membership_active(m, now)]
+        if not active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Cross-client mode requires an active compliance_head, "
+                    "ca_consultant, or cfo membership"
+                ),
+            )
+        membership = active[0]
+    elif cid is not None:
+        membership = (
+            db.query(ClientMembership)
+            .filter(
+                ClientMembership.user_id == current_user.id,
+                ClientMembership.client_id == cid,
+            )
+            .first()
+        )
+        if not membership:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"No membership for client {cid}",
+            )
+        if not is_membership_active(membership):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=reason_inactive(membership) or "Membership not active",
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Client-Id header is required for compliance endpoints",
+        )
+
+    role = ComplianceRole(membership.compliance_role)
+    if not has_permission(role, CompliancePermission.CLIENT_CREATE):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Role '{role.value}' lacks permission "
+                f"'{CompliancePermission.CLIENT_CREATE.value}'"
+            ),
+        )
+    return membership
+
+
 def require_compliance_role(*allowed_roles: ComplianceRole):
     """Factory: requires the active membership to be in one of `allowed_roles`.
 

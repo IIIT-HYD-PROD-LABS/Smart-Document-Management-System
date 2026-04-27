@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.compliance.dependencies import (
     get_active_membership,
+    require_client_create_or_first_onboard,
     require_compliance_permission,
 )
 from app.compliance.models.client import Client
@@ -79,13 +80,12 @@ def onboard(
     payload: ClientOnboardRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    # CLIENT_CREATE: only ca_consultant has it per registry. The dependency
-    # also doubles as the active-membership gate so we know the calling
-    # user is an active CA Consultant on SOME client (cross-client mode for
-    # ca_consultant is allowed per is_cross_client_eligible()).
-    _membership: ClientMembership = Depends(
-        require_compliance_permission(CompliancePermission.CLIENT_CREATE)
-    ),
+    # CLIENT_CREATE gate with bootstrap exemption: a user with zero
+    # memberships may self-service create their first client (the team
+    # payload self-grants their role). After that, only ca_consultant
+    # (the role with CLIENT_CREATE in the registry) can onboard new
+    # clients via the API.
+    _membership=Depends(require_client_create_or_first_onboard),
 ):
     """Atomic client onboarding — CLIENT-05.
 
