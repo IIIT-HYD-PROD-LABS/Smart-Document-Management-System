@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
-status: Ready to execute
-stopped_at: Plan 09-02 complete — Wave 1 security primitives. 5 migrations (0013-0017), 8 utility/service modules, 22/22 tests GREEN. Resume at Plan 09-03 (ORM models).
-last_updated: "2026-04-27T08:31:18.667Z"
+status: Executing Phase 09 — PAUSED (org monthly usage limit hit mid-09-03)
+stopped_at: Plan 09-03 partial (5/8 tasks committed, T6-T8 + WIP files uncommitted). Org monthly usage limit hit during executor agent run.
+last_updated: "2026-04-27T08:50:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 0
@@ -65,11 +65,39 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-27T08:31:18.664Z
+Last session: 2026-04-27T08:50:00.000Z
 Previous session: 2026-03-31T12:30:40.526Z (Phase 9 context gathered)
-Stopped at: Plan 09-02 complete — Wave 1 security primitives. 5 migrations (0013-0017), 8 utility/service modules, 22/22 tests GREEN. Resume at Plan 09-03 (ORM models).
-Resume file: None
-Next command: /gsd:execute-phase 9 (start with Wave 0 test infrastructure)
+Stopped at: Plan 09-03 task ~5/8 — usage limit interrupted executor mid-plan
+Resume command: /gsd:execute-phase 9 (will detect 09-03 missing SUMMARY.md, resume there)
+
+## Plan 09-03 Resume Notes (CRITICAL — DO NOT LOSE)
+
+**Committed (5 commits):**
+- `9bf9607` T1: Client + ClientRegistration ORM
+- `928d055` T2: ClientMembership ORM (time-bound access)
+- `038e5d4` T3: NoticeType + ComplianceNotice + NoticeActivity + NoticeTag + RegulatoryCalendar
+- `ee7b843` T4: Document.notice_id FK + register Phase 9 models
+- `85d7435` T5 (or part): Pydantic schemas (client + notice + activity)
+
+**Uncommitted WIP (executor was working on these when limit hit):**
+- `backend/app/compliance/services/activity_service.py` (52 lines, partial — likely incomplete stub)
+- `backend/alembic/versions/0018_fix_rls_cross_client_recursion.py` (246 lines — agent discovered RLS recursion bug, started fix; **REVIEW BEFORE COMMITTING**)
+- `backend/app/compliance/models/__init__.py` (modified — likely registers new exports)
+- `backend/tests/conftest.py` (modified)
+
+**Tasks remaining (likely):**
+- T6: notice_service.py (state machine + activity capture wiring) — NOT STARTED
+- T7: client_service.py + onboarding service — NOT STARTED
+- T8: report_service.py — NOT STARTED
+- SUMMARY.md — NOT CREATED
+- ROADMAP.md update for 09-03 progress — NOT DONE
+
+**To resume:** `/gsd:execute-phase 9` will see 09-03-PLAN.md without 09-03-SUMMARY.md and re-spawn the executor on Plan 09-03. The executor should:
+1. Read this STATE.md to learn what's already done
+2. Inspect the WIP files (activity_service.py, migration 0018) and decide whether to keep, complete, or restart
+3. Complete tasks T6-T8
+4. Write SUMMARY.md
+5. Move to Plan 09-04 (Wave 3 — middleware + RBAC factory)
 
 Artifacts produced this session:
 
