@@ -50,6 +50,26 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
+        # Phase 9: ensure alembic_version column is wide enough for descriptive
+        # revision ids (e.g. 0013_compliance_foundation_schema = 33 chars).
+        # The default is varchar(32). Idempotent — no-op if already wide enough
+        # or table doesn't exist yet.
+        from sqlalchemy import text
+        connection.execute(text("""
+            DO $$
+            BEGIN
+              IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'alembic_version'
+                  AND column_name = 'version_num'
+                  AND character_maximum_length < 64
+              ) THEN
+                EXECUTE 'ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(64)';
+              END IF;
+            END $$;
+        """))
+        connection.commit()
+
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

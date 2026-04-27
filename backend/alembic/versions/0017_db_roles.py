@@ -1,7 +1,7 @@
 """Create DB roles app_migrator (owner) and app_runtime (subject to RLS).
 
 Revision ID: 0017_db_roles
-Revises: 0016_regulatory_calendar_seed (re-chained in Task 5 — initially set to 0012 to keep migration tree valid before 0013-0016 land)
+Revises: 0013_compliance_foundation_schema
 Create Date: 2026-04-27
 
 Per 09-RESEARCH.md Pattern 1 — app_migrator has BYPASSRLS implicit (owner);
@@ -9,13 +9,22 @@ app_runtime is the FastAPI process role and is subject to RLS policies.
 
 Passwords are read from env vars APP_MIGRATOR_PASSWORD and APP_RUNTIME_PASSWORD.
 Operators set these in .env before running alembic upgrade head.
+
+CHAIN ORDER (deviation from plan):
+  Plan specified 0012 -> 0013 -> 0014 -> 0015 -> 0016 -> 0017.
+  But 0014 (REVOKE on app_runtime) and 0015 (CREATE POLICY ... TO app_runtime)
+  fail when app_runtime does not yet exist. CREATE POLICY does NOT have an
+  IF NOT EXISTS / DO block escape hatch for the role reference.
+  Therefore 0017 (role creation) must run BEFORE 0014/0015.
+  Final working chain: 0012 -> 0013 -> 0017 -> 0014 -> 0015 -> 0016.
+  Head is 0016_regulatory_calendar_seed.
 """
 
 import os
 from alembic import op
 
 revision = "0017_db_roles"
-down_revision = "0016_regulatory_calendar_seed"
+down_revision = "0013_compliance_foundation_schema"
 branch_labels = None
 depends_on = None
 

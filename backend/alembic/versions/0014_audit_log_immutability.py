@@ -15,7 +15,7 @@ No schema change, no data migration. Existing audit_logs rows are preserved.
 from alembic import op
 
 revision = "0014_audit_log_immutability"
-down_revision = "0013_compliance_foundation_schema"
+down_revision = "0017_db_roles"
 branch_labels = None
 depends_on = None
 
