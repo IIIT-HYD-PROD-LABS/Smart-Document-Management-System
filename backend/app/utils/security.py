@@ -134,3 +134,34 @@ def require_editor(current_user: User = Depends(get_current_user)) -> User:
 def require_viewer(current_user: User = Depends(get_current_user)) -> User:
     """FastAPI dependency for viewer access. All authenticated users can view."""
     return current_user
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: Compliance role/permission Depends — delegates to
+# app.compliance.dependencies. Mirrors the v1.0 require_admin/require_editor
+# naming convention so routers can `from app.utils.security import ...` for
+# both system-role and compliance-role guards.
+#
+# Imports are deferred to avoid a circular import at startup:
+# app.compliance.dependencies depends on this module's get_current_user.
+# ---------------------------------------------------------------------------
+
+
+def require_compliance_permission(perm):
+    """Re-export of app.compliance.dependencies.require_compliance_permission.
+
+    Allows routers to import compliance guards from app.utils.security
+    consistently with the v1.0 require_admin pattern.
+    """
+    from app.compliance.dependencies import (
+        require_compliance_permission as _impl,
+    )
+
+    return _impl(perm)
+
+
+def require_compliance_role(*roles):
+    """Re-export of app.compliance.dependencies.require_compliance_role."""
+    from app.compliance.dependencies import require_compliance_role as _impl
+
+    return _impl(*roles)
