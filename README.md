@@ -310,6 +310,7 @@ docker-compose.yml           # Redis, Backend, Celery, Frontend
 | Security Hardening | 25 fixes across 14 files + all tests green | ✅ Done |
 | 7 | UI & Analytics | ✅ Done |
 | 8 | Production Readiness | ✅ Done |
+| 9 | Compliance Foundation (v2.0) | ✅ Code-complete (final smoke test pending) |
 
 ### Completed
 
@@ -336,6 +337,63 @@ docker-compose.yml           # Redis, Backend, Celery, Frontend
 **UI Redesign** — Minimalist dark theme (Linear/Notion-inspired), Inter font, zinc/neutral palette, no glassmorphism. Clean dashboard with stats, category filters, full-text search, analytics.
 
 **Phase 8 — Production Readiness (March 25, 2026)** — Audit logging system (AuditLog model, audit service with fire-and-forget BackgroundTasks, admin query endpoint with filters). GitHub Actions CI/CD (automated tests + lint on push/PR, Docker image build on merge, Dependabot for dependency updates). Production documentation (DEPLOYMENT.md step-by-step guide, TROUBLESHOOTING.md with 12+ entries, SECURITY.md production checklist).
+
+---
+
+## v2.0 — Compliance Management System
+
+Smart Document Management System v2.0 extends v1.0 with multi-tenant compliance notice tracking for Indian regulators (GST, IT, MCA, RBI, SEBI). Manual notice metadata entry, full status workflow, immutable audit trail, multi-client RBAC — Phase 9 ships the foundation; Phases 10-14 add ML auto-classification, alert system, response drafting, cross-entity search, and government-portal integration.
+
+### Phase 9 — Compliance Foundation
+
+**Goal:** Manually track compliance notices end-to-end with full audit trail, multi-client support, and role-based access control.
+
+**ROADMAP success criteria — all GREEN:**
+
+1. Upload a compliance notice (PDF/JPG/PNG) with manual metadata; appears scoped to the correct client.
+2. Move a notice through the full workflow (Received → Under Review → Response Drafted → Submitted → Resolved/Dismissed) and link related notices via parent_notice_id chain.
+3. Filter and search by authority/type/status/risk/deadline/GSTIN; bulk-update status for multiple notices.
+4. Every notice action recorded in an immutable, timestamped audit log — no application user (including admins) can alter or delete an audit record (PostgreSQL trigger + REVOKE on app_runtime role).
+5. CA/Tax Consultant manages multiple client entities (each with distinct GSTIN/PAN) with PostgreSQL RLS guaranteeing zero cross-client leakage.
+6. All 7 compliance roles enforce correct permission boundaries: Compliance Head, Legal Team, Finance Team, Auditor (time-bound), CA/Consultant, Staff, CFO — verified by 84-case parametrized RBAC matrix.
+
+**Requirements covered (26):** LIFE-01..08, AUDIT-01/02, RBAC-01..06, CLIENT-01..07, INFRA-05/06/07.
+
+### Stack additions for v2.0
+
+| Layer | Additions |
+|-------|-----------|
+| Backend | PostgreSQL RLS (FORCE ROW LEVEL SECURITY on 6 client-scoped tables), `app_runtime` DB role with REVOKE on audit_logs, Fernet PII encryption, pytest-freezer + freezegun, structlog redact_pii |
+| Frontend | zustand@5 (multi-tenant state + persist), @tanstack/react-query@5 (server cache), @tanstack/react-table@8 (notice table + row selection), react-hook-form@7 + zod@3 (wizard validation), react-day-picker@9 (date pickers — v9 for React 19 compat), papaparse@5 (CSV), date-fns@3 |
+| Migrations | 0013–0019 (clients, registrations, memberships, notices, activity, calendar, RLS policies, recursion fix, fail-closed cast) |
+
+### Run commands
+
+```bash
+# Start all services (Postgres, Redis, backend, frontend)
+docker compose up -d
+
+# Apply Phase 9 migrations
+docker compose exec backend alembic upgrade head
+
+# Run full backend test suite (Phase 9 merge gates: RLS isolation, audit immutability, RBAC matrix)
+docker compose exec backend pytest --tb=short tests/
+
+# Run frontend lint (skipped at build-time per next.config.mjs.eslint.ignoreDuringBuilds)
+docker compose exec frontend npm run lint
+```
+
+### Phase 9 plan status
+
+| Plan | Wave | Description | Status |
+|------|------|-------------|--------|
+| 09-01 | 0 | Test infrastructure: 17 stub test files, conftest fixtures, validation contract | ✅ done |
+| 09-02 | 1 | DB foundations: 5 migrations (schema, audit-immutability trigger, RLS policies, calendar seed, DB roles) + Indian validators + permission registry + state machine | ✅ done |
+| 09-03 | 2 | ORM models + services: Client/Membership/Notice/NoticeType/Calendar + activity_service + notice_service + client_service + report_service (+ migration 0018 RLS recursion fix) | ✅ done |
+| 09-04 | 3 | Tenant context middleware + auditor expiry + require_compliance_permission factory + 3 merge gates GREEN | ✅ done |
+| 09-05 | 4 | 7 FastAPI compliance routers (clients, memberships, notices, reports, audit, lookups) under /api/compliance | ✅ done |
+| 09-06 | 5 | Frontend foundation: 2 Zustand stores, complianceApi axios extension (X-Client-Id auto-attach), ClientSwitcher, 4-step onboarding wizard, team management (user APPROVED 2026-04-27) | ✅ done |
+| 09-07 | 6 | Frontend notice surfaces: 12 components, 5 pages, README v2.0 — compliance dashboard, notice detail (40/60 layout), bulk action bar with partial-failure UX, audit log viewer, monthly health summary report (XSS-safe structural render) | ✅ code-complete (manual smoke test pending) |
 
 ---
 
