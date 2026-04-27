@@ -3,9 +3,11 @@ phase: 09-compliance-foundation
 plan: 06
 subsystem: ui
 tags: [zustand, react-query, react-hook-form, zod, multi-tenant, axios, nextjs15, react19]
-status: checkpoint-reached
+status: complete
 checkpoint_type: human-verify
 checkpoint_task: 6
+checkpoint_approved_at: "2026-04-27T10:32:00Z"
+checkpoint_approval_signal: "APPROVED"
 
 # Dependency graph
 requires:
@@ -97,17 +99,17 @@ requirements-completed:
   - RBAC-06
 
 # Metrics
-duration: 23min (autonomous tasks 1-5; checkpoint task 6 awaits user verification)
-completed: pending-checkpoint
+duration: 23min (autonomous tasks 1-5; checkpoint task 6 user-verified APPROVED)
+completed: "2026-04-27T10:32:00Z"
 ---
 
-# Phase 09 Plan 06: Compliance Frontend Foundation — CHECKPOINT REACHED
+# Phase 09 Plan 06: Compliance Frontend Foundation — COMPLETE
 
 **Multi-tenant compliance frontend foundation: Zustand stores, X-Client-Id auto-attach axios extension, top-bar ClientSwitcher with eligibility-gated cross-client toggle, 4-step onboarding wizard with localStorage resume, and team management page with 7-role chips + Auditor expiry visualization.**
 
 ## Status
 
-**Tasks 1-5 of 6 autonomous tasks complete.** Task 6 is `checkpoint:human-verify` — paused awaiting user manual smoke test. After user approves, this SUMMARY will be marked completed and Plan 09-07 begins.
+**All 6 tasks complete.** User performed the 16-step manual smoke test on 2026-04-27 and signed off with `APPROVED`. Plan 09-07 (Wave 6 — final notice-centric surfaces) begins next.
 
 ## Performance
 
@@ -139,7 +141,7 @@ completed: pending-checkpoint
 | 3 | ClientSwitcher + compliance layout + dashboard nav | `6ec75f0` | components/compliance/ClientSwitcher.tsx, app/dashboard/compliance/layout.tsx, app/dashboard/layout.tsx |
 | 4 | 4-step onboarding wizard | `9c33e2f` | OnboardingWizard/{WizardLayout,StepDetails,StepRegistrations,StepTeam,StepImport}.tsx, app/dashboard/compliance/clients/new/page.tsx |
 | 5 | Client list + detail + team mgmt + dialog/drawer | `762c896` | app/dashboard/compliance/{page,clients/page,clients/[id]/page,clients/[id]/team/page}.tsx, components/compliance/{AddMemberDialog,RoleDescriptionDrawer}.tsx, next.config.mjs (eslint), lib/api/compliance.ts (Authority type fix), deferred-items.md |
-| 6 | Manual smoke test (checkpoint) | (awaiting user) | n/a |
+| 6 | Manual smoke test (checkpoint) — APPROVED 2026-04-27T10:32Z | `182bc98` (partial summary commit) | 16-step smoke test executed by user; sign-off "APPROVED" |
 
 ## Files Created (18)
 
@@ -264,13 +266,13 @@ FOUND: 9c33e2f (T4)
 FOUND: 762c896 (T5)
 ```
 
-## Awaiting User Verification
+## User Verification — APPROVED
 
-Task 6 is `checkpoint:human-verify`. The 16-step manual smoke test from the plan (lines 1985-2008) is what the user will perform at http://localhost:3000 once they sign in. After approval, this plan will be finalized and Plan 09-07 begins (Wave 6 — notice-centric surfaces).
+Task 6 (`checkpoint:human-verify`) PASSED. The 16-step manual smoke test from the plan was executed by the user at http://localhost:3000 on 2026-04-27 and signed off with `APPROVED`. Plan 09-07 (Wave 6 — notice-centric surfaces) begins immediately.
 
 ## Next Phase Readiness
 
-**Ready for Plan 09-07** (the next plan in this phase) once the user signs off on the checkpoint:
+**Ready for Plan 09-07** — the user has approved the checkpoint:
 - Same `complianceApi` will be reused for notices/activity/audit/reports
 - Same Zustand `useCurrentClient` store will drive the notice table tenant filter
 - TanStack Table v8 is installed and ready for the notice table
@@ -283,4 +285,4 @@ Task 6 is `checkpoint:human-verify`. The 16-step manual smoke test from the plan
 
 ---
 *Phase: 09-compliance-foundation*
-*Status: checkpoint reached after Task 5; Task 6 awaits user verification*
+*Status: complete — user APPROVED checkpoint on 2026-04-27T10:32Z; Plan 09-07 begins*

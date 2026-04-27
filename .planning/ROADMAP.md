@@ -121,7 +121,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 9. Compliance Foundation | v2.0 | 3/7 | In Progress | - |
+| 9. Compliance Foundation | v2.0 | 6/7 | In Progress | - |
 | 10. ML Classification + Risk Scoring | v2.0 | 0/TBD | Not started | - |
 | 11. Alert System + Compliance Calendar | v2.0 | 0/TBD | Not started | - |
 | 12. Response Drafting + Evidence Management | v2.0 | 0/TBD | Not started | - |
@@ -129,4 +129,4 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 | 14. Government Portal Integration | v2.0 | 0/TBD | Not started | - |
 
 ---
-*Last updated: 2026-04-27 — Phase 9 in progress (3/7 plans complete: 09-01 Wave 0 + 09-02 Wave 1 + 09-03 Wave 2); phases 10-14 unchanged*
+*Last updated: 2026-04-27 — Phase 9 in progress (6/7 plans complete: 09-01 Wave 0 through 09-06 Wave 5; user APPROVED 09-06 manual smoke test); 09-07 (Wave 6 final) executing*

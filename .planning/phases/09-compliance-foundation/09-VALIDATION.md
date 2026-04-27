@@ -77,7 +77,7 @@ updated: 2026-04-27
 | 09-05 | T2 (notices + bulk router) | 4 | LIFE-01, LIFE-07, LIFE-08 | integration | `docker compose exec backend pytest -x tests/test_compliance_notices.py tests/test_notice_query.py` | ✅ Plan 01 | ✅ green |
 | 09-05 | T3 (reports + audit viewer router) | 4 | CLIENT-07, AUDIT-01 | integration | `docker compose exec backend pytest -x tests/test_reports.py` | ✅ Plan 01 | ✅ green |
 | 09-05 | T4 (mount routers in main.py) | 4 | LIFE-01..08, AUDIT-01, CLIENT-01..07 | integration | `docker compose exec backend python -c "from app.main import app; assert any('/api/compliance' in getattr(r, 'path', '') for r in app.routes)"` | self | ✅ green |
-| 09-06 | T1-T4 (frontend client switcher + onboarding wizard) | 5 | CLIENT-05, CLIENT-04 (UI part) | manual smoke | manual click-through, lint: `docker compose exec frontend npm run lint` | n/a (manual) | ⬜ pending |
+| 09-06 | T1-T4 (frontend client switcher + onboarding wizard) | 5 | CLIENT-05, CLIENT-04 (UI part) | manual smoke | manual click-through, lint: `docker compose exec frontend npm run lint` | n/a (manual) | ✅ green (user APPROVED 2026-04-27) |
 | 09-07 | T1-T5 (frontend notice surfaces) | 6 | LIFE-01..08, AUDIT-01 (UI part) | manual smoke + lint | manual click-through, lint: `docker compose exec frontend npm run lint` | n/a (manual) | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
