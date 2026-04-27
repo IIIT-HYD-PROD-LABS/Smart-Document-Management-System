@@ -179,21 +179,30 @@ def require_client_create_or_first_onboard(
 ) -> Optional[ClientMembership]:
     """Onboarding gate for POST /compliance/clients.
 
-    Bootstrap rule: a user with zero existing compliance memberships may
-    self-service create their first client (no X-Client-Id required). The
-    onboarding payload's `team` array MUST place that user into a role on
-    the new client — that membership grant is what permits them to operate
-    afterwards.
+    Three short-circuit paths before the standard CLIENT_CREATE check:
 
-    Once the user has any membership, normal CLIENT_CREATE enforcement
-    applies: they need an active membership with the `client:create`
-    permission (only `ca_consultant` per the registry), via either a
-    specific X-Client-Id or cross-client mode. This is the same code path
-    require_compliance_permission(CLIENT_CREATE) would have run, inlined so
-    the bootstrap exemption can short-circuit before the X-Client-Id check
-    raises 400.
+      1. v1.0 admin override — admins administer the system, including
+         tenant provisioning. Even if their compliance_role is something
+         non-creating like compliance_head, they can always onboard new
+         clients. (CONTEXT D-24: parallel role systems; v1.0 admin
+         retains system-administration powers.)
+
+      2. Bootstrap path — a user with zero compliance memberships may
+         self-service create their first client. The onboarding payload's
+         `team` array (or the auto-add in client_service) MUST grant the
+         user a role on the new client.
+
+      3. Otherwise — standard CLIENT_CREATE enforcement: active membership
+         with the `client:create` permission (only `ca_consultant` per the
+         registry), via X-Client-Id or cross-client mode. Inlined here so
+         the bootstrap/admin exemptions can short-circuit before the
+         X-Client-Id check raises 400.
     """
-    # Bootstrap path — user has no memberships at all
+    # 1. v1.0 admin override
+    if (current_user.role or "").lower() == "admin":
+        return None
+
+    # 2. Bootstrap path — user has no memberships at all
     has_existing = (
         db.query(ClientMembership)
         .filter(ClientMembership.user_id == current_user.id)
