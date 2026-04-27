@@ -51,6 +51,8 @@ asgi-correlation-id==4.3.4
 
 # HTTP Client
 httpx==0.25.2
+pytest-freezer==0.4.9
+freezegun==1.5.5
 
 # Dataset Management
 kaggle==1.6.17
