@@ -50,9 +50,47 @@ def onboard_client(
     `registrations` row keys: type (GSTIN/PAN/CIN/DIN), value, state.
     `team` row keys: user_id, compliance_role, access_start, access_end.
 
+    The actor is auto-added as `compliance_head` if not already present in
+    the team payload — every onboarder needs at least one membership on
+    the new client (otherwise they cannot operate it after creation).
+    Team rows referencing non-existent user_ids are dropped (defensive
+    against frontend wizards that ask users to type numeric IDs they
+    can't reasonably know).
+
     Per CLIENT-05: rolls back the entire onboarding if any step fails;
     callers see Client with all dependents committed or no Client at all.
     """
+    # Sanitise team: drop entries with missing/zero user_id or referencing
+    # users that don't exist in the users table (FK would IntegrityError
+    # otherwise — preserved as defensive even after the frontend fix).
+    candidate_ids = [m.get("user_id") for m in team if m.get("user_id")]
+    if candidate_ids:
+        existing_ids = {
+            uid
+            for (uid,) in db.query(User.id)
+            .filter(User.id.in_(candidate_ids))
+            .all()
+        }
+    else:
+        existing_ids = set()
+    sanitised_team: list[dict] = []
+    seen_user_ids: set[int] = set()
+    for m in team:
+        uid = m.get("user_id")
+        if not uid or uid in seen_user_ids or uid not in existing_ids:
+            continue
+        sanitised_team.append(m)
+        seen_user_ids.add(uid)
+
+    # Auto-add the actor as compliance_head if they aren't already on the
+    # team. Without this, an empty/invalid wizard team payload creates a
+    # Client the actor cannot see (no membership → RLS hides it).
+    if actor.id not in seen_user_ids:
+        sanitised_team.insert(
+            0,
+            {"user_id": actor.id, "compliance_role": "compliance_head"},
+        )
+
     try:
         client = Client(
             name=details["name"],
@@ -74,7 +112,7 @@ def onboard_client(
                 )
             )
 
-        for member in team:
+        for member in sanitised_team:
             db.add(
                 ClientMembership(
                     user_id=member["user_id"],

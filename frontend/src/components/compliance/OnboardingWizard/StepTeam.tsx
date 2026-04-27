@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { FiTrash2, FiPlus } from "react-icons/fi";
+import { FiTrash2, FiPlus, FiInfo } from "react-icons/fi";
+import { useAuth } from "@/context/AuthContext";
 import {
     useOnboardingWizard,
     type WizardTeamMember,
@@ -26,10 +27,18 @@ import {
  */
 export function StepTeam() {
     const { team, setTeam, setStep, markComplete } = useOnboardingWizard();
+    const { user: currentUser } = useAuth();
     const [draft, setDraft] = useState<WizardTeamMember | null>(null);
     const [accessStart, setAccessStart] = useState<string>("");
     const [accessEnd, setAccessEnd] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
+
+    // The backend auto-adds the current user as compliance_head if they
+    // aren't already on the team list. Surface that here so the user
+    // knows they don't need to do anything to be added.
+    const currentUserOnTeam = currentUser
+        ? team.some((m) => m.user_id === currentUser.id)
+        : false;
 
     const beginAdd = () => {
         setDraft({ user_id: 0, compliance_role: "staff" });
@@ -95,9 +104,36 @@ export function StepTeam() {
                 </p>
             </div>
 
+            {!currentUserOnTeam && currentUser && (
+                <div
+                    className="flex items-start gap-3 p-3 rounded-md bg-[#3b82f6]/10 border border-[#3b82f6]/30"
+                    role="note"
+                >
+                    <FiInfo
+                        className="w-4 h-4 text-[#3b82f6] mt-0.5 shrink-0"
+                        aria-hidden="true"
+                    />
+                    <div className="text-[13px] text-[#a1a1aa]">
+                        <span className="text-white">{currentUser.email}</span>{" "}
+                        will be added automatically as{" "}
+                        <span
+                            className="px-1.5 py-0.5 rounded text-[11px] font-medium"
+                            style={{
+                                backgroundColor: `${COMPLIANCE_ROLE_COLORS.compliance_head}1a`,
+                                color: COMPLIANCE_ROLE_COLORS.compliance_head,
+                            }}
+                        >
+                            Compliance Head
+                        </span>
+                        . Add other team members below or skip — you can manage
+                        roles later from the Team page.
+                    </div>
+                </div>
+            )}
+
             {team.length === 0 && !draft && (
                 <p className="text-[#52525b] text-sm py-2">
-                    No team members added yet.
+                    No additional team members yet.
                 </p>
             )}
 
