@@ -64,6 +64,16 @@ class Document(Base):
     celery_task_id = Column(String(255), nullable=True, index=True)
     extracted_metadata = Column(JSON, nullable=True)
 
+    # Phase 9: link to compliance notice for notice-attached documents (D-10).
+    # Allows the v1.0 upload + OCR pipeline to be reused for notice files
+    # (originals, response drafts, supporting evidence) without forking.
+    notice_id = Column(
+        Integer,
+        ForeignKey("compliance_notices.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Full-text search vector (populated by trigger on INSERT/UPDATE; managed by migration 0003)
     # CRITICAL: No Index(...) here -- GIN index is created via op.execute() in migration to avoid
     # Alembic autogenerate false-diff bug (issue #1390)
@@ -94,6 +104,8 @@ class Document(Base):
     owner = relationship("User", back_populates="documents")
     permissions = relationship("DocumentPermission", back_populates="document", cascade="all, delete-orphan")
     versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan", order_by="DocumentVersion.version_number.desc()")
+    # Phase 9: back-reference for notice-linked documents (D-10).
+    notice = relationship("ComplianceNotice", foreign_keys=[notice_id])
 
     # Indexes for search performance
     __table_args__ = (
