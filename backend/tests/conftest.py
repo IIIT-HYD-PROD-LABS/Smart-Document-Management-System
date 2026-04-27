@@ -89,65 +89,125 @@ def mock_current_user():
 
 @pytest.fixture(scope="session")
 def app_runtime_engine():
-    """Engine connected as app_runtime (non-owner, non-BYPASSRLS) DB role.
+    """Engine connected to the local DB with credentials that can SET ROLE.
 
-    Wave 0: this fixture references env var DATABASE_URL_RUNTIME which Plan 02
-    will populate. For Wave 0, if the env var is unset, fall back to
-    DATABASE_URL with a SET ROLE app_runtime preamble. The role itself does
-    not exist until Plan 02 migration runs.
+    Plan 09-03 update: the engine intentionally uses DATABASE_URL (postgres
+    superuser) rather than DATABASE_URL_RUNTIME so that test fixtures can
+    `RESET ROLE` to bypass RLS while creating fixture data, then
+    `SET LOCAL ROLE app_runtime` to subject the test body to RLS.
+
+    DATABASE_URL_RUNTIME (= literal app_runtime user) cannot RESET to a
+    higher-privilege role; once subjected to FORCE RLS without a tenant
+    context, INSERTs into client-scoped tables fail unconditionally.
     """
-    url = os.environ.get("DATABASE_URL_RUNTIME") or os.environ.get("DATABASE_URL")
+    url = os.environ.get("DATABASE_URL")
     if not url:
-        pytest.skip("DATABASE_URL or DATABASE_URL_RUNTIME not set")
+        pytest.skip("DATABASE_URL not set")
     engine = create_engine(url, pool_pre_ping=True)
     yield engine
     engine.dispose()
 
 
+def _set_tenant_context(session, *, client_id: int = 0, user_id: int = 1):
+    """Helper: install the per-request tenant context expected by RLS policies.
+
+    Plan 04 will land an HTTP middleware that calls these set_config()s on
+    every request. Until then, fixtures call this helper directly.
+    """
+    session.execute(
+        text("SELECT set_config('app.current_client_id', :cid, true)"),
+        {"cid": str(client_id)},
+    )
+    session.execute(
+        text("SELECT set_config('app.user_id', :uid, true)"),
+        {"uid": str(user_id)},
+    )
+
+
 @pytest.fixture()
 def db_as_app_runtime(app_runtime_engine):
-    """Session that runs as app_runtime role (subject to RLS, no BYPASSRLS)."""
-    SessionAR = sessionmaker(bind=app_runtime_engine, autoflush=False, autocommit=False)
+    """Session subjected to RLS as app_runtime.
+
+    Pattern: connect as postgres (RLS-bypassing owner), SET ROLE
+    app_runtime so subsequent statements ARE subject to RLS. Fixtures
+    that need to bootstrap data temporarily RESET ROLE — see client_a
+    / client_b / auditor_membership fixtures below.
+    """
+    SessionAR = sessionmaker(
+        bind=app_runtime_engine, autoflush=False, autocommit=False
+    )
     session = SessionAR()
-    # Switch to app_runtime if connected as owner/migrator
     try:
         session.execute(text("SET LOCAL ROLE app_runtime"))
     except Exception:
-        # Plan 02 migration has not run yet — test will fail with clear message
         pass
     yield session
     session.rollback()
     session.close()
 
 
+def _create_client_with_rls_bypass(db, name: str):
+    """Insert a Client row bypassing RLS, then re-subject session to RLS
+    with the new client's id pinned as the tenant context.
+
+    `db` is the pytest-yielded session; we toggle role within the same
+    session so the test body sees the inserted row through normal
+    tenant_isolation policy evaluation.
+    """
+    from app.compliance.models.client import Client
+
+    db.execute(text("RESET ROLE"))
+    c = Client(name=name, client_type="pvt_ltd")
+    db.add(c)
+    db.commit()  # commit so id is materialised
+    db.execute(text("SET LOCAL ROLE app_runtime"))
+    _set_tenant_context(db, client_id=c.id, user_id=1)
+    return c
+
+
+def _delete_with_rls_bypass(db, *objs):
+    """Counterpart cleanup that bypasses RLS to delete fixture rows."""
+    db.rollback()  # clear any failed-test state
+    db.execute(text("RESET ROLE"))
+    for obj in objs:
+        try:
+            db.delete(obj)
+        except Exception:
+            pass
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+    db.execute(text("SET LOCAL ROLE app_runtime"))
+
+
 @pytest.fixture()
 def client_a(db_as_app_runtime):
-    """First test client. Skipped until Plan 03 creates Client model."""
+    """First test client.
+
+    Inserts via RESET ROLE to bypass RLS (analogous to admin/onboarding
+    flow), then sets tenant context so subsequent app_runtime queries
+    can read and write rows for this client.
+    """
     try:
-        from app.compliance.models.client import Client
+        from app.compliance.models.client import Client  # noqa: F401
     except ImportError:
         pytest.skip("Client model not yet created — Plan 03")
-    c = Client(name="Test Client A", client_type="pvt_ltd")
-    db_as_app_runtime.add(c)
-    db_as_app_runtime.commit()
+    c = _create_client_with_rls_bypass(db_as_app_runtime, "Test Client A")
     yield c
-    db_as_app_runtime.delete(c)
-    db_as_app_runtime.commit()
+    _delete_with_rls_bypass(db_as_app_runtime, c)
 
 
 @pytest.fixture()
 def client_b(db_as_app_runtime):
-    """Second test client for cross-tenant leakage tests. Skipped until Plan 03."""
+    """Second test client for cross-tenant leakage tests."""
     try:
-        from app.compliance.models.client import Client
+        from app.compliance.models.client import Client  # noqa: F401
     except ImportError:
         pytest.skip("Client model not yet created — Plan 03")
-    c = Client(name="Test Client B", client_type="pvt_ltd")
-    db_as_app_runtime.add(c)
-    db_as_app_runtime.commit()
+    c = _create_client_with_rls_bypass(db_as_app_runtime, "Test Client B")
     yield c
-    db_as_app_runtime.delete(c)
-    db_as_app_runtime.commit()
+    _delete_with_rls_bypass(db_as_app_runtime, c)
 
 
 @pytest.fixture()
@@ -168,14 +228,19 @@ def audit_log_row(db_as_app_runtime):
 
 @pytest.fixture()
 def auditor_membership(db_as_app_runtime, client_a):
-    """ClientMembership with compliance_role=auditor. Skipped until Plan 03.
+    """ClientMembership with compliance_role=auditor.
 
-    Caller adjusts access_start / access_end attributes after fixture yields.
+    Caller adjusts access_start / access_end attributes after fixture
+    yields. Created with RLS bypass because the membership row references
+    a fresh client id; tenant_isolation requires the row's client_id to
+    match app.current_client_id which is enforced by the surrounding
+    client_a fixture.
     """
     try:
         from app.compliance.models.membership import ClientMembership
     except ImportError:
         pytest.skip("ClientMembership not yet created — Plan 03")
+    db_as_app_runtime.execute(text("RESET ROLE"))
     m = ClientMembership(
         user_id=1,
         client_id=client_a.id,
@@ -185,17 +250,15 @@ def auditor_membership(db_as_app_runtime, client_a):
     )
     db_as_app_runtime.add(m)
     db_as_app_runtime.commit()
+    db_as_app_runtime.execute(text("SET LOCAL ROLE app_runtime"))
+    _set_tenant_context(db_as_app_runtime, client_id=client_a.id, user_id=1)
     yield m
-    db_as_app_runtime.delete(m)
-    db_as_app_runtime.commit()
+    _delete_with_rls_bypass(db_as_app_runtime, m)
 
 
 @pytest.fixture()
 def client_with_membership(db_as_app_runtime):
-    """Factory: create a user with a given compliance_role on a fresh client.
-
-    Skipped until Plan 03 creates membership model.
-    """
+    """Factory: create a user with a given compliance_role on a fresh client."""
     try:
         from app.compliance.models.client import Client
         from app.compliance.models.membership import ClientMembership
@@ -205,6 +268,7 @@ def client_with_membership(db_as_app_runtime):
     created = []
 
     def _factory(compliance_role: str):
+        db_as_app_runtime.execute(text("RESET ROLE"))
         u = User(
             email=f"test-{compliance_role}@example.com",
             username=f"u_{compliance_role}",
@@ -223,10 +287,52 @@ def client_with_membership(db_as_app_runtime):
         )
         db_as_app_runtime.add(m)
         db_as_app_runtime.commit()
+        db_as_app_runtime.execute(text("SET LOCAL ROLE app_runtime"))
+        _set_tenant_context(db_as_app_runtime, client_id=c.id, user_id=u.id)
         created.extend([u, c, m])
         return u
 
     yield _factory
-    for obj in reversed(created):
-        db_as_app_runtime.delete(obj)
-    db_as_app_runtime.commit()
+    _delete_with_rls_bypass(db_as_app_runtime, *reversed(created))
+
+
+@pytest.fixture(autouse=True)
+def _ensure_phase9_test_user(app_runtime_engine):
+    """Phase 9 FK fixture: guarantee a User row with id=1 exists.
+
+    Many Phase 9 fixtures + tests pass user_id=1 (matching the v1.0
+    `mock_current_user` MagicMock id) to FK columns like
+    NoticeActivity.user_id, AuditLog.user_id, ClientMembership.user_id.
+    Without an actual users.id=1 row those FKs raise IntegrityError on
+    insert. This autouse fixture creates the row once and leaves it in
+    place across the test session.
+    """
+    try:
+        from app.models.user import User
+    except ImportError:
+        return  # v1.0-only test run
+    SessionFactory = sessionmaker(
+        bind=app_runtime_engine, autoflush=False, autocommit=False
+    )
+    s = SessionFactory()
+    try:
+        # Bypass RLS — users table may have its own access controls but the
+        # postgres role can always insert.
+        s.execute(text("RESET ROLE"))
+        if s.query(User).filter(User.id == 1).first() is None:
+            s.add(
+                User(
+                    id=1,
+                    email="phase9-fixture@example.com",
+                    username="phase9_fixture_user",
+                    hashed_password="x",
+                    role="editor",
+                )
+            )
+            try:
+                s.commit()
+            except Exception:
+                s.rollback()
+    finally:
+        s.close()
+    yield
