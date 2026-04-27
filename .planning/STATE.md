@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
-status: Ready to execute
-stopped_at: Completed 09-05-PLAN.md (Wave 4 — 7 FastAPI compliance routers under /api/compliance; 85/85 RBAC matrix GREEN; 18 OpenAPI paths)
-last_updated: "2026-04-27T09:52:45.427Z"
+status: Checkpoint awaiting verify
+stopped_at: "Checkpoint reached on 09-06-PLAN.md Task 6 (human-verify) — Tasks 1-5 complete (T1=1b151e8, T2=1617e51, T3=6ec75f0, T4=9c33e2f, T5=762c896); 18 frontend files, build passes, 71 UI-SPEC color token instances; awaiting user manual smoke test of 16 steps at http://localhost:3000"
+last_updated: "2026-04-27T10:21:42.801Z"
 progress:
   total_phases: 6
   completed_phases: 0
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 09 (compliance-foundation) — EXECUTING
-Plan: 6 of 7
+Plan: 6 of 7 — Tasks 1-5 of 6 complete; Task 6 is checkpoint:human-verify (awaiting user smoke test)
 
 ## Shipped Milestones
 
@@ -61,6 +61,11 @@ See .planning/milestones/v1.0-ROADMAP.md for v1.0 decisions.
 - [Phase 09-compliance-foundation]: Plan 05: First-upload-wins for notice.document_id — first POST /notices/{id}/upload sets the FK; subsequent uploads attach via NoticeActivity 'file_attached' rows but do NOT overwrite the primary, preserving stable deep-links to the original notice document
 - [Phase 09-compliance-foundation]: Plan 05: Read-only audit endpoint (audit.py omits @router.post/put/delete decorators entirely) — DB trigger + REVOKE on app_runtime is the authoritative defense; API surface omission is principle-of-least-surprise so a future maintainer cannot accidentally add a write handler
 - [Phase 09-compliance-foundation]: Plan 05: REPORT_EXPORT (not REPORT_VIEW) on /reports/health-summary — REPORT_EXPORT covers compliance_head/ca_consultant/auditor/cfo (the actual stakeholders) while REPORT_VIEW would over-grant to legal_team + finance_team who view notices but should not extract per-client analytics
+- [Phase 09-compliance-foundation]: Plan 06: Hybrid URL+Zustand for tenant state — URL holds detail-page IDs and step number; Zustand holds in-memory wizard form data and active client. complianceApi.tenantHeaders() reads X-Client-Id from useCurrentClient.getState() on every call (not cached) so client switches are immediate.
+- [Phase 09-compliance-foundation]: Plan 06: react-day-picker v9 (NOT v8) — v8's peerDependencies cap React at 18; v1.0 stack is React 19. v9 declares react>=16.8.0 and works.
+- [Phase 09-compliance-foundation]: Plan 06: getValues() not watch() for RHF — placeholders for dynamic field arrays (StepRegistrations) computed inside JSX render via getValues() per RESEARCH Pattern 6 (React 19 + RHF v7 watch() compatibility caveat).
+- [Phase 09-compliance-foundation]: Plan 06: Membership validation on switcher mount — when /memberships/me returns, ClientSwitcher cross-checks the persisted activeClientId; if missing (auditor expired, revoked) the store clears it so the next request doesn't 403. Cross-client mode sends 'X-Client-Id: *' (not omitted); backend Plan 04 enforces eligibility.
+- [Phase 09-compliance-foundation]: Plan 06: Auditor 3-tier expiry visualization (D-27): default neutral / amber 'Expires in N days' if <7 days remain / red 'Expired' + opacity-50 if past access_end. Pure derived state from access_end + now().
 
 ### Pending Todos
 
@@ -76,9 +81,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-27T09:52:30.385Z
+Last session: 2026-04-27T10:21:42.798Z
 Previous session: 2026-03-31T12:30:40.526Z (Phase 9 context gathered)
-Stopped at: Completed 09-05-PLAN.md (Wave 4 — 7 FastAPI compliance routers under /api/compliance; 85/85 RBAC matrix GREEN; 18 OpenAPI paths)
+Stopped at: Checkpoint reached on 09-06-PLAN.md Task 6 (human-verify) — Tasks 1-5 complete (T1=1b151e8, T2=1617e51, T3=6ec75f0, T4=9c33e2f, T5=762c896); 18 frontend files, build passes, 71 UI-SPEC color token instances; awaiting user manual smoke test of 16 steps at http://localhost:3000
 Resume command: /gsd:execute-phase 9 (will detect 09-03 missing SUMMARY.md, resume there)
 
 ## Plan 09-03 Completion (resolved 2026-04-27)
