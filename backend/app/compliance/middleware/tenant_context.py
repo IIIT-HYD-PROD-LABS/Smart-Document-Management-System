@@ -126,6 +126,13 @@ def register_tenant_listener(engine) -> None:
         Critical: without this, a connection that served a request for client A
         could be handed to a request that hasn't set tenant context yet. RLS
         would still see the leftover client A id and leak rows.
+
+        psycopg2 default is autocommit=False, so the SELECT set_config calls
+        below open an implicit transaction. We MUST commit (or rollback) before
+        the connection returns to the pool — otherwise the next checkout sees
+        an "idle in transaction" connection and SQLAlchemy's pool_pre_ping
+        SELECT 1 fails intermittently. This was the root cause of the
+        /api/health 200/503 flap.
         """
         try:
             cur = dbapi_connection.cursor()
@@ -133,8 +140,14 @@ def register_tenant_listener(engine) -> None:
             cur.execute("SELECT set_config('app.cross_client_mode', 'false', false)")
             cur.execute("SELECT set_config('app.user_id', '', false)")
             cur.close()
+            if not getattr(dbapi_connection, "autocommit", True):
+                dbapi_connection.commit()
         except Exception:
-            pass
+            try:
+                if not getattr(dbapi_connection, "autocommit", True):
+                    dbapi_connection.rollback()
+            except Exception:
+                pass
 
 
 class TenantContextMiddleware(BaseHTTPMiddleware):
