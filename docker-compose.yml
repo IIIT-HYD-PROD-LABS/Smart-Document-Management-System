@@ -1,4 +1,36 @@
 services:
+  # PostgreSQL (Local development & testing only — Phase 9+)
+  # Production uses Supabase via DATABASE_URL override.
+  # This local Postgres supports Phase 9 RLS / audit immutability tests
+  # which require trigger DDL, CREATE ROLE, and FORCE ROW LEVEL SECURITY —
+  # operations not reliably supported by the Supabase pooler in transaction mode.
+  db:
+    image: postgres:16-alpine
+    container_name: smartdocs-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
   # Redis (Message Broker)
   redis:
     image: redis:7-alpine
@@ -129,3 +161,4 @@ services:
 
 volumes:
   backend_uploads:
+  postgres_data:

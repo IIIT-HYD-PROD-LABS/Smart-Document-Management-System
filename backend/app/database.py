@@ -6,7 +6,10 @@ from app.config import settings
 
 _connect_args: dict = {}
 _db_url = settings.DATABASE_URL
-if _db_url.startswith("postgresql") and "localhost" not in _db_url and "127.0.0.1" not in _db_url:
+# SSL required only for remote production databases. Local docker-compose Postgres
+# (hostname `db`), localhost, and 127.0.0.1 connect without SSL.
+_local_hosts = ("localhost", "127.0.0.1", "@db:", "@db/")
+if _db_url.startswith("postgresql") and not any(h in _db_url for h in _local_hosts):
     _connect_args["sslmode"] = "require"
 
 engine = create_engine(
