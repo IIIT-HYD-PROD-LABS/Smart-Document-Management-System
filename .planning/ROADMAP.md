@@ -20,7 +20,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 
 **Milestone Goal:** Add AI-powered compliance notice management for Indian regulatory authorities to the existing document management system, with BERT-based classification, risk scoring, AI-assisted response drafting, multi-channel alerts, full audit trails, and Gmail MCP integration for direct email-to-DMS ingestion of notices and bills.
 
-- [ ] **Phase 9: Compliance Foundation** - Notice lifecycle, extended RBAC, client/entity management, immutable audit infrastructure
+- [x] **Phase 9: Compliance Foundation** ✅ Shipped 2026-04-28 - Notice lifecycle, extended RBAC, client/entity management, immutable audit infrastructure
 - [ ] **Phase 10: ML Classification + Risk Scoring** - BERT notice classifier, spaCy NER, XGBoost risk scoring, dedicated ML worker
 - [ ] **Phase 11: Alert System + Compliance Calendar** - SendGrid/Twilio/WebSocket alerts, T-7/T-3/T-1 reminders, statutory deadline calendar
 - [ ] **Phase 12: Response Drafting + Evidence Management** - LLM draft generation, approval workflow, evidence packages, reconciliation engine, regulation library
@@ -62,7 +62,8 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
   4. Every notice receives an automated risk score (0-100) with a Critical/High/Medium/Low tier label; the top 3 risk factors are displayed via SHAP explanations
   5. Critical-risk notices trigger automatic escalation to the Compliance Head role
   6. ML inference runs in the dedicated 2GB `compliance` Celery worker — uploading a document via the existing v1.0 flow shows no measurable latency regression
-**Plans**: TBD
+**Plans**: TBD (CONTEXT seeded 2026-04-28 with 32 proposed implementation decisions across BERT classification, spaCy NER, XGBoost risk scoring, auto-escalation, infrastructure, training data, and frontend; see `.planning/phases/10-ml-classification-risk-scoring/10-CONTEXT.md`. Open blockers: BERT base model selection (`bert-base-uncased` vs `ai4bharat/indic-bert` vs `legal-bert`), training data sourcing target 300+ examples × 40+ classes. Run `/gsd:discuss-phase 10` → `/gsd:research-phase 10` → `/gsd:plan-phase 10`.)
+**UI hint**: yes
 
 ### Phase 11: Alert System + Compliance Calendar
 **Goal**: No compliance deadline is silently missed — users receive tiered alerts (email, SMS, in-app) at T-7/T-3/T-1 before deadlines, and a compliance calendar shows all Indian statutory filing deadlines for each client entity
@@ -137,8 +138,8 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 9. Compliance Foundation | v2.0 | 7/7 | Code-complete (smoke pending) | - |
-| 10. ML Classification + Risk Scoring | v2.0 | 0/TBD | Not started | - |
+| 9. Compliance Foundation | v2.0 | 7/7 | ✅ Shipped | 2026-04-28 |
+| 10. ML Classification + Risk Scoring | v2.0 | 0/TBD | Wave 0 setup in progress (deps + worker + skeleton + research) | - |
 | 11. Alert System + Compliance Calendar | v2.0 | 0/TBD | Not started | - |
 | 12. Response Drafting + Evidence Management | v2.0 | 0/TBD | Not started | - |
 | 13. Elasticsearch + Cross-Entity Search + Reporting | v2.0 | 0/TBD | Not started | - |
@@ -146,4 +147,4 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 | 15. Gmail MCP Integration & Email Document Ingestion | v2.0 | 0/TBD | Not started (context seeded) | - |
 
 ---
-*Last updated: 2026-04-28 — Phase 15 (Gmail MCP Integration & Email Document Ingestion) added per client request; depends on Phases 9-11 + Phase 14 patterns. CONTEXT.md seeded; awaiting `/gsd:discuss-phase 15` and `/gsd:research-phase 15`.*
+*Last updated: 2026-04-28 — **Phase 9 SHIPPED** (manual smoke verified by user); Phase 10 (ML Classification + Risk Scoring) Wave 0 setup in progress (ML dependencies, dedicated compliance-worker, module skeleton, research draft); Phase 15 (Gmail MCP Integration) CONTEXT seeded.*

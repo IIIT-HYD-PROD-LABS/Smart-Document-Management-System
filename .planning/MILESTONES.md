@@ -1,5 +1,25 @@
 # Milestones
 
+## v2.0 — Compliance Management System (in progress)
+
+**Started:** 2026-03-30
+**Phases:** 7 (9-15) | **Plans shipped:** 7 (Phase 9) | **Status:** Phase 9 ✅ Shipped 2026-04-28; Phase 10 in setup
+
+### Phase 9 — Compliance Foundation (Shipped 2026-04-28)
+
+26 requirements satisfied across 6 success criteria:
+- Notice lifecycle (LIFE-01..08): upload, status workflow, chain linking, filtering, bulk actions
+- Immutable audit trail (AUDIT-01..02): DB-level triggers + REVOKE on app_runtime
+- Extended RBAC (RBAC-01..06): 6 compliance roles with 84-case permission matrix
+- Multi-client architecture (CLIENT-01..07): PostgreSQL RLS, zero cross-client leakage, time-bound auditor access
+- Infrastructure (INFRA-05..07): RegulatoryCalendar seed, Fernet PII encryption, audit immutability
+
+7 plans (Waves 0-6): test infrastructure, DB foundations, ORM + services, tenant middleware + RBAC, FastAPI routers, frontend foundation, frontend notice surfaces.
+
+Manual smoke (21 steps across 6 sections — Lifecycle, Cross-Client, Audit, RBAC, Onboarding, Visual) verified by user 2026-04-28.
+
+---
+
 ## v1.0 — Smart Document Management System
 
 **Shipped:** 2026-03-30

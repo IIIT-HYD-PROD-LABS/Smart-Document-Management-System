@@ -8,8 +8,17 @@ celery_app = Celery(
     "smart_docs",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.tasks.document_tasks"],
+    include=[
+        "app.tasks.document_tasks",
+        "app.tasks.compliance_tasks",
+    ],
 )
+
+# Phase 10 — route ML inference tasks to dedicated compliance worker (queue=compliance,
+# 2GB ceiling) so BERT/XGBoost loads don't starve v1.0 OCR throughput on the default queue.
+celery_app.conf.task_routes = {
+    "app.tasks.compliance_tasks.*": {"queue": "compliance"},
+}
 
 # Handle rediss:// (TLS) connections for managed Redis (e.g. Render)
 broker_url = settings.CELERY_BROKER_URL
