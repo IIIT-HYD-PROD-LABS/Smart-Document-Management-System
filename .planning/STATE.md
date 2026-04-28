@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
-status: Phase 9 code-complete — awaiting user smoke verification (Task 7); Phase 15 (Gmail MCP) added to roadmap
-stopped_at: "Plan 09-07 atomic tasks 1-6 + 8 committed (bff0bcd, 084de7d, 3c7e038, a140e24, 5fdf285, 30ac094). Task 7 (21-step manual smoke) is the user's blocking gate; once approved, Phase 9 ships and Phase 10 (ML Classification + Risk Scoring) is ready to plan. Phase 15 (Gmail MCP Integration) added 2026-04-28 with CONTEXT.md seeded; awaiting /gsd:discuss-phase 15."
-last_updated: "2026-04-28T00:00:00.000Z"
+status: Phase 9 SHIPPED 2026-04-28 (manual smoke verified by user); current focus Phase 10 (ML Classification + Risk Scoring) — Wave 0 infra setup in progress
+stopped_at: "v2.0 Phase 9 SHIPPED 2026-04-28 — user completed 21-step manual smoke; all 26 requirements (LIFE-01..08, AUDIT-01..02, RBAC-01..06, CLIENT-01..07, INFRA-05..07) validated. Phase 10 (ML Classification + Risk Scoring) Wave 0 setup in progress: ML dependencies + dedicated compliance-worker Celery service + module skeleton + research doc. Open blockers per 10-CONTEXT.md: BERT base model selection, training data sourcing (300+ examples × 40+ classes target). Next: /gsd:research-phase 10 to empirically validate model selection, /gsd:plan-phase 10 to produce executable plans. Phase 15 CONTEXT seeded 2026-04-28."
+last_updated: "2026-04-28T14:00:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 7
   completed_plans: 7
   percent: 14
+  v2_phase_9_shipped_at: "2026-04-28"
 ---
 
 # Project State
@@ -24,13 +25,13 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 09 (compliance-foundation) — EXECUTING
-Plan: 7 of 7 — Plan 06 user-APPROVED (2026-04-27); Plan 07 (final wave) executing
+Phase: 10 (ml-classification-risk-scoring) — Wave 0 setup (ML deps, compliance-worker, module skeleton, research draft)
+Next: /gsd:research-phase 10 to empirically validate BERT model selection on a held-out test set; then /gsd:plan-phase 10
 
 ## Shipped Milestones
 
 - **v1.0** (2026-03-30): Smart Document Management System — 8 phases, 42 requirements, 127 commits
-- **v2.0 Phase 9** (2026-04-27, code-complete): Compliance Foundation — 26 requirements, 7 plans, all merge gates GREEN; awaiting user smoke verification (Task 7)
+- **v2.0 Phase 9** (2026-04-28, SHIPPED): Compliance Foundation — 26 requirements satisfied (LIFE-01..08, AUDIT-01..02, RBAC-01..06, CLIENT-01..07, INFRA-05..07), 7 plans, all merge gates GREEN, 21-step manual smoke verified by user 2026-04-28
 
 ## Accumulated Context
 

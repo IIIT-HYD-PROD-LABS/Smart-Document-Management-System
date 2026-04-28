@@ -96,12 +96,13 @@ services:
         limits:
           memory: 1G
 
-  # Celery Worker
+  # Celery Worker — v1.0 default queue (OCR, doc processing).
+  # Lean 1GB ceiling to leave room for the compliance-worker.
   celery_worker:
     build: ./backend
     container_name: smartdocs-celery
     env_file: .env
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2 --pool=prefork --max-memory-per-child=512000
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2 --pool=prefork --max-memory-per-child=512000 --queues=celery,default
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping --timeout 10 2>&1 | grep -q OK || exit 1"]
@@ -138,6 +139,55 @@ services:
       resources:
         limits:
           memory: 1G
+
+  # Compliance Celery Worker — Phase 10 ML inference (BERT classifier, spaCy NER,
+  # XGBoost risk scoring, SHAP). Dedicated queue and 2GB ceiling enforce CLASS-07
+  # zero-regression guard on v1.0 throughput.
+  compliance_worker:
+    build: ./backend
+    container_name: smartdocs-compliance-worker
+    env_file: .env
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2 --pool=prefork --max-memory-per-child=2000000 --queues=compliance --hostname=compliance@%h
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping --destination compliance@$$(hostname) --timeout 10 2>&1 | grep -q OK || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-local}
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      # HuggingFace cache mount keeps BERT weights persisted across worker restarts
+      HF_HOME: /app/models/hf_cache
+      TRANSFORMERS_CACHE: /app/models/hf_cache
+      TOKENIZERS_PARALLELISM: "false"
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/uploads
+      - ./backend/models:/app/models
+      - ./backend/datasets:/app/datasets
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 2500M
 
   # Next.js Frontend
   frontend:
