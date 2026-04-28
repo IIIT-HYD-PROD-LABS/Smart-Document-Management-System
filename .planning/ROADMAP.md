@@ -18,14 +18,15 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 
 ### v2.0 Compliance Management System
 
-**Milestone Goal:** Add AI-powered compliance notice management for Indian regulatory authorities to the existing document management system, with BERT-based classification, risk scoring, AI-assisted response drafting, multi-channel alerts, and full audit trails.
+**Milestone Goal:** Add AI-powered compliance notice management for Indian regulatory authorities to the existing document management system, with BERT-based classification, risk scoring, AI-assisted response drafting, multi-channel alerts, full audit trails, and Gmail MCP integration for direct email-to-DMS ingestion of notices and bills.
 
 - [ ] **Phase 9: Compliance Foundation** - Notice lifecycle, extended RBAC, client/entity management, immutable audit infrastructure
 - [ ] **Phase 10: ML Classification + Risk Scoring** - BERT notice classifier, spaCy NER, XGBoost risk scoring, dedicated ML worker
 - [ ] **Phase 11: Alert System + Compliance Calendar** - SendGrid/Twilio/WebSocket alerts, T-7/T-3/T-1 reminders, statutory deadline calendar
 - [ ] **Phase 12: Response Drafting + Evidence Management** - LLM draft generation, approval workflow, evidence packages, reconciliation engine, regulation library
 - [ ] **Phase 13: Elasticsearch + Cross-Entity Search + Reporting** - Unified notice+document search, compliance reports, penalty analytics, compliance health score
-- [ ] **Phase 14: Government Portal Integration** - GST/IT/MCA auto-fetch, RBI/SEBI scraping, IMAP email parsing, portal credential vault
+- [ ] **Phase 14: Government Portal Integration** - GST/IT/MCA auto-fetch, RBI/SEBI scraping, generic IMAP email parsing, portal credential vault
+- [ ] **Phase 15: Gmail MCP Integration & Email Document Ingestion** - Gmail OAuth + MCP server, auto-ingest notice/bill attachments to DMS, compliance auto-routing, bill management dashboard
 
 ## Phase Details
 
@@ -103,30 +104,46 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 **Plans**: TBD
 
 ### Phase 14: Government Portal Integration + Reconciliation Engine
-**Goal**: Notices from GST, Income Tax, and MCA portals are auto-fetched on a schedule, RBI/SEBI public notices are scraped, and email inboxes are parsed — all with encrypted credential storage, fetch health monitoring, and duplicate prevention
+**Goal**: Notices from GST, Income Tax, and MCA portals are auto-fetched on a schedule, RBI/SEBI public notices are scraped, and non-Gmail email inboxes are parsed via IMAP — all with encrypted credential storage, fetch health monitoring, and duplicate prevention
 **Depends on**: Phase 13
 **Requirements**: PORT-01, PORT-02, PORT-03, PORT-04, PORT-05, PORT-06, PORT-07, PORT-08
 **Success Criteria** (what must be TRUE):
   1. Notices from GST portal (GSTIN-based), Income Tax e-filing portal (PAN-based), and MCA portal (CIN-based) are automatically fetched on a configurable schedule and appear in the compliance dashboard without manual upload
   2. RBI and SEBI public enforcement notices are scraped and ingested; the scraper detects redirect-to-login and marks the run as FETCH_FAILED rather than SUCCESS_EMPTY
-  3. An IMAP-connected email account captures compliance notices sent to official email addresses and routes them through the standard ingestion pipeline
+  3. An IMAP-connected email account (Outlook/Yahoo/custom — Gmail is owned by Phase 15) captures compliance notices sent to official email addresses and routes them through the standard ingestion pipeline
   4. Every portal fetch run creates a PortalFetchLog entry with a three-state result (SUCCESS_EMPTY / SUCCESS_WITH_RESULTS / FETCH_FAILED); admins receive an alert after two consecutive FETCH_FAILED runs for any portal
   5. Portal credentials (GST API keys, email passwords) are stored encrypted (Fernet) in the database; no credentials appear in application logs, Celery task arguments, or Elasticsearch source fields
   6. Duplicate notices are prevented by a database UNIQUE constraint plus Redis distributed lock — restarting the portal poller during a partial run never creates duplicate notice records
 **Plans**: TBD
 
+### Phase 15: Gmail MCP Integration & Email Document Ingestion
+**Goal**: A user connects Gmail once and the system continuously surfaces compliance notices and personal/household bills from email — auto-uploaded to DMS, auto-routed for compliance review, queryable by internal AI agents via MCP tools — without manual forwarding or copy-paste
+**Depends on**: Phase 9 (RBAC, audit, RLS, INFRA-06 encryption), Phase 10 (BERT classifier + spaCy NER for notice routing), Phase 11 (APScheduler + alert pipeline for bill reminders), Phase 14 (Fernet credential vault and PortalFetchLog three-state pattern)
+**Requirements**: EMAIL-01, EMAIL-02, EMAIL-03, EMAIL-04, EMAIL-05, EMAIL-06, EMAIL-07, EMAIL-08, EMAIL-09, EMAIL-10, BILL-01, BILL-02, BILL-03, BILL-04, BILL-05, BILL-06
+**Success Criteria** (what must be TRUE):
+  1. A user can connect their Gmail account via OAuth 2.0 with offline access, and refresh tokens are stored Fernet-encrypted at rest with no plaintext leakage in logs, Celery args, or Elasticsearch source fields
+  2. The system exposes Gmail as 6 callable MCP (Model Context Protocol) tools — `gmail_search`, `gmail_read_message`, `gmail_list_attachments`, `gmail_get_attachment`, `gmail_list_labels`, `gmail_modify_labels` — accessible only to internal compliance and response-drafting agents (localhost-bound, no public surface)
+  3. A configurable scheduled scanner pulls matching messages every 15 minutes (per-credential cadence 5min-24hr) and ingests attachments into the existing DMS via the v1.0 upload pipeline, with deduplication via Gmail message-id UNIQUE + per-attachment SHA-256 hash
+  4. Emails from regulatory authorities auto-create ComplianceNotice records (Phase 9 schema) with `source=gmail`, classified via the Phase 10 BERT pipeline; low-confidence (<0.75) routes to the human review queue
+  5. Personal/household bills (utility, telecom, credit card, OTT/SaaS subscriptions) are auto-detected, metadata-extracted via the v1.0 LLM service, and surfaced in a bill dashboard with Upcoming/Due Soon/Overdue/Paid filters and T-3/T-1/overdue reminders via Phase 11 alerts
+  6. Every MCP tool invocation writes an immutable audit_log row (Phase 9 INFRA-07); two consecutive FETCH_FAILED runs trigger a Phase 11 alert; OAuth token revocation auto-disables the scanner and surfaces a "reconnect required" UI banner
+  7. A "View source email" deep-link on every Gmail-ingested Document and ComplianceNotice fetches the email body via MCP at view-time without persisting it (PII minimization)
+**Plans**: TBD
+**UI hint**: yes
+
 ## Progress
 
-**Execution Order:** Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14
+**Execution Order:** Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 9. Compliance Foundation | v2.0 | 6/7 | In Progress | - |
+| 9. Compliance Foundation | v2.0 | 7/7 | Code-complete (smoke pending) | - |
 | 10. ML Classification + Risk Scoring | v2.0 | 0/TBD | Not started | - |
 | 11. Alert System + Compliance Calendar | v2.0 | 0/TBD | Not started | - |
 | 12. Response Drafting + Evidence Management | v2.0 | 0/TBD | Not started | - |
 | 13. Elasticsearch + Cross-Entity Search + Reporting | v2.0 | 0/TBD | Not started | - |
 | 14. Government Portal Integration | v2.0 | 0/TBD | Not started | - |
+| 15. Gmail MCP Integration & Email Document Ingestion | v2.0 | 0/TBD | Not started (context seeded) | - |
 
 ---
-*Last updated: 2026-04-27 — Phase 9 in progress (6/7 plans complete: 09-01 Wave 0 through 09-06 Wave 5; user APPROVED 09-06 manual smoke test); 09-07 (Wave 6 final) executing*
+*Last updated: 2026-04-28 — Phase 15 (Gmail MCP Integration & Email Document Ingestion) added per client request; depends on Phases 9-11 + Phase 14 patterns. CONTEXT.md seeded; awaiting `/gsd:discuss-phase 15` and `/gsd:research-phase 15`.*

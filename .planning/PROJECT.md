@@ -61,7 +61,8 @@ An AI-powered platform for document management and regulatory compliance automat
 - [ ] Auto-fetch notices from Income Tax e-filing portal API
 - [ ] Auto-fetch notices from MCA portal API
 - [ ] Web scraping for RBI/SEBI notices (no official API)
-- [ ] Email integration to capture notices sent via official email
+- [ ] Generic IMAP email integration for non-Gmail accounts (Outlook, Yahoo, custom)
+- [ ] Gmail MCP integration — direct Gmail OAuth + MCP tools for AI-assisted ingestion
 - [ ] Manual upload option for physical/postal notices
 - [ ] OCR-based text extraction from scanned notices
 - [ ] BERT-based notice classification across 6 authority categories
@@ -110,6 +111,16 @@ An AI-powered platform for document management and regulatory compliance automat
 - [ ] Unified search across documents and notices
 - [ ] Two-way sync for compliance-related documents
 - [ ] Evidence management for notice responses
+- [ ] Gmail attachment auto-ingestion into DMS via the v1.0 upload pipeline
+- [ ] Provenance tracking — every Gmail-sourced Document/Notice records its source email for "view original" deep-links
+
+**Bill Management (Personal/Household):**
+- [ ] Auto-detect bill emails (utility, telecom, credit card, OTT/SaaS subscriptions) from connected Gmail
+- [ ] Bill metadata extraction (biller, amount, due date) via the v1.0 LLM extraction service
+- [ ] Bill dashboard with Upcoming / Due Soon / Overdue / Paid filters and per-category aggregates
+- [ ] Pre-deadline reminders (T-3, T-1, overdue) reusing the Phase 11 alert pipeline
+- [ ] Mark-as-paid workflow with payment date, reference, and method
+- [ ] Recurring bill detection (monthly / quarterly / annual) with sibling linking
 
 **Extended User Roles:**
 - [ ] Compliance Head role (view all notices, approve responses, reports)
@@ -154,7 +165,8 @@ An AI-powered platform for document management and regulatory compliance automat
 - Search: Elasticsearch (cross-system notice search)
 - Scheduling: APScheduler (periodic compliance checks)
 - Real-time: WebSocket (live notifications)
-- Integrations: GST Portal API, Income Tax API, MCA API, SendGrid, Twilio
+- Integrations: GST Portal API, Income Tax API, MCA API, SendGrid, Twilio, Gmail API (OAuth 2.0)
+- AI Protocol: Model Context Protocol (MCP) server exposing Gmail tools to internal agents
 - State: Zustand + React Query (frontend state management upgrade)
 
 **Indian Regulatory Landscape:**
@@ -196,6 +208,9 @@ An AI-powered platform for document management and regulatory compliance automat
 | BERT for notice classification (v2) | Higher accuracy needed for legal/compliance (>92% target) | — Pending |
 | Elasticsearch for v2 search | Cross-system search across documents + notices at scale | — Pending |
 | Real government portal integration | Client requirement; GST/IT APIs available, RBI/SEBI via scraping | — Pending |
+| Gmail MCP integration (v2.0 Phase 15) | Client requested direct Gmail access for notice + bill ingestion; MCP exposes Gmail to internal AI agents (read-only scope), non-Gmail IMAP stays in Phase 14 PORT-05 | — Pending |
+| Bill management as a separate entity (not Document) | Bills have payment-cycle semantics (recurring, paid-state) distinct from notice-status workflow; sharing a table would muddy queries | — Pending |
+| MCP server is internal-only (localhost-bound) | User-facing AI chat surface deferred to v3.0; v2.0 MCP tools are called only by compliance routing and response-drafting agents | — Pending |
 
 ## Evolution
 
@@ -215,4 +230,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-30 after v2.0 milestone initialization*
+*Last updated: 2026-04-28 — Phase 15 (Gmail MCP Integration & Email Document Ingestion) added per client request; PROJECT.md Active section, Bill Management subsection, and Key Decisions updated*

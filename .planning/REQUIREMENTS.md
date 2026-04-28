@@ -141,6 +141,28 @@ Requirements for the Compliance Management System milestone. Each maps to roadma
 - [x] **INFRA-06**: Field-level PII encryption (Fernet) for GSTIN, PAN, penalty amounts in DB and logs
 - [x] **INFRA-07**: Database-level audit trail immutability (PostgreSQL triggers, REVOKE UPDATE/DELETE)
 
+### Email Integration (Gmail MCP)
+
+- [ ] **EMAIL-01**: User can connect their Gmail account via OAuth 2.0 with offline access (refresh-token flow), per (user, client) pair
+- [ ] **EMAIL-02**: System exposes Gmail as 6 MCP (Model Context Protocol) tools — `gmail_search`, `gmail_read_message`, `gmail_list_attachments`, `gmail_get_attachment`, `gmail_list_labels`, `gmail_modify_labels`
+- [ ] **EMAIL-03**: Refresh-token storage at the field level (Fernet-encrypted, reuses Phase 9 INFRA-06 helper); access tokens never persisted (Redis-cached with TTL)
+- [ ] **EMAIL-04**: Configurable filter rules per credential — sender pattern, subject pattern, label include/exclude, route_to (compliance_notice / bill / dms_only / ignore); seeded defaults for gov.in domains and known billers
+- [ ] **EMAIL-05**: Automated attachment ingestion to DMS reusing the v1.0 upload pipeline (storage_service + document_tasks); Document.source_email_id FK records provenance
+- [ ] **EMAIL-06**: Automated ComplianceNotice creation when sender/content matches notice patterns; classification confidence ≥0.75 auto-creates with status=Received, below routes to Phase 10 human review queue
+- [ ] **EMAIL-07**: GmailFetchLog three-state monitoring (SUCCESS_EMPTY / SUCCESS_WITH_RESULTS / FETCH_FAILED) mirrors Phase 14 PortalFetchLog; two consecutive FETCH_FAILED triggers a Phase 11 alert
+- [ ] **EMAIL-08**: Deduplication via composite UNIQUE on (credential_id, gmail_message_id) for messages and per-attachment SHA-256 hash UNIQUE within a credential
+- [ ] **EMAIL-09**: Audit log for every MCP tool invocation (actor, action=MCP_TOOL_CALL, target=tool name, args summary with PII redaction); immutable per Phase 9 INFRA-07
+- [ ] **EMAIL-10**: Connection health monitoring — Gmail `invalid_grant` marks credential REVOKED, disables scanner, emits `gmail.connection.lost` event for Phase 11 banner
+
+### Bill Management
+
+- [ ] **BILL-01**: System auto-detects bill emails (utility, telecom, credit card, OTT/SaaS subscriptions) via sender heuristics + LLM classification through the v1.0 extraction service
+- [ ] **BILL-02**: Bill metadata extraction — biller name, biller_category, amount_due (Decimal INR), due_date, account_number_last4, currency (INR default); reuses v1.0 LLM extraction service with bill-specific prompt template
+- [ ] **BILL-03**: Bill dashboard with Upcoming / Due Soon / Overdue / Paid filters, per-category aggregates, and bulk mark-as-paid
+- [ ] **BILL-04**: Pre-deadline reminders for bill due dates (T-3, T-1, overdue) — reuses Phase 11 alert pipeline with `BILL_DUE_SOON` event type and per-bill cool-down (max 3 reminders)
+- [ ] **BILL-05**: Mark-as-paid workflow with payment_date, payment_reference, payment_method; transition recorded in audit log
+- [ ] **BILL-06**: Recurring bill detection (monthly / quarterly / annual) — sibling-link via `parent_bill_id` when (biller_name, account_number_last4) matches an existing bill; flag missing-month anomalies via Phase 11
+
 ## Future Requirements (v2.1+)
 
 ### Deferred Features
@@ -271,10 +293,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PORT-06 | Phase 14 | Pending |
 | PORT-07 | Phase 14 | Pending |
 | PORT-08 | Phase 14 | Pending |
+| EMAIL-01 | Phase 15 | Pending |
+| EMAIL-02 | Phase 15 | Pending |
+| EMAIL-03 | Phase 15 | Pending |
+| EMAIL-04 | Phase 15 | Pending |
+| EMAIL-05 | Phase 15 | Pending |
+| EMAIL-06 | Phase 15 | Pending |
+| EMAIL-07 | Phase 15 | Pending |
+| EMAIL-08 | Phase 15 | Pending |
+| EMAIL-09 | Phase 15 | Pending |
+| EMAIL-10 | Phase 15 | Pending |
+| BILL-01 | Phase 15 | Pending |
+| BILL-02 | Phase 15 | Pending |
+| BILL-03 | Phase 15 | Pending |
+| BILL-04 | Phase 15 | Pending |
+| BILL-05 | Phase 15 | Pending |
+| BILL-06 | Phase 15 | Pending |
 
 **Coverage:**
-- v2.0 requirements: 92 total
-- Mapped to phases: 92
+- v2.0 requirements: 108 total
+- Mapped to phases: 108
 - Unmapped: 0
 
 | Phase | Requirements | Count |
@@ -285,8 +323,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Phase 12: Response Drafting + Evidence Management | RESP-01..06, EVID-01..04, RECON-01..05, REG-01..04 | 19 |
 | Phase 13: Elasticsearch + Cross-Entity Search + Reporting | AUDIT-03..07, EVID-05, INFRA-02 | 7 |
 | Phase 14: Government Portal Integration | PORT-01..08 | 8 |
-| **Total** | | **92** |
+| Phase 15: Gmail MCP Integration & Email Document Ingestion | EMAIL-01..10, BILL-01..06 | 16 |
+| **Total** | | **108** |
 
 ---
 *Requirements defined: 2026-03-30*
-*Last updated: 2026-03-30 — traceability populated by roadmapper (92/92 mapped)*
+*Last updated: 2026-04-28 — Phase 15 added (EMAIL-01..10 + BILL-01..06); coverage now 108/108 mapped*
