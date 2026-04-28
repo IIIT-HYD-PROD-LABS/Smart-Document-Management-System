@@ -55,6 +55,12 @@ def transition_notice_status(
     row in the same DB transaction; and finally writes a system AuditLog
     row via log_audit_event (separate session — audit-of-record pattern).
 
+    Phase 10: on Received -> Under Review transition, dispatches the
+    classify_and_score_notice Celery task to the compliance queue so ML
+    inference + rule-based risk scoring run async without blocking the
+    status update. Per CONTEXT anti-pattern guidance, never auto-classify
+    on Resolved/Dismissed transitions.
+
     Raises InvalidTransitionError if (current -> new_status) is not
     allowed by the state machine. The session is rolled back on failure
     so callers can recover; bulk_update_status relies on this contract.
@@ -103,6 +109,24 @@ def transition_notice_status(
             "reason": reason,
         },
     )
+
+    # Phase 10 — auto-classify + risk score on Received -> Under Review.
+    # Lazy import to avoid pulling Celery into Phase 9 test bootstrap when
+    # the broker isn't available. Failure here is non-fatal: a missed
+    # classification can be retried via /api/compliance/notices/{id}/classify
+    # (admin endpoint) or the daily recompute_all_risk_scores cron.
+    if old_status == NoticeStatus.RECEIVED and new_status == NoticeStatus.UNDER_REVIEW:
+        try:
+            from app.tasks.compliance_tasks import classify_and_score_notice
+            classify_and_score_notice.delay(notice.id)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Failed to dispatch classify_and_score_notice for notice %d "
+                "(non-fatal — daily recompute will pick this up)",
+                notice.id,
+            )
+
     return notice
 
 
