@@ -39,7 +39,7 @@
 
 ### Notice Classification (BERT)
 
-- **D-01:** Base model — `ai4bharat/indic-bert` (preferred for Indian compliance text including Hinglish in legal sections), with `bert-base-uncased` as fallback if indic-bert underperforms on validation. Final choice empirically validated during `/gsd:research-phase 10` against a 200-notice held-out set.
+- **D-01:** Base model — `law-ai/InLegalBERT` (IIT Kharagpur, pretrained on 5.4M Indian legal documents) is the primary recommendation as of 2026-04-28 research update; `ai4bharat/indic-bert`, `bert-base-uncased`, and `nlpaueb/legal-bert-base-uncased` serve as bake-off comparisons. Final choice empirically validated during `/gsd:research-phase 10` against a 200-notice held-out set. See `10-RESEARCH.md` section 1 for full candidate comparison.
 - **D-02:** Multi-class single-label classification — one primary notice type per document. 40+ classes mapped to authority-specific taxonomies (e.g., GST: DRC-01, ASMT-10, GSTR-3A, ITC-04; IT: u/s 143(2), 142(1), 156, 245; MCA: SCN under §454, etc.). Authority pre-routing first (5-way), then type classifier within authority.
 - **D-03:** Two-stage classifier — Stage 1 predicts authority (5 classes, simpler ~98% target). Stage 2 picks notice type within authority (8-15 classes per authority). Improves per-authority accuracy and surfaces calibrated per-stage confidence.
 - **D-04:** Confidence threshold for auto-routing — 0.75 per CLASS-04 requirement. Below threshold → routed to `notice_review_queue` table; user assigns correct class; that label feeds the next training cycle.

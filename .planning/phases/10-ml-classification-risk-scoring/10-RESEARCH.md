@@ -9,7 +9,9 @@ This document is the starting point for `/gsd:research-phase 10`. It pre-populat
 
 ## 1. BERT Base Model Selection (CONTEXT D-01)
 
-Three candidates evaluated below. **Final pick must be empirically validated** on a held-out test set of at least 200 manually labeled Indian compliance notices stratified across the 5 authorities.
+**UPDATE 2026-04-28:** Added Candidate D (`law-ai/InLegalBERT`) after web research revealed an Indian-legal-domain pre-trained BERT from IIT Kharagpur. **This is now the primary recommendation** — likely supersedes Candidates A-C empirically. Final pick must still be empirically validated on a 200-notice held-out set.
+
+Four candidates evaluated below. **Final pick must be empirically validated** on a held-out test set of at least 200 manually labeled Indian compliance notices stratified across the 5 authorities.
 
 ### Candidate A — `ai4bharat/indic-bert`
 
@@ -38,14 +40,24 @@ Three candidates evaluated below. **Final pick must be empirically validated** o
 - **License:** CC-BY-SA-4.0
 - **HF identifier:** `nlpaueb/legal-bert-base-uncased`
 
+### Candidate D — `law-ai/InLegalBERT` ⭐ **PRIMARY RECOMMENDATION**
+
+- **Architecture:** BERT-base (12 layers, 768 hidden, 12 attention heads, ~110M params — same as B/C)
+- **Pretraining corpus:** ~5.4 million Indian legal documents from the Supreme Court and many High Courts of India (1950-2019), all legal domains. Curated by IIT Kharagpur Department of Computer Science and Technology.
+- **Strengths:** **Already domain-adapted to Indian legal English** — the pretraining corpus contains the exact statutory citation patterns, authority references, and procedural language found in Indian compliance notices. Same tokenizer as legal-bert (preserves comparison validity). Well-documented evaluation on Indian legal benchmarks. IIT Kharagpur reputation lends academic credibility for IIIT Hyderabad project.
+- **Weaknesses:** Trained on court documents (judgments + appeals) not directly on regulatory NOTICES — domain shift from court → regulator language is small but non-zero. Pretraining cutoff at 2019 (no recent CBDT/CBIC circulars).
+- **License:** Check repo card; appears permissive for research and commercial.
+- **HF identifier:** `law-ai/InLegalBERT`
+- **Why this changes the bake-off:** The pretraining corpus is 100× more relevant than indic-bert for Indian compliance text. Hypothesis: InLegalBERT wins on all 5 authorities, especially IT/MCA where statutory citations dominate. May obviate the need to maintain separate per-authority models.
+
 ### Recommended empirical experiment
 
 1. Hand-label 200 notices stratified across 5 authorities × 40 random types.
-2. Fine-tune all 3 candidates with identical hyperparameters (D-05): last 2 layers + classifier head unfrozen, AdamW lr=2e-5, 5 epochs, early stop on val_f1.
+2. Fine-tune all 4 candidates with identical hyperparameters (D-05): last 2 layers + classifier head unfrozen, AdamW lr=2e-5, 5 epochs, early stop on val_f1.
 3. Evaluate on 30-notice held-out per authority. Pick winner by macro-F1, tiebreaker = inference latency.
 4. Document results in `10-MODEL-SELECTION.md` so the choice is reproducible.
 
-**Hypothesis:** indic-bert wins on GST + IT (most Hinglish), bert-base-uncased wins on RBI/SEBI (English-heavy circulars). May warrant per-authority model selection for Stage 2 type classifier, single model for Stage 1 authority classifier.
+**Updated hypothesis (2026-04-28):** InLegalBERT wins overall due to Indian-legal pretraining; indic-bert wins specifically on GST notices that contain Hinglish; bert-base-uncased and legal-bert serve as control baselines. If InLegalBERT >= indic-bert + 3% F1 on the held-out set, ship InLegalBERT as the single base model for both Stage 1 (authority) and Stage 2 (type) classifiers.
 
 ---
 
@@ -119,13 +131,37 @@ Top-3 features mapped to phrase templates:
 
 ## 4. Training Data Sources (CONTEXT D-25..D-28)
 
-### Public sources (~500 notices)
+**UPDATE 2026-04-28:** Added Hugging Face Indian-legal datasets after web research; rebalanced
+volume estimates based on what's actually publicly accessible. GST/IT/MCA private notices
+remain off-limits — only synthetic generation + anonymized hand-labeling closes that gap.
 
-- **GST Council** — published advisory + sample notices on `gstcouncil.gov.in` (verify scraping ToS)
-- **CBDT** — `incometaxindia.gov.in` press releases + sample assessment orders
-- **RBI Enforcement Department** — public enforcement orders against banks (good severity examples)
-- **SEBI Adjudication Orders** — public on `sebi.gov.in`; thousands of orders available
-- **MCA RoC** — sample show-cause notices under §454 (less commonly published)
+### Public sources (~3000-5000 orders)
+
+- **SEBI Adjudication Orders** ⭐ — public on `sebi.gov.in/enforcement/orders`; **thousands of orders available**, structured (party, date, sections, penalty, full text); license: public records. **Highest-volume reliable source for Phase 10 training data.** Starter scraper at `backend/app/ml/datasets/scrape_sebi.py`.
+- **RBI Enforcement Orders** — public on `rbi.org.in`; ~500-1000 enforcement actions against banks/NBFCs available; high-severity examples for risk-tier calibration.
+- **GST Council advisories + circulars** — public on `gstcouncil.gov.in`; ~200 advisories. NOT raw notices but use the same statutory citation language; useful for vocabulary adaptation.
+- **CBDT press releases + sample assessment orders** — public on `incometaxindia.gov.in`; mostly anonymized samples in tax bulletins. Lower volume but high quality.
+- **MCA RoC SCNs under §454** — limited public access; mostly redacted; ~50-100 docs realistic.
+
+### Hugging Face Indian-legal datasets (domain pre-training continuation)
+
+- `ninadn/indian-legal` — Indian legal text corpus (volume varies by snapshot)
+- `bharatgenai/BhashaBench-Legal` — Indian legal knowledge benchmark (use for evaluation, not training)
+- `ShreyasP123/Legal-Dataset-for-india` — Indian legal documents
+
+### Kaggle adjacent datasets (vocabulary adaptation, not classification)
+
+- `adarshsingh0903/legal-dataset-sc-judgments-india-19502024` — SC judgments 1950-2024
+- `akshatgupta7/llm-fine-tuning-dataset-of-indian-legal-texts` — Mixed Indian legal corpus
+- `keyushnisar/legal-docu` — Indian Legal Documents LuRA
+- `anishparkhe0401/indian-laws` — Indian statutes (use for Phase 12 regulation library, not Phase 10)
+
+### What is NOT available
+
+GST DRC-01/ASMT/REG, IT u/s 143(2)/142(1)/156, and MCA SCN are addressed individually to assessees containing PII (PAN, GSTIN, party names, exact amounts). They are **not published anywhere**. Strategy:
+- Scrape SEBI + RBI orders for high-volume real data (~5000 examples).
+- Synthetic generation via LLM templates (CONTEXT D-25) for the GST/IT/MCA gap.
+- Hand-label 50 anonymized real client notices per authority for the held-out test set.
 
 ### Synthetic generation (~2000 notices)
 
