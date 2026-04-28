@@ -57,6 +57,22 @@ logger = logging.getLogger(__name__)
 SEBI_BASE_URL = "https://www.sebi.gov.in"
 SEBI_ORDERS_LISTING_PATH = "/sebiweb/home/HomeAction.do?doListing=yes&sid=1&ssid=2&smid=10"
 
+# IMPORTANT: validated 2026-04-28 against live sebi.gov.in. The default
+# listing URL above returns mostly JS bootstrap and the order table is
+# rendered client-side via AJAX. Static HTML scraping yields 0 orders.
+#
+# Two paths forward when operator wants to actually run this scraper:
+#  (a) Capture the AJAX endpoint(s) the page calls (browser DevTools →
+#      Network tab → filter XHR while clicking "Submit"). Replace
+#      fetch_listing_page with a POST to that endpoint, parsing the JSON
+#      response shape.
+#  (b) Use Playwright/Selenium to render JS, then feed the rendered DOM
+#      into parse_listing_page. Adds heavy dep; reserve for production.
+#
+# The pure parser functions (parse_listing_page, extract_metadata_from_text)
+# work correctly against well-formed table HTML and have unit tests.
+# They're ready to consume real markup once the right endpoint is wired.
+
 # Polite scraping: 2-second minimum between requests.
 RATE_LIMIT_DELAY_SECONDS = 2.0
 
