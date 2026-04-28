@@ -136,6 +136,24 @@ class ComplianceNotice(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Phase 10 — ML output columns (migration 0020)
+    classifier_authority_confidence = Column(Numeric(5, 4), nullable=True)
+    classifier_type_confidence = Column(Numeric(5, 4), nullable=True)
+    risk_score = Column(Numeric(5, 2), nullable=True)
+    risk_tier = Column(String(20), nullable=True, index=True)
+    ner_extracted_fields = Column(JSONB, nullable=True)
+    model_version = Column(String(50), nullable=True)
+    classified_at = Column(DateTime(timezone=True), nullable=True)
+    risk_scored_at = Column(DateTime(timezone=True), nullable=True)
+    # Phase 15 + Phase 14 — source provenance for filter chip on dashboard.
+    source = Column(
+        String(20),
+        nullable=False,
+        default="manual",
+        server_default="manual",
+        index=True,
+    )
+
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
@@ -184,6 +202,16 @@ class ComplianceNotice(Base):
             "'received', 'under_review', 'response_drafted', "
             "'submitted', 'resolved', 'dismissed')",
             name="ck_notices_status",
+        ),
+        # Phase 10 — risk_tier check (mirrors migration 0020).
+        CheckConstraint(
+            "risk_tier IS NULL OR risk_tier IN ('critical', 'high', 'medium', 'low')",
+            name="ck_compliance_notices_risk_tier_valid",
+        ),
+        # Phase 10 + Phase 15 — source provenance.
+        CheckConstraint(
+            "source IN ('manual', 'portal', 'gmail', 'imap')",
+            name="ck_compliance_notices_source_valid",
         ),
         Index("ix_notices_client_status", "client_id", "status"),
         Index("ix_notices_client_authority", "client_id", "authority"),
