@@ -54,7 +54,7 @@ celery==5.3.6
 redis==5.0.1
 
 # Configuration
-python-dotenv==1.0.0
+python-dotenv==1.2.2
 pydantic==2.11.3
 pydantic-settings==2.13.0
 
