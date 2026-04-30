@@ -92,7 +92,7 @@ app.include_router(early_access.router)
 # All seven mount under /api/compliance. Every endpoint composes
 # Depends(require_compliance_permission(...)) — RBAC is enforced at the
 # route layer; RLS isolation is automatic via TenantContextMiddleware.
-from app.compliance.routers import (
+from app.compliance.routers import (  # noqa: E402  (intentional grouping with v1.0 routers above)
     audit as compliance_audit,
     clients as compliance_clients,
     memberships as compliance_memberships,

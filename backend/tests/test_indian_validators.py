@@ -1,6 +1,5 @@
 """LIFE-03: Indian identifier validators — GSTIN/PAN/CIN/DIN regex."""
 
-import pytest
 
 
 def test_valid_gstin_accepted():

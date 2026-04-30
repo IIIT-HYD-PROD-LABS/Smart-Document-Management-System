@@ -8,12 +8,9 @@ pytestmark = pytest.mark.integration
 
 
 def test_containment_uses_gin(db_as_app_runtime):
-    # EXPLAIN should show Bitmap Index Scan using ix_clients_config_overrides_gin
-    plan = db_as_app_runtime.execute(
-        text("EXPLAIN SELECT id FROM compliance_clients WHERE config_overrides @> '{}'::jsonb")
-    ).all()
-    plan_text = "\n".join(str(r[0]) for r in plan)
-    # On small tables planner may choose Seq Scan; assert the GIN index EXISTS at minimum
+    # On small tables the planner may choose Seq Scan over the GIN index, so we
+    # don't EXPLAIN the JSONB containment query — we just assert the index
+    # exists. CLIENT-06 only requires the index to be present.
     idx = db_as_app_runtime.execute(
         text(
             "SELECT indexname FROM pg_indexes "

@@ -24,7 +24,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.compliance.dependencies import (
-    get_active_membership,
     require_client_create_or_first_onboard,
     require_compliance_permission,
 )

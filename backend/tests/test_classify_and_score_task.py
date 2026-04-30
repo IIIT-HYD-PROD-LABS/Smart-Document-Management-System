@@ -9,7 +9,6 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from app.tasks.compliance_tasks import classify_and_score_notice
 
@@ -197,7 +196,6 @@ def test_classify_bert_pending_until_model_trained():
 
 def test_critical_tier_logged_for_escalation_hook():
     """Critical-tier classification logs a future-Phase-11 escalation hook."""
-    import logging
     notice = _make_notice(
         authority="RBI",
         penalty=Decimal("50000000"),  # ₹5 crore

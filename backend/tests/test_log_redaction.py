@@ -1,6 +1,5 @@
 """INFRA-06: structlog redaction filter strips PII fields."""
 
-import pytest
 
 
 def test_pii_stripped():
