@@ -420,12 +420,44 @@ MICROSOFT_CLIENT_SECRET=your-microsoft-client-secret
 FRONTEND_URL=http://localhost:3000
 BACKEND_URL=http://localhost:8000
 
+# Email (SMTP) — required to deliver early-access invitation emails.
+# Without these, admin approval succeeds but the invitee never gets the link
+# (admin UI now flags this with "approved, but email NOT delivered").
+#
+# Recommended: Resend (3k emails/month free, no domain required for testing).
+# Sign up at https://resend.com → API Keys → paste the re_xxx value below.
+# `onboarding@resend.dev` is Resend's verified sandbox sender — works out of
+# the box. Verify your own domain later for production.
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=587
+SMTP_USERNAME=resend
+SMTP_PASSWORD=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+SMTP_FROM_EMAIL=onboarding@resend.dev
+SMTP_USE_TLS=true
+
+# Alternative: Gmail App Password (requires 2-Step Verification on the account).
+# Generate at https://myaccount.google.com/apppasswords (16-char value, no spaces).
+# SMTP_HOST=smtp.gmail.com
+# SMTP_USERNAME=you@gmail.com
+# SMTP_PASSWORD=xxxxxxxxxxxxxxxx
+# SMTP_FROM_EMAIL=you@gmail.com
+
 # LLM
 LLM_PROVIDER=ollama
 LLM_MODEL=llama3
 ```
 
 See `backend/.env.example` for the full list.
+
+## Auth & Early-Access Flow
+
+1. Visitor lands on `/`, clicks **Start Beta Trial** → fills the modal → record persisted in `early_access_requests` (status: `pending`).
+2. Admin approves at `/dashboard/admin` → backend mints a 7-day JWT and sends `Your TaxSync Early Access is Approved!` email containing `${FRONTEND_URL}/register?token=<jwt>`.
+3. Invitee clicks the email link → `/register?token=<jwt>` → frontend validates the token via `GET /api/early-access/validate-invite?token=<jwt>` → form pre-fills email + full name (email is read-only).
+4. Invitee chooses username + password → `POST /api/auth/register` → token pair issued → redirected to `/dashboard`.
+5. Existing users sign in via the **Sign in** link in the navbar → `/login`.
+
+If `SMTP_HOST` is not set, admin approval still succeeds but the toast on `/dashboard/admin` reads "approved, but email NOT delivered (SMTP not configured)". In `DEBUG=true`, the registration URL is logged to the backend so you can copy/paste it into the browser without running an SMTP server.
 
 ---
 

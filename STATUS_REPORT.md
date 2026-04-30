@@ -1,8 +1,8 @@
 # Smart Document Management System — Status Report
 
 **Organization:** Product Labs, IIIT Hyderabad
-**Last Updated:** 2026-03-25
-**Overall Progress:** 8 of 8 phases complete (100%) — comprehensive security hardening (25 fixes), all 12 tests passing
+**Last Updated:** 2026-04-30
+**Overall Progress:** v1.0 shipped (8/8 phases). v2.0 Phase 9 (Compliance Foundation) shipped 2026-04-28. Phase 10 (ML Classification + Risk Scoring) Wave 0 in progress.
 
 ---
 
@@ -266,6 +266,38 @@ The Smart Document Management System (SmartDocs) is an AI-powered document manag
 **Files:** 8 new, 19 modified (+1468, -226 lines)
 
 ---
+
+### Auth & Early Access Bug Fixes (April 30, 2026) ✅
+
+**Problem:** End-to-end audit surfaced three production-impact issues in the early-access + login flow:
+
+1. **CRITICAL — Invitation token URL parameter mismatch.**
+   `send_approval_email` minted links as `/register?invite=<jwt>` but `register/page.tsx` read `searchParams.get("token")`. Approved users clicked the email link and saw the "Early Access Only" gate instead of the registration form. Bug survived unit tests because each side passed its own contract — only end-to-end testing surfaced it.
+
+2. **No `/login` entry point on the landing page.** Existing users had no visible path back to login from `/` — the only navbar CTA was the early-access modal trigger. Users had to know the URL.
+
+3. **Silent email failure.** `send_approval_email` was dispatched via FastAPI `BackgroundTasks` which discarded the `False` return. Admins saw "approved" in the UI while the user never received the link. Root cause for the "no mail coming" complaints: `SMTP_HOST` was unset in `.env`.
+
+**Fixes shipped:**
+
+- `backend/app/utils/email.py:52` — invitation URL now uses `?token=` to match the frontend contract; added DEBUG-mode dev breadcrumb that logs the registration URL when SMTP is unconfigured (lets devs test the full flow without a mail server); added 10s SMTP timeout
+- `backend/app/routers/admin.py:466` — early-access review now sends mail synchronously and returns `{ email_sent: bool, email_error?: string, invitation_token?: string (DEBUG only) }` so the admin UI can surface delivery failures
+- `frontend/src/app/dashboard/admin/page.tsx` — the review handler reads `email_sent`; toast distinguishes "approved — invitation email sent" vs. "approved, but email NOT delivered (SMTP not configured / send failed)"
+- `frontend/src/components/landing/Navbar.tsx` — added quiet "Sign in" link → `/login` next to the primary "Start Beta Trial" CTA (desktop + mobile drawer); brand wordmark wraps in `<Link href="/">` for keyboard navigation; mobile hamburger gets `aria-expanded`/`aria-controls`
+- `frontend/src/app/login/page.tsx`, `register/page.tsx` — focus-visible rings using existing `#10b981/40` accent token (preserves the dark-minimalist system); `autoFocus` on first field; `autoComplete=email|current-password|new-password|name|username`; `aria-busy` on form during submit; `aria-readonly` on the invitation-locked email field; `disabled:cursor-not-allowed` on submit buttons
+- `backend/.env.example` — appended SMTP block with Gmail App Password setup walkthrough (the missing variable that was the root cause for "no mail coming")
+
+**Verification (Playwright smoke 2026-04-30):**
+
+- Submitted real early-access request → 201 Created
+- Approved via direct DB path → minted JWT invitation token via the admin code path
+- Visited `/register?token=<jwt>` → form rendered with `Smoke Test User` (full name) + `smoke-test-2026-04-30@taxsync.test` (read-only email) + "Your invitation has been verified" banner ✅
+- Backend logged `email_skipped_no_smtp hint='Set SMTP_HOST/SMTP_USERNAME/SMTP_PASSWORD in .env to enable email delivery'` confirming the visibility fix
+- Login page autofocuses email field, focus rings render correctly, `Sign in` link in navbar routes to `/login`
+
+**Files touched:** 6 source + 1 env example. No new tests added (this was a regression sweep on an existing flow; the smoke screenshots are the verification artifact).
+
+**SMTP wired (live verification):** Resend SMTP relay (`smtp.resend.com:587`, user=`resend`, sender=`onboarding@resend.dev` — Resend's verified sandbox sender, no domain verification needed). Live test send to `munnasrav45@gmail.com` returned `email_sent: True` from the production code path on 2026-04-30T10:44Z. Two Gmail App Passwords were attempted prior to switching to Resend and both got rejected with `535 BadCredentials` — suspected cause is 2-Step Verification not being on for that Google account. README + `.env.example` now lead with Resend and document Gmail as a fallback that requires 2-Step.
 
 ### Phase 8: Production Readiness (March 25, 2026) ✅
 **Goal:** Audit logging, CI/CD pipeline, production deployment documentation.
