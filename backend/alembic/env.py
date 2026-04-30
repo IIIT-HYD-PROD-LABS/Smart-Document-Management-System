@@ -50,12 +50,20 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        # Phase 9: ensure alembic_version column is wide enough for descriptive
-        # revision ids (e.g. 0013_compliance_foundation_schema = 33 chars).
-        # The default is varchar(32). Idempotent — no-op if already wide enough
-        # or table doesn't exist yet.
+        # Phase 9: alembic_version.version_num must be wide enough for our
+        # descriptive revision ids (0013_compliance_foundation_schema = 35
+        # chars). Default is varchar(32). Two cases:
+        #   (a) fresh DB — table doesn't exist; pre-create with varchar(64) so
+        #       alembic's CREATE TABLE IF NOT EXISTS is a no-op and our wide
+        #       column survives. Without this, fresh CI runs fail at the
+        #       UPDATE that records revision 0013.
+        #   (b) existing DB on varchar(32) — widen in place.
         from sqlalchemy import text
         connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS alembic_version (
+                version_num VARCHAR(64) NOT NULL,
+                CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
+            );
             DO $$
             BEGIN
               IF EXISTS (
