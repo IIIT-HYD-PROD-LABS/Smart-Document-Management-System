@@ -51,25 +51,54 @@ function LoginInner() {
         }
     };
 
+    const inputClass = "w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] transition-colors focus:outline-none focus:border-[#3f3f46] focus-visible:ring-2 focus-visible:ring-[#10b981]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111113]";
+    const focusRing = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]";
+
     return (
         <div className="min-h-screen bg-[#09090b] flex items-center justify-center px-6">
             <div className="w-full max-w-sm">
                 <div className="text-center mb-8">
-                    <Link href="/" className="text-sm font-semibold text-white tracking-tight">TaxSync</Link>
+                    <Link href="/" className={`text-sm font-semibold text-white tracking-tight rounded-sm ${focusRing}`}>TaxSync</Link>
                     <h1 className="text-xl font-semibold text-white mt-6">Sign in</h1>
                     <p className="text-sm text-[#71717a] mt-1">Welcome back to your account</p>
                 </div>
                 <div className="bg-[#111113] border border-[#27272a] rounded-lg p-6">
-                    <form onSubmit={handleSubmit} className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading}>
                         <div>
                             <label htmlFor="login-email" className="text-xs font-medium text-[#a1a1aa] mb-1.5 block">Email</label>
-                            <input id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors" placeholder="you@example.com" required />
+                            <input
+                                id="login-email"
+                                type="email"
+                                name="email"
+                                autoComplete="email"
+                                inputMode="email"
+                                autoFocus
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className={inputClass}
+                                placeholder="you@example.com"
+                                required
+                            />
                         </div>
                         <div>
                             <label htmlFor="login-password" className="text-xs font-medium text-[#a1a1aa] mb-1.5 block">Password</label>
-                            <input id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors" placeholder="Enter your password" required />
+                            <input
+                                id="login-password"
+                                type="password"
+                                name="password"
+                                autoComplete="current-password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className={inputClass}
+                                placeholder="Enter your password"
+                                required
+                            />
                         </div>
-                        <button type="submit" disabled={loading} className="w-full py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors disabled:opacity-50 cursor-pointer mt-2">
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className={`w-full py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2 ${focusRing}`}
+                        >
                             {loading ? "Signing in..." : "Sign in"}
                         </button>
                     </form>
@@ -90,9 +119,9 @@ function LoginInner() {
                                                 window.location.href = res.data.url;
                                             } catch { toast.error("Failed to start Google sign-in"); }
                                         }}
-                                        className="w-full py-2 text-sm font-medium bg-[#09090b] border border-[#27272a] text-white rounded-md hover:bg-[#18181b] transition-colors cursor-pointer flex items-center justify-center gap-2"
+                                        className={`w-full py-2 text-sm font-medium bg-[#09090b] border border-[#27272a] text-white rounded-md hover:bg-[#18181b] transition-colors cursor-pointer flex items-center justify-center gap-2 ${focusRing}`}
                                     >
-                                        <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                                        <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
                                         Google
                                     </button>
                                 )}
@@ -105,9 +134,9 @@ function LoginInner() {
                                                 window.location.href = res.data.url;
                                             } catch { toast.error("Failed to start Microsoft sign-in"); }
                                         }}
-                                        className="w-full py-2 text-sm font-medium bg-[#09090b] border border-[#27272a] text-white rounded-md hover:bg-[#18181b] transition-colors cursor-pointer flex items-center justify-center gap-2"
+                                        className={`w-full py-2 text-sm font-medium bg-[#09090b] border border-[#27272a] text-white rounded-md hover:bg-[#18181b] transition-colors cursor-pointer flex items-center justify-center gap-2 ${focusRing}`}
                                     >
-                                        <svg className="w-4 h-4" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+                                        <svg className="w-4 h-4" viewBox="0 0 21 21" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
                                         Microsoft
                                     </button>
                                 )}
@@ -116,7 +145,7 @@ function LoginInner() {
                     )}
                 </div>
                 <p className="text-center text-xs text-[#52525b] mt-5">
-                    No account?{" "}<Link href="/" className="text-[#a1a1aa] hover:text-white transition-colors">Request early access</Link>
+                    No account?{" "}<Link href="/" className={`text-[#a1a1aa] hover:text-white transition-colors rounded-sm ${focusRing}`}>Request early access</Link>
                 </p>
             </div>
         </div>

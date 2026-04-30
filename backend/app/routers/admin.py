@@ -463,10 +463,26 @@ def review_early_access(
 
     logger.info("early_access_reviewed", request_id=request_id, status=payload.status, admin=current_user.id)
 
+    # Send the decision email synchronously so the admin UI can surface
+    # delivery failures (e.g. SMTP misconfigured). BackgroundTasks would
+    # swallow the False return value and the admin would see "approved"
+    # while the user never receives a link.
+    email_sent = False
+    email_error: str | None = None
     if payload.status == "approved" and invitation_token:
-        background_tasks.add_task(send_approval_email, ea_request.email, ea_request.full_name, invitation_token)
+        email_sent = send_approval_email(ea_request.email, ea_request.full_name, invitation_token)
+        if not email_sent:
+            email_error = (
+                "SMTP not configured" if not settings.SMTP_HOST
+                else "Email send failed — check server logs"
+            )
     elif payload.status == "rejected":
-        background_tasks.add_task(send_rejection_email, ea_request.email, ea_request.full_name, payload.admin_note)
+        email_sent = send_rejection_email(ea_request.email, ea_request.full_name, payload.admin_note)
+        if not email_sent:
+            email_error = (
+                "SMTP not configured" if not settings.SMTP_HOST
+                else "Email send failed — check server logs"
+            )
 
     background_tasks.add_task(
         log_audit_event,
@@ -474,7 +490,7 @@ def review_early_access(
         action=f"early_access_{payload.status}",
         resource_type="early_access",
         resource_id=request_id,
-        details={"email": ea_request.email, "admin_note": payload.admin_note},
+        details={"email": ea_request.email, "admin_note": payload.admin_note, "email_sent": email_sent},
         ip_address=request.client.host if request.client else None,
     )
 
@@ -482,4 +498,7 @@ def review_early_access(
         "detail": f"Early access request {payload.status}",
         "request_id": request_id,
         "email": ea_request.email,
+        "email_sent": email_sent,
+        "email_error": email_error,
+        "invitation_token": invitation_token if (settings.DEBUG and invitation_token) else None,
     }
