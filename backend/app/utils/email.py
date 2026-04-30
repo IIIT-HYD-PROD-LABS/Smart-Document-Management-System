@@ -14,7 +14,12 @@ logger = structlog.stdlib.get_logger()
 def send_email(to_email: str, subject: str, html_body: str) -> bool:
     """Send an email via SMTP. Returns True on success, False on failure."""
     if not settings.SMTP_HOST:
-        logger.warning("email_skipped_no_smtp", to=to_email, subject=subject)
+        logger.warning(
+            "email_skipped_no_smtp",
+            to=to_email,
+            subject=subject,
+            hint="Set SMTP_HOST/SMTP_USERNAME/SMTP_PASSWORD in .env to enable email delivery",
+        )
         return False
 
     try:
@@ -24,7 +29,7 @@ def send_email(to_email: str, subject: str, html_body: str) -> bool:
         msg["To"] = to_email
         msg.attach(MIMEText(html_body, "html"))
 
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:
             if settings.SMTP_USE_TLS:
                 server.starttls()
             if settings.SMTP_USERNAME:
@@ -34,13 +39,26 @@ def send_email(to_email: str, subject: str, html_body: str) -> bool:
         logger.info("email_sent", to=to_email, subject=subject)
         return True
     except Exception as e:
-        logger.error("email_send_failed", to=to_email, error=str(e))
+        logger.error("email_send_failed", to=to_email, subject=subject, error=str(e))
         return False
 
 
 def send_approval_email(to_email: str, full_name: str, invitation_token: str) -> bool:
-    """Send early access approval email with registration link."""
-    registration_url = f"{settings.FRONTEND_URL}/register?invite={invitation_token}"
+    """Send early access approval email with registration link.
+
+    The query parameter must match what `/register` reads (`token`); a mismatch
+    silently routes the user to the early-access gate even when the email lands.
+    """
+    registration_url = f"{settings.FRONTEND_URL}/register?token={invitation_token}"
+
+    if not settings.SMTP_HOST and settings.DEBUG:
+        logger.warning(
+            "invitation_url_for_dev",
+            to=to_email,
+            full_name=full_name,
+            url=registration_url,
+            hint="SMTP not configured — copy this URL into a browser to test the flow locally",
+        )
 
     html = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">

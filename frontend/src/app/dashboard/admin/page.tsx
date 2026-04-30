@@ -293,8 +293,19 @@ function EarlyAccessTab() {
         const confirmed = window.confirm(`Are you sure you want to ${action} this request?`);
         if (!confirmed) return;
         try {
-            await adminApi.reviewEarlyAccess(id, status, adminNote || undefined);
-            toast.success(`Request ${status}`);
+            const res = await adminApi.reviewEarlyAccess(id, status, adminNote || undefined);
+            const { email_sent, email_error } = (res?.data ?? {}) as {
+                email_sent?: boolean;
+                email_error?: string | null;
+            };
+            if (email_sent) {
+                toast.success(`Request ${status} — invitation email sent`);
+            } else {
+                toast.error(
+                    `Request ${status}, but email was NOT delivered${email_error ? ` (${email_error})` : ""}. Check server logs.`,
+                    { duration: 6000 }
+                );
+            }
             setReviewingId(null);
             setAdminNote("");
             fetchItems();

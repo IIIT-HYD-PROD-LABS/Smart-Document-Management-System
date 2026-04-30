@@ -75,11 +75,13 @@ function RegisterInner() {
     };
 
     const fields = [
-        { name: "full_name", label: "Full name", type: "text", placeholder: "John Doe", required: false, id: "register-full-name", readOnly: false },
-        { name: "username", label: "Username", type: "text", placeholder: "johndoe", required: true, id: "register-username", readOnly: false },
-        { name: "email", label: "Email", type: "email", placeholder: "you@example.com", required: true, id: "register-email", readOnly: tokenValid === true },
-        { name: "password", label: "Password", type: "password", placeholder: "Min 8 characters", required: true, id: "register-password", readOnly: false },
+        { name: "full_name", label: "Full name", type: "text", placeholder: "John Doe", required: false, id: "register-full-name", readOnly: false, autoComplete: "name" },
+        { name: "username", label: "Username", type: "text", placeholder: "johndoe", required: true, id: "register-username", readOnly: false, autoComplete: "username" },
+        { name: "email", label: "Email", type: "email", placeholder: "you@example.com", required: true, id: "register-email", readOnly: tokenValid === true, autoComplete: "email" },
+        { name: "password", label: "Password", type: "password", placeholder: "Min 8 characters", required: true, id: "register-password", readOnly: false, autoComplete: "new-password" },
     ];
+
+    const focusRing = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]";
 
     // Still validating token
     if (inviteToken && tokenValid === null) {
@@ -145,24 +147,33 @@ function RegisterInner() {
                 </div>
 
                 <div className="bg-[#111113] border border-[#27272a] rounded-lg p-6">
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        {fields.map((f) => (
+                    <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading}>
+                        {fields.map((f, idx) => (
                             <div key={f.name}>
                                 <label htmlFor={f.id} className="text-xs font-medium text-[#a1a1aa] mb-1.5 block">{f.label}</label>
                                 <input
                                     id={f.id}
                                     type={f.type}
                                     name={f.name}
+                                    autoComplete={f.autoComplete}
+                                    autoFocus={idx === 0 && !f.readOnly}
                                     value={form[f.name as keyof typeof form]}
                                     onChange={handleChange}
-                                    className={`w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors ${f.readOnly ? "opacity-60 cursor-not-allowed" : ""}`}
+                                    className={`w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] transition-colors focus:outline-none focus:border-[#3f3f46] focus-visible:ring-2 focus-visible:ring-[#10b981]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111113] ${f.readOnly ? "opacity-60 cursor-not-allowed" : ""}`}
                                     placeholder={f.placeholder}
                                     required={f.required}
                                     readOnly={f.readOnly}
+                                    aria-readonly={f.readOnly}
+                                    minLength={f.name === "password" ? 8 : undefined}
+                                    maxLength={f.name === "password" ? 128 : undefined}
                                 />
                             </div>
                         ))}
-                        <button type="submit" disabled={loading} className="w-full py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors disabled:opacity-50 cursor-pointer mt-2">
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className={`w-full py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2 ${focusRing}`}
+                        >
                             {loading ? "Creating..." : "Create account"}
                         </button>
                     </form>
