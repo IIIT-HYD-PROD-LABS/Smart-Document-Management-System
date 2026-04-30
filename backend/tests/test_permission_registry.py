@@ -1,6 +1,5 @@
 """RBAC-01..06: Permission registry per-role permission set sanity."""
 
-import pytest
 
 
 def test_compliance_head_has_approve():

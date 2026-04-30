@@ -11,8 +11,6 @@ from decimal import Decimal
 import pytest
 
 from app.ml.datasets.scrape_sebi import (
-    PENALTY_PATTERN,
-    SECTION_PATTERN,
     SEBI_ORDER_ID_PATTERN,
     SEBIOrder,
     extract_metadata_from_text,
