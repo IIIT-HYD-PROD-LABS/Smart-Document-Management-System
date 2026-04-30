@@ -4,7 +4,7 @@ milestone: v2.0
 milestone_name: Compliance Management System
 status: Phase 9 SHIPPED 2026-04-28 (manual smoke verified by user); current focus Phase 10 (ML Classification + Risk Scoring) — Wave 0 infra setup in progress
 stopped_at: "v2.0 Phase 9 SHIPPED 2026-04-28 — user completed 21-step manual smoke; all 26 requirements (LIFE-01..08, AUDIT-01..02, RBAC-01..06, CLIENT-01..07, INFRA-05..07) validated. Phase 10 (ML Classification + Risk Scoring) Wave 0 setup in progress: ML dependencies + dedicated compliance-worker Celery service + module skeleton + research doc. Open blockers per 10-CONTEXT.md: BERT base model selection, training data sourcing (300+ examples × 40+ classes target). Next: /gsd:research-phase 10 to empirically validate model selection, /gsd:plan-phase 10 to produce executable plans. Phase 15 CONTEXT seeded 2026-04-28."
-last_updated: "2026-04-28T14:00:00.000Z"
+last_updated: "2026-04-30T10:21:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 1
@@ -84,10 +84,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-27T10:34:46Z
-Previous session: 2026-04-27T10:21:42.798Z
-Stopped at: Plan 09-06 user-APPROVED on 2026-04-27T10:32Z (all 6 tasks complete); Plan 09-07 (Wave 6 — final notice-centric surfaces) starting now
-Resume command: /gsd:execute-phase 9 (will resume at Plan 09-07)
+Last session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
+Previous session: 2026-04-27T10:34:46Z
+Stopped at: 2026-04-30 — fixed three end-to-end issues in the auth/early-access flow: (1) `?invite=` ↔ `?token=` parameter mismatch in approval-email URL silently routed approved users to the early-access gate; (2) no Sign-in CTA on landing-page navbar; (3) `send_approval_email` was fire-and-forget via `BackgroundTasks` so SMTP failures were invisible to the admin (root cause for "no mail coming": `SMTP_HOST` unset in `.env`). Surface fixes shipped: backend now sends synchronously and returns `email_sent`/`email_error`; admin UI distinguishes delivery success vs. failure; landing navbar gets a quiet `Sign in` link; login + register pages get focus-visible rings + autoComplete + autoFocus + ARIA. `.env.example` rewritten with a multi-provider SMTP walkthrough (Resend recommended; Gmail App Password as fallback). SMTP wired against Resend (host=smtp.resend.com:587, user=resend, sender=onboarding@resend.dev, default sandbox); two test sends to munnasrav45@gmail.com returned `email_sent: True`. Two Gmail App Passwords were attempted earlier and rejected with 535 — likely 2-Step Verification was off; Gmail block left as documented fallback only. Phase 10 work is unchanged from 2026-04-28.
+Resume command: /gsd:research-phase 10 (Phase 10 still awaits empirical BERT model validation; no Phase 10 commits this session)
 
 ## Plan 09-03 Completion (resolved 2026-04-27)
 
