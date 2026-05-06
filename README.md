@@ -1,20 +1,32 @@
-# SmartDocs
+# SmartDocs / TaxSync
 
-**AI-powered document management system** built for IIIT Hyderabad Production Labs. Upload any document — PDFs, scanned images, DOCX — and the system automatically extracts text via OCR, classifies it using machine learning, and makes it searchable.
+**AI-powered document management + compliance tracking system** built for IIIT Hyderabad Production Labs. Upload any document — PDFs, scanned images, DOCX — and the system automatically extracts text via OCR, classifies it using machine learning, and makes it searchable. v2.0 layers a multi-tenant **compliance notice tracking** workflow on top: ingest GST/IT/MCA/RBI/SEBI notices, route through a 4-stage approval pipeline, fire deadline alerts, and export per-client compliance reports.
+
+**Current status (2026-05-06):** v1.0 SHIPPED · v2.0 Phases 9-13 CODE-COMPLETE · v2.0.1 patch in production · 389 backend tests GREEN · Vercel deploy: Ready · See [STATUS_REPORT.md](./STATUS_REPORT.md) for the full ship log.
 
 ---
 
 ## Features
 
+### v1.0 — Document Management
 - **ML Document Classification** — Automatically categorizes documents into bills, invoices, tax forms, bank statements, UPI receipts, and tickets using a trained Linear SVC model (85.06% accuracy — exceeds 85% target)
 - **OCR Text Extraction** — Extracts text from scanned PDFs and images using Tesseract with adaptive preprocessing (grayscale, blur, thresholding, deskew, morphological ops, multi-PSM retry)
-- **LLM Smart Extraction** — Multi-provider LLM service (Ollama, Gemini, Anthropic, OpenAI, local regex fallback) with category-specific extraction prompts and AI summaries
+- **LLM Smart Extraction** — Multi-provider LLM service (Ollama, Gemini, Anthropic, OpenAI, local regex fallback) with category-specific extraction prompts and AI summaries; degraded-mode tracking when only the regex fallback is available
 - **Multi-User & RBAC** — Three-tier role system (admin/editor/viewer), admin panel, document-level sharing with permissions
-- **OAuth SSO** — Google & Microsoft OAuth single sign-on with exchange code flow
+- **OAuth SSO** — Google & Microsoft OAuth single sign-on with exchange code flow. Both buttons render unconditionally on `/login` and `/register`; backend gracefully reports "not configured" when OAuth env vars are absent
 - **Async Processing** — Upload returns immediately (HTTP 202). Celery workers handle OCR + classification in the background with real-time status polling
-- **Full-Text Search** — Search across all extracted document content with category filtering
+- **Full-Text Search** — PostgreSQL `tsvector` + GIN indexes; search across all extracted content with category filtering
 - **Secure Auth** — JWT access tokens + opaque refresh tokens with rotation and reuse detection. bcrypt password hashing. Rate limiting on all endpoints
 - **Multi-Format Support** — PDF (text + scanned), PNG, JPG, TIFF, DOCX
+
+### v2.0 — Compliance Notice Management
+- **Multi-tenant compliance** (Phase 9) — 7-role × 12-permission matrix with row-level security (RLS), audit immutability via DB triggers + `REVOKE` on the `app_runtime` runtime role, and a `cross_client_view` PERMISSIVE policy for senior auditors
+- **ML risk scoring + auto-escalation** (Phase 10) — rule-based scorer with SHAP-style factor explanations; review queue for low-confidence classifications; escalation activity + audit log on critical-tier notices
+- **Alerts + statutory calendar** (Phase 11) — APScheduler-backed multi-channel alert pipeline (email + WebSocket; SMS scaffolded). 37 FY 2025-26 statutory deadlines pre-seeded. Indian holiday-aware deadline adjustment. Real-time `NotificationBell` with auto-reconnecting WebSocket
+- **Response drafting + 4-stage approval** (Phase 12) — Drafter → Reviewer → Legal → CFO workflow with versioned drafts and evidence linking
+- **Cross-entity unified search + analytics** (Phase 13) — single FTS query across `compliance_notices` + `documents` (`tsvector` + GIN trigger). Three analytics endpoints: penalty by authority, notice volume by status, response-time percentiles
+- **CSV report export** (v2.0.1) — Download Generate-summary + the 3 Phase 13 aggregations as CSV from `/dashboard/compliance/reports`. Stdlib `csv` + `StreamingResponse`, charset=utf-8 declared; no new dependencies
+- **Notice file upload pipeline** (Phase 9 + v2.0.1) — `POST /notices/{id}/upload` reuses v1.0 storage AND dispatches the Celery OCR/classification task (parity with the regular doc upload), so notice-attached documents transition `PENDING → COMPLETED` automatically
 
 ---
 
@@ -40,14 +52,17 @@
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS |
-| Backend | FastAPI, SQLAlchemy, Pydantic v2, Uvicorn |
-| Database | PostgreSQL (Supabase Cloud), Alembic migrations |
-| AI/LLM | Multi-provider (Ollama, Gemini, Anthropic, OpenAI, local fallback) |
-| ML | scikit-learn (LinearSVC + CalibratedClassifierCV + TF-IDF), Tesseract OCR, pdfplumber, python-docx |
-| Async | Celery + Redis |
-| Auth | JWT (HS256) + opaque refresh tokens, bcrypt, OAuth (Google/Microsoft), slowapi rate limiting |
-| Infra | Docker, Docker Compose |
+| Frontend | Next.js 15 (App Router, standalone build), React 19, TypeScript, Tailwind CSS, TanStack Query, Zustand, react-day-picker v9, framer-motion |
+| Backend | FastAPI, SQLAlchemy, Pydantic v2, Uvicorn, structlog |
+| Database | PostgreSQL (Supabase Cloud — session-mode pooler for Phase 9 RLS), Alembic migrations (head: `0024_supabase_security_advisor_fixes`) |
+| AI/LLM | Multi-provider (Ollama, Gemini, Anthropic, OpenAI, local regex fallback) with degraded-mode tracking |
+| Phase 10 ML | InLegalBERT (deferred), rule-based risk scorer + SHAP-style factors, scikit-learn (LinearSVC + CalibratedClassifierCV + TF-IDF), Tesseract OCR, pdfplumber, python-docx, spaCy NER |
+| Phase 11 alerts | APScheduler (durable), holidays (Indian FY 2025-26), Twilio SMS adapter, WebSocket via FastAPI; SendGrid migration deferred to v2.1 |
+| Phase 13 search | PostgreSQL `tsvector` + GIN indexes + trigger-maintained search vectors on `documents` + `compliance_notices` (Elastic Cloud deferred to v2.1) |
+| Async | Celery + Redis (default queue + dedicated `compliance` queue with 2GB ceiling) |
+| Auth | JWT (HS256) + opaque refresh tokens with rotation + reuse detection, bcrypt, OAuth (Google/Microsoft), slowapi rate limiting |
+| Security | RLS on every client-scoped table + immutable audit triggers + `REVOKE` on `app_runtime` role |
+| Infra | Docker Compose (db + redis + backend + 2 Celery workers + frontend), Vercel (frontend prod) |
 
 ---
 
@@ -60,12 +75,23 @@
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/10srav/SMART-DOCUMENT-MANAGEMENT-SYSTEM--IIITHYD-PROD-LABS.git
-cd "SMART DOCUMENT MANAGEMENT SYSTEM- IIITHYD PROD LABS"
-cp backend/.env.example backend/.env
-# Edit backend/.env — set SECRET_KEY (>= 32 chars), DATABASE_URL (Supabase), and OAuth credentials
-# The root .env has DATABASE_URL pointing to Supabase Cloud
+git clone https://github.com/IIIT-HYD-PROD-LABS/Smart-Document-Management-System.git
+cd Smart-Document-Management-System
+cp backend/.env.example .env  # repo root .env, NOT backend/.env (docker compose reads root)
 ```
+
+Required `.env` keys:
+
+| Key | Why | Notes |
+|---|---|---|
+| `SECRET_KEY` | JWT signing | ≥ 32 chars, ≥ 10 unique chars (config.py validates) |
+| `DATABASE_URL` | Postgres | Supabase pooler in **session mode** (port 5432) — Phase 9 RLS context vars don't survive transaction-mode pooling |
+| `REDIS_PASSWORD` | Celery broker | Any random secret |
+| `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` | Google OAuth (optional) | Get from console.cloud.google.com → APIs & Services → Credentials. Authorized redirect URI: `http://localhost:8000/api/auth/callback/google` (dev) |
+| `MICROSOFT_CLIENT_ID` + `MICROSOFT_CLIENT_SECRET` | Microsoft OAuth (optional) | Same pattern |
+| `KAGGLE_USERNAME` + `KAGGLE_KEY` | Dataset retraining (optional) | Only needed if running `python -m app.ml.datasets.download` |
+
+OAuth buttons render unconditionally. If creds are absent, clicking shows a helpful toast (`"Google sign-in not yet configured. Set GOOGLE_CLIENT_ID in backend .env to enable."`); the OAuth dance is fully gated server-side, so no error escape paths.
 
 ### 2. Start all services
 
@@ -192,6 +218,51 @@ npm run dev
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/ml/evaluation` | Model metrics — accuracy, per-category P/R/F1, confusion matrix |
+
+### Compliance — Notices (Phase 9, all require `X-Client-Id` tenant header + role-gated)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/compliance/notices` | List/filter notices for active tenant (paginated) |
+| POST | `/api/compliance/notices` | Create notice with manual metadata |
+| GET | `/api/compliance/notices/{id}` | Get notice detail |
+| PATCH | `/api/compliance/notices/{id}` | Edit metadata (omits status field) |
+| PATCH | `/api/compliance/notices/{id}/status` | State machine transition (target-dependent permission gate; `under_review` accepts `NOTICE_REVIEW` OR `NOTICE_DRAFT_RESPONSE`) |
+| POST | `/api/compliance/notices/bulk` | Bulk status update with partial-failure semantics |
+| GET | `/api/compliance/notices/{id}/chain` | Recursive CTE: ancestors + descendants |
+| POST | `/api/compliance/notices/{id}/upload` | Attach PDF/JPG/PNG; first upload becomes `notice.document_id`; **dispatches Celery OCR + classification** (v2.0.1) |
+| GET | `/api/compliance/notices/{id}/activity` | User-facing timeline |
+| POST | `/api/compliance/notices/{id}/activity/note` | Add free-text note |
+
+### Compliance — Reports + Search (Phase 13 + v2.0.1 CSV exports)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/compliance/reports/health-summary` | Monthly summary JSON; payload: `{client_id, month: "YYYY-MM"}` |
+| POST | `/api/compliance/reports/health-summary/export` | Same as above, returns **CSV** |
+| GET | `/api/compliance/reports/penalty-by-authority` | Aggregation JSON |
+| GET | `/api/compliance/reports/penalty-by-authority/export` | Aggregation **CSV** |
+| GET | `/api/compliance/reports/notice-volume-by-status` | Aggregation JSON |
+| GET | `/api/compliance/reports/notice-volume-by-status/export` | Aggregation **CSV** |
+| GET | `/api/compliance/reports/response-time` | Percentile stats JSON |
+| GET | `/api/compliance/reports/response-time/export` | Percentile stats **CSV** (3-column `metric,value,unit`) |
+| GET | `/api/compliance/search/unified?q=…` | FTS across notices + documents (`min_length=2`) |
+
+### Compliance — Other Phase 9-12 (gated by role + tenant)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/compliance/clients/me` | List the tenants the current user has membership on |
+| GET | `/api/compliance/audit` | Read-only immutable audit log (DB trigger + `REVOKE` on `app_runtime` enforce append-only) |
+| GET | `/api/compliance/calendar/entries` | 37 statutory FY 2025-26 deadlines (year/month/authority/category filterable) |
+| GET | `/api/compliance/calendar/compliance-score` | Rolling 90-day compliance health score |
+| GET | `/api/compliance/review/pending` | Phase 10 ML review queue |
+| PATCH | `/api/compliance/review/{review_id}/assign` | Assign authority + notice type for low-confidence ML output |
+| POST | `/api/compliance/responses` | Create draft response |
+| GET | `/api/compliance/responses/{id}` | Read response state + version |
+| PATCH | `/api/compliance/responses/{id}/transition` | 4-stage approval transition (Drafter → Reviewer → Legal → CFO) |
+
+Permission matrix (84-cell): see `backend/app/compliance/services/permission_registry.py` and `backend/tests/test_compliance_endpoints.py`. Roles: `compliance_head`, `legal_team`, `finance_team`, `auditor`, `ca_consultant`, `staff`, `cfo`.
 
 ---
 
