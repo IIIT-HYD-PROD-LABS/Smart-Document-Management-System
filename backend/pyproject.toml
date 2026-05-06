@@ -18,7 +18,20 @@
 [project]
 name = "smart-docs-backend"
 version = "2.0.1"
-requires-python = ">=3.11"
+# Vercel's `vercel-runtime==0.13.0` requires Python >=3.12. uv resolves
+# to the LOWEST version that satisfies `requires-python`, so `>=3.11`
+# was making Vercel's uv pick 3.11 and then fail to install
+# vercel-runtime. Bumped to `>=3.12` so uv picks 3.12.
+#
+# CI / Docker impact: none. CI uses `pip install -r requirements.txt`
+# (not `pip install .`), so it doesn't honor this project's
+# `requires-python`. Docker images run pip the same way.
+requires-python = ">=3.12"
 
 [tool.uv]
+# Vercel uses the `--extra-index-url https://download.pytorch.org/whl/cpu`
+# in requirements.txt. uv defaults to `first-index` (one source per
+# package); pillow 12.2.0 is on PyPI but not on PyTorch's index, so uv
+# fails to resolve it. `unsafe-best-match` matches pip's behavior of
+# trying every index — both are trusted, no dependency-confusion risk.
 index-strategy = "unsafe-best-match"
