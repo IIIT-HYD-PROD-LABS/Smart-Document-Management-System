@@ -199,14 +199,11 @@ def main() -> int:
         print(f"FATAL: {md} not found", file=sys.stderr)
         return 1
 
-    # Two outputs: the canonical clean filename + the legacy
-    # `.md (1) (1).docx` filename the user already has open.
+    # Single canonical output. The legacy `.md (1) (1).docx` mirror has
+    # been retired (2026-05-06) — it was a one-time accommodation for a
+    # browser-suffixed download path, no longer needed.
     canonical = project_root / "Smart_Document_Management_System_Status_Report.docx"
-    legacy = project_root / "Smart_Document_Management_System_Status_Report.md (1) (1).docx"
-
     md_to_docx(md, canonical)
-    # Mirror to the legacy filename so the user's existing reference doesn't go stale
-    md_to_docx(md, legacy)
     return 0
 
 
