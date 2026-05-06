@@ -98,31 +98,89 @@ def upgrade() -> None:
     # service_role) only exist on Supabase. Wrap conditionally so the
     # migration is portable to vanilla Postgres (CI, dev) where those roles
     # are absent.
-    def _conditional_revoke_secdef(fn: str) -> None:
-        op.execute(f"REVOKE EXECUTE ON FUNCTION {fn} FROM PUBLIC;")
-        for role in ("anon", "authenticated", "service_role"):
-            op.execute(f"""
-            DO $do$
-            BEGIN
-                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') THEN
-                    EXECUTE 'REVOKE EXECUTE ON FUNCTION {fn} FROM {role}';
+    #
+    # Function-existence is also conditional: rls_auto_enable was created
+    # manually on the user's Supabase via the UI and does NOT exist in the
+    # codebase migration chain. On CI / fresh Postgres the function isn't
+    # there, so the REVOKE must skip cleanly.
+    def _conditional_revoke_secdef(fn: str, fn_name: str) -> None:
+        # Single DO block: skip entirely if the function doesn't exist on
+        # this DB. fn_name is the unqualified name for pg_proc lookup;
+        # fn is the schema-qualified signature for REVOKE.
+        op.execute(f"""
+        DO $do$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = 'public' AND p.proname = '{fn_name}'
+            ) THEN
+                EXECUTE 'REVOKE EXECUTE ON FUNCTION {fn} FROM PUBLIC';
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+                    EXECUTE 'REVOKE EXECUTE ON FUNCTION {fn} FROM anon';
                 END IF;
-            END $do$;
-            """)
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                    EXECUTE 'REVOKE EXECUTE ON FUNCTION {fn} FROM authenticated';
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+                    EXECUTE 'REVOKE EXECUTE ON FUNCTION {fn} FROM service_role';
+                END IF;
+            END IF;
+        END $do$;
+        """)
+
+    def _conditional_grant_secdef(fn: str, fn_name: str, role: str) -> None:
+        op.execute(f"""
+        DO $do$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = 'public' AND p.proname = '{fn_name}'
+            ) THEN
+                EXECUTE 'GRANT EXECUTE ON FUNCTION {fn} TO {role}';
+            END IF;
+        END $do$;
+        """)
+
+    # Map signature -> bare function name for pg_proc.proname lookups.
+    _SECDEF_NAMES = {
+        "public.is_cross_client_eligible(integer)": "is_cross_client_eligible",
+        "public.user_has_client_membership(integer, integer)": "user_has_client_membership",
+        "public.rls_auto_enable()": "rls_auto_enable",
+    }
 
     for fn in _SECDEF_RUNTIME_FUNCS:
-        _conditional_revoke_secdef(fn)
+        _conditional_revoke_secdef(fn, _SECDEF_NAMES[fn])
         # app_runtime is created by Phase 9 migration 0017_db_roles, so it
         # always exists in this codebase.
-        op.execute(f"GRANT EXECUTE ON FUNCTION {fn} TO app_runtime;")
+        _conditional_grant_secdef(fn, _SECDEF_NAMES[fn], "app_runtime")
 
     for fn in _SECDEF_ADMIN_FUNCS:
-        _conditional_revoke_secdef(fn)
+        _conditional_revoke_secdef(fn, _SECDEF_NAMES[fn])
         # rls_auto_enable is an admin helper — only postgres should call it.
 
     # ── 4. Pin search_path on flagged trigger functions ──
+    # These functions are created by Phase 4 (documents trigger) + Phase 13
+    # (compliance_notices trigger) + Phase 9 (audit reject trigger) — all in
+    # the migration chain — so they always exist when 0024 runs. Use a
+    # defensive existence check anyway in case a future schema rename slips.
+    _SEARCHPATH_NAMES = {
+        "public.documents_search_vector_update()": "documents_search_vector_update",
+        "public.compliance_notices_search_vector_update()": "compliance_notices_search_vector_update",
+        "public.reject_audit_log_modification()": "reject_audit_log_modification",
+    }
     for fn in _FIX_SEARCH_PATH_FUNCS:
-        op.execute(f"ALTER FUNCTION {fn} SET search_path = pg_catalog, public;")
+        bare = _SEARCHPATH_NAMES[fn]
+        op.execute(f"""
+        DO $do$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = 'public' AND p.proname = '{bare}'
+            ) THEN
+                EXECUTE 'ALTER FUNCTION {fn} SET search_path = pg_catalog, public';
+            END IF;
+        END $do$;
+        """)
 
     # ── 5. Revoke broad access from Supabase roles that the app does not use ──
     # Wrapped in DO blocks so the migration is idempotent on non-Supabase
@@ -157,23 +215,56 @@ def downgrade() -> None:
         END $do$;
         """)
 
-    # Revert search_path pin
+    # Revert search_path pin (only if functions exist — same defensive
+    # pattern as upgrade)
+    _SEARCHPATH_NAMES_DOWN = {
+        "public.documents_search_vector_update()": "documents_search_vector_update",
+        "public.compliance_notices_search_vector_update()": "compliance_notices_search_vector_update",
+        "public.reject_audit_log_modification()": "reject_audit_log_modification",
+    }
     for fn in _FIX_SEARCH_PATH_FUNCS:
-        op.execute(f"ALTER FUNCTION {fn} RESET search_path;")
+        bare = _SEARCHPATH_NAMES_DOWN[fn]
+        op.execute(f"""
+        DO $do$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = 'public' AND p.proname = '{bare}'
+            ) THEN
+                EXECUTE 'ALTER FUNCTION {fn} RESET search_path';
+            END IF;
+        END $do$;
+        """)
 
-    # Re-grant SECURITY DEFINER funcs to the broad set (Supabase roles only
-    # if present, so downgrade is safe on vanilla Postgres too)
+    # Re-grant SECURITY DEFINER funcs to the broad set (function + role
+    # existence both conditional, mirrors upgrade for portability)
+    _SECDEF_NAMES_DOWN = {
+        "public.is_cross_client_eligible(integer)": "is_cross_client_eligible",
+        "public.user_has_client_membership(integer, integer)": "user_has_client_membership",
+        "public.rls_auto_enable()": "rls_auto_enable",
+    }
     for fn in _SECDEF_RUNTIME_FUNCS + _SECDEF_ADMIN_FUNCS:
-        op.execute(f"GRANT EXECUTE ON FUNCTION {fn} TO PUBLIC;")
-        for role in ("anon", "authenticated", "service_role"):
-            op.execute(f"""
-            DO $do$
-            BEGIN
-                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') THEN
-                    EXECUTE 'GRANT EXECUTE ON FUNCTION {fn} TO {role}';
+        bare = _SECDEF_NAMES_DOWN[fn]
+        op.execute(f"""
+        DO $do$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = 'public' AND p.proname = '{bare}'
+            ) THEN
+                EXECUTE 'GRANT EXECUTE ON FUNCTION {fn} TO PUBLIC';
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+                    EXECUTE 'GRANT EXECUTE ON FUNCTION {fn} TO anon';
                 END IF;
-            END $do$;
-            """)
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                    EXECUTE 'GRANT EXECUTE ON FUNCTION {fn} TO authenticated';
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+                    EXECUTE 'GRANT EXECUTE ON FUNCTION {fn} TO service_role';
+                END IF;
+            END IF;
+        END $do$;
+        """)
 
     # Re-add the permissive policy on document_permissions
     op.execute(
