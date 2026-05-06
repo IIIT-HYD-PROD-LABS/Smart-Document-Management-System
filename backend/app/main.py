@@ -93,13 +93,19 @@ app.include_router(early_access.router)
 # Depends(require_compliance_permission(...)) — RBAC is enforced at the
 # route layer; RLS isolation is automatic via TenantContextMiddleware.
 from app.compliance.routers import (  # noqa: E402  (intentional grouping with v1.0 routers above)
+    alerts as compliance_alerts,
     audit as compliance_audit,
+    calendar as compliance_calendar,
     clients as compliance_clients,
     memberships as compliance_memberships,
     notice_types as compliance_notice_types,
     notices as compliance_notices,
+    notifications as compliance_notifications,
     regulatory_calendar as compliance_regulatory_calendar,
     reports as compliance_reports,
+    responses as compliance_responses,
+    review_queue as compliance_review_queue,
+    search as compliance_search,
 )
 
 app.include_router(compliance_clients.router, prefix="/api/compliance")
@@ -107,6 +113,16 @@ app.include_router(compliance_memberships.router, prefix="/api/compliance")
 app.include_router(compliance_notices.router, prefix="/api/compliance")
 app.include_router(compliance_reports.router, prefix="/api/compliance")
 app.include_router(compliance_audit.router, prefix="/api/compliance")
+app.include_router(compliance_review_queue.router, prefix="/api/compliance")
+# Phase 11 — alerts + calendar
+app.include_router(compliance_alerts.router, prefix="/api/compliance")
+app.include_router(compliance_calendar.router, prefix="/api/compliance")
+# Phase 11 — WebSocket /ws/notifications (no /api prefix; uses ws://)
+app.include_router(compliance_notifications.router)
+# Phase 12 — response workflow + evidence
+app.include_router(compliance_responses.router, prefix="/api/compliance")
+# Phase 13 — unified search
+app.include_router(compliance_search.router, prefix="/api/compliance")
 app.include_router(compliance_notice_types.router, prefix="/api/compliance")
 app.include_router(compliance_regulatory_calendar.router, prefix="/api/compliance")
 

@@ -37,7 +37,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -153,6 +153,10 @@ class ComplianceNotice(Base):
         server_default="manual",
         index=True,
     )
+
+    # Phase 13 — full-text search vector (migration 0023). Maintained by a
+    # PostgreSQL trigger; never written from Python.
+    search_vector = Column(TSVECTOR, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True),

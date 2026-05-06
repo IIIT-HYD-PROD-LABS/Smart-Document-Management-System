@@ -35,6 +35,13 @@ Babel==2.16.0
 beautifulsoup4==4.12.3
 lxml==6.1.0
 
+# Phase 11 — alert pipeline (APScheduler durable scheduler, Twilio SMS adapter,
+# Indian holiday calendar). SendGrid migration deferred to v2.1 — keeps v2.0
+# email path on the existing Resend SMTP integration.
+APScheduler==3.11.0
+twilio==9.4.4
+holidays==0.61
+
 # OCR & Image Processing
 pytesseract==0.3.10
 opencv-python-headless==4.8.1.78

@@ -76,6 +76,23 @@ def transition_notice_status(
     # Raises InvalidTransitionError if not allowed; caller catches in bulk path
     validate_transition(old_status, new_status)
 
+    # Phase 12 RESEARCH-FINAL §1 #9 — gate `submitted` on response approval.
+    # A notice cannot transition to `submitted` until its NoticeResponse
+    # has reached `approved` status (Drafter → Reviewer → Legal → CFO).
+    # H-D second hardening: lock_for_update=True closes the TOCTOU between
+    # the response read and the notice UPDATE commit. The notice row is
+    # already FOR UPDATE-locked above; locking the response row here means
+    # a concurrent CFO approve/reject must wait until this transaction
+    # commits or rolls back.
+    if new_status == NoticeStatus.SUBMITTED and old_status != NoticeStatus.SUBMITTED:
+        from app.compliance.services.response_service import is_response_approved
+        if not is_response_approved(db, notice_id=notice.id, lock_for_update=True):
+            raise InvalidTransitionError(
+                f"Cannot transition notice {notice.id} to 'submitted' — "
+                "response is not approved. Complete the Drafter → Reviewer "
+                "→ Legal → CFO workflow first."
+            )
+
     notice.status = new_status.value
     notice.status_changed_at = datetime.now(timezone.utc)
 
@@ -112,9 +129,11 @@ def transition_notice_status(
 
     # Phase 10 — auto-classify + risk score on Received -> Under Review.
     # Lazy import to avoid pulling Celery into Phase 9 test bootstrap when
-    # the broker isn't available. Failure here is non-fatal: a missed
-    # classification can be retried via /api/compliance/notices/{id}/classify
-    # (admin endpoint) or the daily recompute_all_risk_scores cron.
+    # the broker isn't available. Failure here is non-fatal — recovery
+    # path is the daily `recompute_all_risk_scores` cron wired into
+    # `celery_app.conf.beat_schedule` (see app/tasks/__init__.py). Pre-
+    # hardening, that cron was claimed but unwired; the comment is now
+    # accurate.
     if old_status == NoticeStatus.RECEIVED and new_status == NoticeStatus.UNDER_REVIEW:
         try:
             from app.tasks.compliance_tasks import classify_and_score_notice
@@ -126,6 +145,25 @@ def transition_notice_status(
                 "(non-fatal — daily recompute will pick this up)",
                 notice.id,
             )
+
+    # Phase 11 — schedule deadline-based alerts (T-7/T-3/T-1/overdue) on
+    # entry into Under Review (when the deadline is firmest). Cancel all
+    # scheduled alerts on transition to a terminal status.
+    try:
+        from app.compliance.services.scheduler import (
+            cancel_deadline_alerts,
+            schedule_deadline_alerts,
+        )
+        if new_status in (NoticeStatus.RESOLVED, NoticeStatus.DISMISSED, NoticeStatus.SUBMITTED):
+            cancel_deadline_alerts(notice.id)
+        elif new_status == NoticeStatus.UNDER_REVIEW and notice.response_deadline:
+            schedule_deadline_alerts(notice.id, notice.response_deadline)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Failed to (re)schedule deadline alerts for notice %d (non-fatal)",
+            notice.id,
+        )
 
     return notice
 

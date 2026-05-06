@@ -273,6 +273,44 @@ def require_client_create_or_first_onboard(
     return membership
 
 
+def require_any_compliance_permission(*perms: CompliancePermission):
+    """Factory: returns a dependency that admits any user holding ANY of `perms`.
+
+    H-A second hardening: used at the route layer for endpoints whose
+    fine-grained permission is determined by request state (e.g. response
+    approval where the required permission depends on the response's
+    pending stage). The handler still enforces the precise stage match,
+    but the route gate now refuses callers who lack ALL relevant approval
+    permissions instead of admitting any NOTICE_VIEW holder.
+    """
+    perm_set = frozenset(perms)
+    if not perm_set:
+        raise ValueError("require_any_compliance_permission needs ≥1 permission")
+
+    def _check(
+        membership: ClientMembership = Depends(get_active_membership),
+    ) -> ClientMembership:
+        try:
+            role = ComplianceRole(membership.compliance_role)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Invalid compliance role: {membership.compliance_role}",
+            )
+        for p in perm_set:
+            if has_permission(role, p):
+                return membership
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Role '{role.value}' lacks any of permissions: "
+                f"{[p.value for p in perm_set]}"
+            ),
+        )
+
+    return _check
+
+
 def require_compliance_role(*allowed_roles: ComplianceRole):
     """Factory: requires the active membership to be in one of `allowed_roles`.
 

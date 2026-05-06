@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClientSwitcher } from "@/components/compliance/ClientSwitcher";
+import { NotificationBell } from "@/components/compliance/NotificationBell";
+import { ComplianceScoreChip } from "@/components/compliance/ComplianceScoreChip";
 
 /**
  * Compliance dashboard layout — wraps every /dashboard/compliance/** route.
@@ -44,7 +46,11 @@ export default function ComplianceLayout({
                     <h2 className="text-sm font-semibold text-white tracking-tight">
                         Compliance
                     </h2>
-                    <ClientSwitcher />
+                    <div className="flex items-center gap-3">
+                        <ComplianceScoreChip />
+                        <NotificationBell />
+                        <ClientSwitcher />
+                    </div>
                 </header>
                 {children}
             </div>

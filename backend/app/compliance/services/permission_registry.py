@@ -18,6 +18,12 @@ class CompliancePermission(str, Enum):
     NOTICE_APPROVE = "notice:approve"
     NOTICE_SUBMIT = "notice:submit"
     NOTICE_BULK_UPDATE = "notice:bulk_update"
+    NOTICE_REVIEW = "notice:review"
+    # Phase 12 — multi-stage approval permissions. NOTICE_APPROVE (Phase 9)
+    # covers the Reviewer stage; legal + CFO get dedicated permissions.
+    NOTICE_APPROVE_LEGAL = "notice:approve_legal"
+    NOTICE_APPROVE_CFO = "notice:approve_cfo"
+    NOTICE_ATTACH_EVIDENCE = "notice:attach_evidence"
     CLIENT_CREATE = "client:create"
     CLIENT_MANAGE_TEAM = "client:manage_team"
     REPORT_VIEW = "report:view"
@@ -45,6 +51,8 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.NOTICE_APPROVE,
         CompliancePermission.NOTICE_SUBMIT,
         CompliancePermission.NOTICE_BULK_UPDATE,
+        CompliancePermission.NOTICE_REVIEW,
+        CompliancePermission.NOTICE_ATTACH_EVIDENCE,
         CompliancePermission.CLIENT_MANAGE_TEAM,
         CompliancePermission.REPORT_VIEW,
         CompliancePermission.REPORT_EXPORT,
@@ -53,6 +61,9 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
     ComplianceRole.LEGAL_TEAM: frozenset({
         CompliancePermission.NOTICE_VIEW,
         CompliancePermission.NOTICE_DRAFT_RESPONSE,
+        CompliancePermission.NOTICE_REVIEW,
+        CompliancePermission.NOTICE_APPROVE_LEGAL,
+        CompliancePermission.NOTICE_ATTACH_EVIDENCE,
         CompliancePermission.REPORT_VIEW,
     }),
     ComplianceRole.FINANCE_TEAM: frozenset({
@@ -72,6 +83,10 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.NOTICE_APPROVE,
         CompliancePermission.NOTICE_SUBMIT,
         CompliancePermission.NOTICE_BULK_UPDATE,
+        CompliancePermission.NOTICE_REVIEW,
+        CompliancePermission.NOTICE_APPROVE_LEGAL,
+        CompliancePermission.NOTICE_APPROVE_CFO,
+        CompliancePermission.NOTICE_ATTACH_EVIDENCE,
         CompliancePermission.CLIENT_CREATE,
         CompliancePermission.CLIENT_MANAGE_TEAM,
         CompliancePermission.REPORT_VIEW,
@@ -81,10 +96,12 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.NOTICE_VIEW,
         CompliancePermission.NOTICE_CREATE,
         CompliancePermission.NOTICE_DRAFT_RESPONSE,
+        CompliancePermission.NOTICE_ATTACH_EVIDENCE,
         CompliancePermission.ESCALATION_TRIGGER,
     }),
     ComplianceRole.CFO: frozenset({
         CompliancePermission.NOTICE_VIEW,
+        CompliancePermission.NOTICE_APPROVE_CFO,
         CompliancePermission.REPORT_VIEW,
         CompliancePermission.REPORT_EXPORT,
         CompliancePermission.ESCALATION_TRIGGER,

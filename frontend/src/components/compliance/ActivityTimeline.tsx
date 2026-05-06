@@ -41,7 +41,13 @@ function typeIcon(type: NoticeActivity["type"]) {
 
 function actionLine(a: NoticeActivity): React.ReactNode {
     if (a.type === "status_change") {
-        const to = a.details?.["new_status"] as string | undefined;
+        // Backend writes the target status under details["to"] (notice_service
+        // transition_notice_status). Older callers used "new_status"; we read
+        // both for backward compat and to repair the broken display that
+        // showed every status change as "moved status to —".
+        const to =
+            (a.details?.["to"] as string | undefined) ??
+            (a.details?.["new_status"] as string | undefined);
         const label = to && STATUS_CONFIG[to as keyof typeof STATUS_CONFIG]?.label;
         return (
             <>
@@ -51,6 +57,24 @@ function actionLine(a: NoticeActivity): React.ReactNode {
                 </span>
             </>
         );
+    }
+    if (a.type === "assigned") {
+        // Phase 10 escalation + Phase 10 review_queue both write type='assigned'.
+        // Differentiate via details.source.
+        const src = a.details?.["source"] as string | undefined;
+        if (src === "critical_escalation") {
+            const tier = a.details?.["risk_tier"] as string | undefined;
+            return (
+                <>
+                    auto-escalated{tier ? ` (${tier} risk)` : ""}{" "}
+                    <span className="text-[#ef4444]">to compliance head</span>
+                </>
+            );
+        }
+        if (src === "review_queue") {
+            return <>reviewer assigned authoritative classification</>;
+        }
+        return <>assignment changed</>;
     }
     if (a.type === "note_added") {
         return <>added a note</>;

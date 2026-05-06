@@ -68,6 +68,11 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       LLM_PROVIDER: ${LLM_PROVIDER:-local}
       OLLAMA_BASE_URL: http://host.docker.internal:11434
+      # CRIT-3 second hardening: durable path for the audit-write dead-letter
+      # JSONL. Without this env, audit_service defaults to /tmp which is
+      # wiped on every container restart, defeating the regulatory recovery
+      # contract.
+      AUDIT_FAILURES_PATH: /var/log/smartdocs/audit_failures.jsonl
     depends_on:
       redis:
         condition: service_healthy
@@ -84,6 +89,7 @@ services:
     volumes:
       - ./backend:/app
       - backend_uploads:/app/uploads
+      - audit_failures:/var/log/smartdocs
       - ./backend/models:/app/models
       - ./backend/datasets:/app/datasets
     logging:
@@ -118,6 +124,7 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       LLM_PROVIDER: ${LLM_PROVIDER:-local}
       OLLAMA_BASE_URL: http://host.docker.internal:11434
+      AUDIT_FAILURES_PATH: /var/log/smartdocs/audit_failures.jsonl
     depends_on:
       redis:
         condition: service_healthy
@@ -128,6 +135,7 @@ services:
     volumes:
       - ./backend:/app
       - backend_uploads:/app/uploads
+      - audit_failures:/var/log/smartdocs
       - ./backend/models:/app/models
       - ./backend/datasets:/app/datasets
     logging:
@@ -167,6 +175,7 @@ services:
       HF_HOME: /app/models/hf_cache
       TRANSFORMERS_CACHE: /app/models/hf_cache
       TOKENIZERS_PARALLELISM: "false"
+      AUDIT_FAILURES_PATH: /var/log/smartdocs/audit_failures.jsonl
     depends_on:
       redis:
         condition: service_healthy
@@ -177,6 +186,7 @@ services:
     volumes:
       - ./backend:/app
       - backend_uploads:/app/uploads
+      - audit_failures:/var/log/smartdocs
       - ./backend/models:/app/models
       - ./backend/datasets:/app/datasets
     logging:
@@ -213,4 +223,8 @@ services:
 
 volumes:
   backend_uploads:
+  # CRIT-3 second hardening — named volume for the audit-write dead-letter
+  # JSONL. Persists across container restarts so a regulatory event during
+  # a DB outage doesn't lose its dead-letter row.
+  audit_failures:
   postgres_data:

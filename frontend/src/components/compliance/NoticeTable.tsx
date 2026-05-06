@@ -149,8 +149,10 @@ export function NoticeTable({
                         Risk
                     </span>
                 ),
-                cell: () => <RiskTierDot />,
-                size: 80,
+                cell: ({ row }) => (
+                    <RiskTierDot tier={row.original.risk_tier} showLabel />
+                ),
+                size: 100,
             },
             {
                 accessorKey: "response_deadline",

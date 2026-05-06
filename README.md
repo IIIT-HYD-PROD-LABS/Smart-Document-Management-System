@@ -310,7 +310,13 @@ docker-compose.yml           # Redis, Backend, Celery, Frontend
 | Security Hardening | 25 fixes across 14 files + all tests green | ✅ Done |
 | 7 | UI & Analytics | ✅ Done |
 | 8 | Production Readiness | ✅ Done |
-| 9 | Compliance Foundation (v2.0) | ✅ Code-complete (final smoke test pending) |
+| 9 | Compliance Foundation (v2.0) | ✅ Shipped 2026-04-28 |
+| 10 | ML Classification + Risk Scoring (v2.0) | ✅ Code-complete + smoke PASSED 2026-05-05 (v2.1 BERT bake-off deferred) |
+| 11 | Alerts + Compliance Calendar (v2.0) | ✅ Code-complete + hardening pass 2026-05-05 (v2.1 SendGrid + DLT SMS + ICS export deferred) |
+| 12 | Response Drafting + Evidence (v2.0) | ✅ Code-complete + smoke PASSED 2026-05-05 (v2.1 templates + LLM drafts + PDF merge + ITC recon deferred) |
+| 13 | Elasticsearch + Cross-Entity Search (v2.0) | ✅ Code-complete + smoke PASSED 2026-05-05 via PG-FTS (v2.1 Elastic Cloud + outbox deferred) |
+| 14 | Government Portal Integration (v2.0) | CONTEXT seeded 2026-05-05 — BLOCKED on GSP empanelment + IT API access |
+| 15 | Gmail MCP Integration (v2.0) | CONTEXT seeded 2026-04-28 |
 
 ### Completed
 

@@ -21,12 +21,12 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 **Milestone Goal:** Add AI-powered compliance notice management for Indian regulatory authorities to the existing document management system, with BERT-based classification, risk scoring, AI-assisted response drafting, multi-channel alerts, full audit trails, and Gmail MCP integration for direct email-to-DMS ingestion of notices and bills.
 
 - [x] **Phase 9: Compliance Foundation** ✅ Shipped 2026-04-28 - Notice lifecycle, extended RBAC, client/entity management, immutable audit infrastructure
-- [ ] **Phase 10: ML Classification + Risk Scoring** - BERT notice classifier, spaCy NER, XGBoost risk scoring, dedicated ML worker
-- [ ] **Phase 11: Alert System + Compliance Calendar** - SendGrid/Twilio/WebSocket alerts, T-7/T-3/T-1 reminders, statutory deadline calendar
-- [ ] **Phase 12: Response Drafting + Evidence Management** - LLM draft generation, approval workflow, evidence packages, reconciliation engine, regulation library
-- [ ] **Phase 13: Elasticsearch + Cross-Entity Search + Reporting** - Unified notice+document search, compliance reports, penalty analytics, compliance health score
-- [ ] **Phase 14: Government Portal Integration** - GST/IT/MCA auto-fetch, RBI/SEBI scraping, generic IMAP email parsing, portal credential vault
-- [ ] **Phase 15: Gmail MCP Integration & Email Document Ingestion** - Gmail OAuth + MCP server, auto-ingest notice/bill attachments to DMS, compliance auto-routing, bill management dashboard
+- [~] **Phase 10: ML Classification + Risk Scoring** v2.0 CODE-COMPLETE 2026-05-05 + smoke PASSED — BERT empirical bake-off + spaCy custom NER deferred to v2.1 (depend on labeled data)
+- [~] **Phase 11: Alert System + Compliance Calendar** v2.0 CODE-COMPLETE 2026-05-05 — APScheduler + email + WebSocket; SMS scaffolded (Twilio disabled until DLT registration); SendGrid migration + ICS export + severity-weighted compliance score deferred to v2.1
+- [~] **Phase 12: Response Drafting + Evidence Management** v2.0 CODE-COMPLETE 2026-05-05 + smoke PASSED — 4-stage approval workflow (Drafter → Reviewer → Legal → CFO) + versioned drafts + evidence linking + frontend response editor; LLM draft generation + 20+ response templates + evidence PDF merge + GST ITC reconciliation + regulation library deferred to v2.1
+- [~] **Phase 13: Elasticsearch + Cross-Entity Search + Reporting** v2.0 CODE-COMPLETE 2026-05-05 + smoke PASSED — PG-FTS-backed unified search across notices + documents + reports analytics (penalty by authority + volume by status + response time percentiles); Elastic Cloud + outbox + reconciliation deferred to v2.1
+- [ ] **Phase 14: Government Portal Integration** — GST/IT/MCA auto-fetch, RBI/SEBI scraping, IMAP email parsing — CONTEXT seeded 2026-05-05; **BLOCKED on external decisions: GSP empanelment status, IT e-filing API access path**
+- [ ] **Phase 15: Gmail MCP Integration & Email Document Ingestion** — Gmail OAuth + MCP server, auto-ingest notice/bill attachments — CONTEXT seeded 2026-04-28
 
 ## Phase Details
 
@@ -62,7 +62,11 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
   4. Every notice receives an automated risk score (0-100) with a Critical/High/Medium/Low tier label; the top 3 risk factors are displayed via SHAP explanations
   5. Critical-risk notices trigger automatic escalation to the Compliance Head role
   6. ML inference runs in the dedicated 2GB `compliance` Celery worker — uploading a document via the existing v1.0 flow shows no measurable latency regression
-**Plans**: TBD (CONTEXT seeded 2026-04-28 with 32 proposed implementation decisions across BERT classification, spaCy NER, XGBoost risk scoring, auto-escalation, infrastructure, training data, and frontend; see `.planning/phases/10-ml-classification-risk-scoring/10-CONTEXT.md`. Open blockers: BERT base model selection (`bert-base-uncased` vs `ai4bharat/indic-bert` vs `legal-bert`), training data sourcing target 300+ examples × 40+ classes. Run `/gsd:discuss-phase 10` → `/gsd:research-phase 10` → `/gsd:plan-phase 10`.)
+**Plans**: 3 plans landed for v2.0 (10-01 review queue backend, 10-02 auto-escalation, 10-03 frontend SHAP UI); v2.1 plan slot reserved for BERT bake-off + active learning. See `.planning/phases/10-ml-classification-risk-scoring/10-RESEARCH-FINAL.md` for v2.0/v2.1 split rationale.
+- [x] 10-01-PLAN.md — Review queue backend (NoticeReviewQueue ORM + service + router + NOTICE_REVIEW permission + tests)
+- [x] 10-02-PLAN.md — Auto-escalation on Critical risk (escalation.py + activity timeline + immutable audit log + tests)
+- [x] 10-03-PLAN.md — Frontend SHAP UI (ConfidenceBadge + WhyThisRiskScore + RiskTierDot upgrade + review queue page + sidebar nav)
+- [ ] 10-04-PLAN.md (v2.1) — BERT empirical bake-off + spaCy custom NER + active learning loop (deferred — depends on 200+ hand-labeled real notices)
 **UI hint**: yes
 
 ### Phase 11: Alert System + Compliance Calendar
@@ -139,12 +143,16 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 9. Compliance Foundation | v2.0 | 7/7 | ✅ Shipped | 2026-04-28 |
-| 10. ML Classification + Risk Scoring | v2.0 | 0/TBD | Wave 0 setup in progress (deps + worker + skeleton + research) | - |
-| 11. Alert System + Compliance Calendar | v2.0 | 0/TBD | Not started | - |
+| 10. ML Classification + Risk Scoring | v2.0 | 3/3 v2.0 + 0/1 v2.1 | v2.0 CODE-COMPLETE + smoke PASSED; v2.1 deferred (BERT bake-off + active learning) | 2026-05-05 |
+| 11. Alert System + Compliance Calendar | v2.0 | 1/1 v2.0 + 0/N v2.1 | v2.0 CODE-COMPLETE + hardening pass shipped; v2.1 deferred (SendGrid + DLT SMS + per-user prefs + ICS export) | 2026-05-05 |
+| 12. Response Drafting + Evidence Management | v2.0 | 1/1 v2.0 + 0/N v2.1 | v2.0 CODE-COMPLETE + smoke PASSED; v2.1 deferred (templates + LLM drafts + PDF merge + ITC recon + regulation library) | 2026-05-05 |
+| 13. Elasticsearch + Cross-Entity Search | v2.0 | 1/1 v2.0 + 0/N v2.1 | v2.0 CODE-COMPLETE + smoke PASSED via PG-FTS; v2.1 deferred (Elastic Cloud + outbox + reconciliation) | 2026-05-05 |
+| 14. Government Portal Integration | v2.0 | 0/TBD | CONTEXT seeded 2026-05-05 — **BLOCKED on GSP empanelment + IT API decisions** | - |
+| 15. Gmail MCP Integration | v2.0 | 0/TBD | CONTEXT seeded 2026-04-28 — depends on Phase 9, 10, 11, 14 | - |
 | 12. Response Drafting + Evidence Management | v2.0 | 0/TBD | Not started | - |
 | 13. Elasticsearch + Cross-Entity Search + Reporting | v2.0 | 0/TBD | Not started | - |
 | 14. Government Portal Integration | v2.0 | 0/TBD | Not started | - |
 | 15. Gmail MCP Integration & Email Document Ingestion | v2.0 | 0/TBD | Not started (context seeded) | - |
 
 ---
-*Last updated: 2026-04-28 — **Phase 9 SHIPPED** (manual smoke verified by user); Phase 10 (ML Classification + Risk Scoring) Wave 0 setup in progress (ML dependencies, dedicated compliance-worker, module skeleton, research draft); Phase 15 (Gmail MCP Integration) CONTEXT seeded.*
+*Last updated: 2026-05-05 — **Phases 10 + 11 + 12 + 13 v2.0 CODE-COMPLETE**. Phase 10 + 12 + 13 end-to-end smokes PASSED. 4-agent hardening audit landed 13 fixes earlier in the session. 161 backend tests GREEN. Phase 14 CONTEXT seeded (external-credential blockers documented). Phase 15 CONTEXT seeded 2026-04-28. v2.1 deferrals enumerated in each phase's RESEARCH-FINAL.md.*

@@ -253,19 +253,59 @@ def _sanitize_error(error: str) -> str:
 
 
 def extract_with_llm(text: str, category: str) -> dict:
-    """Try providers in order. First success wins, failures fall through."""
+    """Try providers in order. First success wins, failures fall through.
+
+    Returns a dict with:
+      - `provider`: which provider produced the result
+      - `degraded_local_fallback`: True iff at least one real (non-local)
+        provider was configured AND every real provider failed AND the
+        result came from `LocalProvider` (regex-based stub).
+
+    CRIT-5 second hardening — before this fix, callers could not
+    distinguish "intentional local-only configuration" from "all real
+    providers down → silent regex fallback". The boolean lets the
+    document_tasks layer record `ai_extraction_status="degraded_local"`
+    instead of mislabeling a regex result as `completed`.
+    """
     chain = _get_provider_chain()
+    real_providers_attempted = 0
+    real_providers_failed = 0
 
     for provider_name, provider in chain:
+        is_real = provider_name != "local"
+        if is_real:
+            real_providers_attempted += 1
         try:
             result = provider.extract(text, category)
             result["provider"] = provider_name
-            logger.info("llm_extraction_success", provider=provider_name)
+            # Degraded only when this is the local provider AND we tried
+            # at least one real provider that failed before falling here.
+            result["degraded_local_fallback"] = (
+                provider_name == "local"
+                and real_providers_attempted > 0
+                and real_providers_failed == real_providers_attempted
+            )
+            logger.info(
+                "llm_extraction_success",
+                provider=provider_name,
+                degraded=result["degraded_local_fallback"],
+            )
             return result
         except json.JSONDecodeError:
+            if is_real:
+                real_providers_failed += 1
             logger.warning("llm_json_parse_failed", provider=provider_name)
         except Exception as e:
-            logger.warning("llm_provider_failed", provider=provider_name, error=_sanitize_error(str(e)))
+            if is_real:
+                real_providers_failed += 1
+            logger.warning(
+                "llm_provider_failed",
+                provider=provider_name,
+                error=_sanitize_error(str(e)),
+            )
 
     # Should never reach here since LocalProvider doesn't fail, but just in case
-    return LocalProvider().extract(text, category)
+    fallback = LocalProvider().extract(text, category)
+    fallback["provider"] = "local"
+    fallback["degraded_local_fallback"] = real_providers_attempted > 0
+    return fallback

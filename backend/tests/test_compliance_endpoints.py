@@ -15,13 +15,14 @@ pytestmark = pytest.mark.integration
 # 7 roles × 12 permissions = 84 cases. Source: 09-RESEARCH.md Pattern 4.
 # Format: (compliance_role, permission_or_endpoint, expect_allowed)
 ROLE_PERMISSION_MATRIX = [
-    # COMPLIANCE_HEAD: 9 permissions allowed
+    # COMPLIANCE_HEAD: 10 permissions allowed (Phase 10 added notice:review)
     ("compliance_head", "notice:view", True),
     ("compliance_head", "notice:create", True),
     ("compliance_head", "notice:draft_response", False),
     ("compliance_head", "notice:approve", True),
     ("compliance_head", "notice:submit", True),
     ("compliance_head", "notice:bulk_update", True),
+    ("compliance_head", "notice:review", True),
     ("compliance_head", "client:create", False),
     ("compliance_head", "client:manage_team", True),
     ("compliance_head", "report:view", True),
@@ -29,13 +30,14 @@ ROLE_PERMISSION_MATRIX = [
     ("compliance_head", "audit:view", False),
     ("compliance_head", "escalation:trigger", True),
 
-    # LEGAL_TEAM: 3 permissions allowed
+    # LEGAL_TEAM: 4 permissions allowed (Phase 10 added notice:review)
     ("legal_team", "notice:view", True),
     ("legal_team", "notice:create", False),
     ("legal_team", "notice:draft_response", True),
     ("legal_team", "notice:approve", False),
     ("legal_team", "notice:submit", False),
     ("legal_team", "notice:bulk_update", False),
+    ("legal_team", "notice:review", True),
     ("legal_team", "client:create", False),
     ("legal_team", "client:manage_team", False),
     ("legal_team", "report:view", True),
@@ -50,6 +52,7 @@ ROLE_PERMISSION_MATRIX = [
     ("finance_team", "notice:approve", False),
     ("finance_team", "notice:submit", False),
     ("finance_team", "notice:bulk_update", False),
+    ("finance_team", "notice:review", False),
     ("finance_team", "client:create", False),
     ("finance_team", "client:manage_team", False),
     ("finance_team", "report:view", True),
@@ -64,6 +67,7 @@ ROLE_PERMISSION_MATRIX = [
     ("auditor", "notice:approve", False),
     ("auditor", "notice:submit", False),
     ("auditor", "notice:bulk_update", False),
+    ("auditor", "notice:review", False),
     ("auditor", "client:create", False),
     ("auditor", "client:manage_team", False),
     ("auditor", "report:view", True),
@@ -71,13 +75,14 @@ ROLE_PERMISSION_MATRIX = [
     ("auditor", "audit:view", True),
     ("auditor", "escalation:trigger", False),
 
-    # CA_CONSULTANT: 10 permissions allowed (most permissive role)
+    # CA_CONSULTANT: 11 permissions allowed (most permissive — Phase 10 added notice:review)
     ("ca_consultant", "notice:view", True),
     ("ca_consultant", "notice:create", True),
     ("ca_consultant", "notice:draft_response", True),
     ("ca_consultant", "notice:approve", True),
     ("ca_consultant", "notice:submit", True),
     ("ca_consultant", "notice:bulk_update", True),
+    ("ca_consultant", "notice:review", True),
     ("ca_consultant", "client:create", True),
     ("ca_consultant", "client:manage_team", True),
     ("ca_consultant", "report:view", True),
@@ -92,6 +97,7 @@ ROLE_PERMISSION_MATRIX = [
     ("staff", "notice:approve", False),
     ("staff", "notice:submit", False),
     ("staff", "notice:bulk_update", False),
+    ("staff", "notice:review", False),
     ("staff", "client:create", False),
     ("staff", "client:manage_team", False),
     ("staff", "report:view", False),
@@ -106,6 +112,7 @@ ROLE_PERMISSION_MATRIX = [
     ("cfo", "notice:approve", False),
     ("cfo", "notice:submit", False),
     ("cfo", "notice:bulk_update", False),
+    ("cfo", "notice:review", False),
     ("cfo", "client:create", False),
     ("cfo", "client:manage_team", False),
     ("cfo", "report:view", True),
@@ -136,18 +143,28 @@ def test_role_permission_matrix(client_with_membership, compliance_role, permiss
 
 
 def test_matrix_covers_all_roles_and_permissions():
-    """Sanity: every role appears 12 times, every permission appears 7 times."""
+    """Sanity: every role appears 13 times in the legacy matrix, every
+    permission appears 7 times.
+
+    Phase 10 added notice:review (84 → 91). Phase 12 added 3 more
+    permissions (notice:approve_legal, notice:approve_cfo,
+    notice:attach_evidence) but they're tested directly in
+    test_permission_registry.py rather than expanding this matrix
+    further — keeps the existing matrix stable while still asserting
+    the new grants explicitly.
+    """
     roles_in_matrix = [r for r, _, _ in ROLE_PERMISSION_MATRIX]
     perms_in_matrix = [p for _, p, _ in ROLE_PERMISSION_MATRIX]
-    assert len(ROLE_PERMISSION_MATRIX) == 84, "Matrix must be exactly 7×12 = 84 cases"
+    assert len(ROLE_PERMISSION_MATRIX) == 91, "Matrix must be exactly 7×13 = 91 cases"
     for role in (
         "compliance_head", "legal_team", "finance_team", "auditor",
         "ca_consultant", "staff", "cfo",
     ):
-        assert roles_in_matrix.count(role) == 12, f"Role {role} should have 12 entries"
+        assert roles_in_matrix.count(role) == 13, f"Role {role} should have 13 entries"
     for perm in (
         "notice:view", "notice:create", "notice:draft_response",
         "notice:approve", "notice:submit", "notice:bulk_update",
+        "notice:review",
         "client:create", "client:manage_team",
         "report:view", "report:export",
         "audit:view", "escalation:trigger",
