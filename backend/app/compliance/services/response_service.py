@@ -23,7 +23,6 @@ tables alone, even if the response row is later mutated.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import func, select

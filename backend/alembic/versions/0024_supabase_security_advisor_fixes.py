@@ -94,19 +94,30 @@ def upgrade() -> None:
     )
 
     # ── 3. Lock down SECURITY DEFINER functions ──
+    # PUBLIC always exists; the Supabase-specific roles (anon, authenticated,
+    # service_role) only exist on Supabase. Wrap conditionally so the
+    # migration is portable to vanilla Postgres (CI, dev) where those roles
+    # are absent.
+    def _conditional_revoke_secdef(fn: str) -> None:
+        op.execute(f"REVOKE EXECUTE ON FUNCTION {fn} FROM PUBLIC;")
+        for role in ("anon", "authenticated", "service_role"):
+            op.execute(f"""
+            DO $do$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') THEN
+                    EXECUTE 'REVOKE EXECUTE ON FUNCTION {fn} FROM {role}';
+                END IF;
+            END $do$;
+            """)
+
     for fn in _SECDEF_RUNTIME_FUNCS:
-        op.execute(
-            f"REVOKE EXECUTE ON FUNCTION {fn} "
-            f"FROM PUBLIC, anon, authenticated, service_role;"
-        )
-        # app_runtime is the FastAPI runtime role; it calls these from RLS policies.
+        _conditional_revoke_secdef(fn)
+        # app_runtime is created by Phase 9 migration 0017_db_roles, so it
+        # always exists in this codebase.
         op.execute(f"GRANT EXECUTE ON FUNCTION {fn} TO app_runtime;")
 
     for fn in _SECDEF_ADMIN_FUNCS:
-        op.execute(
-            f"REVOKE EXECUTE ON FUNCTION {fn} "
-            f"FROM PUBLIC, anon, authenticated, service_role;"
-        )
+        _conditional_revoke_secdef(fn)
         # rls_auto_enable is an admin helper — only postgres should call it.
 
     # ── 4. Pin search_path on flagged trigger functions ──
@@ -150,12 +161,19 @@ def downgrade() -> None:
     for fn in _FIX_SEARCH_PATH_FUNCS:
         op.execute(f"ALTER FUNCTION {fn} RESET search_path;")
 
-    # Re-grant SECURITY DEFINER funcs to the broad set
+    # Re-grant SECURITY DEFINER funcs to the broad set (Supabase roles only
+    # if present, so downgrade is safe on vanilla Postgres too)
     for fn in _SECDEF_RUNTIME_FUNCS + _SECDEF_ADMIN_FUNCS:
-        op.execute(
-            f"GRANT EXECUTE ON FUNCTION {fn} "
-            f"TO PUBLIC, anon, authenticated, service_role;"
-        )
+        op.execute(f"GRANT EXECUTE ON FUNCTION {fn} TO PUBLIC;")
+        for role in ("anon", "authenticated", "service_role"):
+            op.execute(f"""
+            DO $do$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') THEN
+                    EXECUTE 'GRANT EXECUTE ON FUNCTION {fn} TO {role}';
+                END IF;
+            END $do$;
+            """)
 
     # Re-add the permissive policy on document_permissions
     op.execute(

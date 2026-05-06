@@ -17,7 +17,7 @@ tabs on the reports page.
 import html
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import case, extract, func, text
+from sqlalchemy import extract, func, text
 from sqlalchemy.orm import Session
 
 from app.compliance.models.client import Client

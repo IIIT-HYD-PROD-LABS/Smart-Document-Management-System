@@ -8,13 +8,11 @@ Endpoints under /api/compliance/review (mounted in main.py):
 
 All routes RLS-scoped via X-Client-Id header (Phase 9 TenantContextMiddleware).
 """
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.compliance.dependencies import (
-    get_active_client_id,
     is_cross_client_mode,
     require_compliance_permission,
 )
