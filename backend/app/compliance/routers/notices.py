@@ -102,14 +102,30 @@ _CONTENT_TYPE_TO_EXT = {
 }
 
 
-def _permission_for_target_status(target: NoticeStatus) -> CompliancePermission:
-    """Map target status -> required permission. Used by PATCH /status only."""
+def _permissions_for_target_status(target: NoticeStatus) -> tuple[CompliancePermission, ...]:
+    """Map target status -> permissions that authorize the transition.
+
+    Returns a tuple of permissions; the caller accepts the transition if the
+    user has ANY of them. The `under_review` state is entered both by:
+      - compliance_head starting their own review (NOTICE_REVIEW)
+      - legal/staff/ca_consultant beginning to draft (NOTICE_DRAFT_RESPONSE)
+
+    Pre-2026-05-06: this function returned a single permission and used
+    NOTICE_DRAFT_RESPONSE for `under_review`, locking compliance_head out of
+    starting review on their own notices (received -> under_review).
+    """
     if target == NoticeStatus.SUBMITTED:
-        return CompliancePermission.NOTICE_SUBMIT
+        return (CompliancePermission.NOTICE_SUBMIT,)
     if target in (NoticeStatus.RESOLVED, NoticeStatus.DISMISSED):
-        return CompliancePermission.NOTICE_APPROVE
-    # received -> under_review, under_review -> response_drafted, back-edits
-    return CompliancePermission.NOTICE_DRAFT_RESPONSE
+        return (CompliancePermission.NOTICE_APPROVE,)
+    if target == NoticeStatus.UNDER_REVIEW:
+        # Entered by reviewers (compliance_head) OR drafters
+        return (
+            CompliancePermission.NOTICE_REVIEW,
+            CompliancePermission.NOTICE_DRAFT_RESPONSE,
+        )
+    # response_drafted, back-edits to draft
+    return (CompliancePermission.NOTICE_DRAFT_RESPONSE,)
 
 
 @router.get("", response_model=dict)
@@ -372,12 +388,13 @@ def transition_status(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Invalid compliance role: {membership.compliance_role}",
         )
-    required = _permission_for_target_status(target)
-    if not has_permission(role, required):
+    accepted_perms = _permissions_for_target_status(target)
+    if not any(has_permission(role, p) for p in accepted_perms):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                f"Role '{role.value}' lacks permission '{required.value}' "
+                f"Role '{role.value}' lacks any of permissions "
+                f"{[p.value for p in accepted_perms]} "
                 f"for transition to '{target.value}'"
             ),
         )
@@ -522,7 +539,10 @@ def upload_notice_file(
             document_id=d.id,
             error=str(e),
         )
-        db.rollback()
+        # The Document row is ALREADY committed (line 500 above); rolling back
+        # here only undoes the in-memory celery_task_id assignment. Do not
+        # call db.rollback() — it would leave the session in an unclear
+        # state for the subsequent first-upload-wins commit.
     # First upload becomes the notice's primary file so the detail page
     # has somewhere to link the "View original" button.
     if n.document_id is None:

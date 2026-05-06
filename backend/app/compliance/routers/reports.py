@@ -48,12 +48,16 @@ def _csv_stream(headers: list[str], rows: list[dict]) -> io.StringIO:
 
 
 def _csv_response(buf: io.StringIO, filename_prefix: str) -> StreamingResponse:
-    """Wrap a StringIO as an attachment download with date-stamped filename."""
+    """Wrap a StringIO as an attachment download with date-stamped filename.
+
+    Explicit charset=utf-8 in the media_type so older Excel and BOM-sniffing
+    importers don't misinterpret authority/status names with non-ASCII chars.
+    """
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     filename = f"{filename_prefix}_{today}.csv"
     return StreamingResponse(
         iter([buf.getvalue()]),
-        media_type="text/csv",
+        media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
@@ -245,15 +249,17 @@ def export_response_time(
     stats = response_time_distribution(
         db, client_id=membership.client_id, window_days=window_days
     )
-    # Single-row file; readable column-per-percentile shape.
+    # Three columns so units are explicit. Earlier shape mixed `days` (float
+    # percentile) and `count` (integer sample size) under a single "days"
+    # header which was semantically wrong: the count is not a day-value.
     buf = _csv_stream(
-        headers=["metric", "days"],
+        headers=["metric", "value", "unit"],
         rows=[
-            {"metric": "p50_median", "days": stats["p50"]},
-            {"metric": "p90", "days": stats["p90"]},
-            {"metric": "p95", "days": stats["p95"]},
-            {"metric": "mean", "days": stats["mean"]},
-            {"metric": "sample_count", "days": stats["count"]},
+            {"metric": "p50_median", "value": stats["p50"], "unit": "days"},
+            {"metric": "p90", "value": stats["p90"], "unit": "days"},
+            {"metric": "p95", "value": stats["p95"], "unit": "days"},
+            {"metric": "mean", "value": stats["mean"], "unit": "days"},
+            {"metric": "sample_count", "value": stats["count"], "unit": "notices"},
         ],
     )
     return _csv_response(buf, "response_time_distribution")
