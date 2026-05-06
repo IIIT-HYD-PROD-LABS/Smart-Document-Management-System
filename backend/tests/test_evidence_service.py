@@ -36,7 +36,7 @@ def test_attach_inserts_new_when_not_present():
 
     with patch("app.compliance.services.evidence_service.log_activity"), \
          patch("app.compliance.services.evidence_service.log_audit_event"):
-        result = attach_document(
+        attach_document(
             db, notice=notice, document_id=42, user_id=7,
             description="Invoice ledger",
         )
@@ -76,7 +76,7 @@ def test_attach_succeeds_when_document_shared_via_permission():
 
     with patch("app.compliance.services.evidence_service.log_activity"), \
          patch("app.compliance.services.evidence_service.log_audit_event"):
-        result = attach_document(
+        attach_document(
             db, notice=notice, document_id=42, user_id=7,
         )
     db.add.assert_called()

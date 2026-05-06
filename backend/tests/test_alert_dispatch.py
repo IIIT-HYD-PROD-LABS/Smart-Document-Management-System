@@ -5,11 +5,9 @@ test that triggers a Critical-tier escalation end-to-end.
 """
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from app.compliance.services.senders import (
     EmailSender,
-    SendResult,
     SmsSender,
     WebSocketSender,
 )

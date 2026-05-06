@@ -1,0 +1,24 @@
+# Minimal pyproject.toml — exists solely to configure `uv` for Vercel
+# Python service deployments. The canonical dependency list remains in
+# `requirements.txt` (used by the Docker images and CI).
+#
+# Why this file is needed:
+#   Vercel's Python builder runs `uv lock` against requirements.txt before
+#   installing. With `--extra-index-url https://download.pytorch.org/whl/cpu`
+#   in requirements.txt, uv defaults to `first-index` resolution — meaning
+#   each package is resolved from a single index. Pillow 12.2.0 is on PyPI
+#   but not on the PyTorch CPU index, so `uv lock` fails:
+#       "Because there is no version of pillow==12.2.0 ... unsatisfiable"
+#
+#   `index-strategy = "unsafe-best-match"` matches pip's default behavior:
+#   try all indexes, pick the best match. The "unsafe" prefix is uv's
+#   warning that this opens a dependency-confusion attack surface — but
+#   our two indexes (PyPI + pytorch.org) are both trusted, so this is fine.
+
+[project]
+name = "smart-docs-backend"
+version = "2.0.1"
+requires-python = ">=3.11"
+
+[tool.uv]
+index-strategy = "unsafe-best-match"

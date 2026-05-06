@@ -3,8 +3,8 @@
 Pure-Python tests of the `compliance_score` endpoint logic via direct
 service invocation (no FastAPI test client to keep tests fast).
 """
-from datetime import date, datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from datetime import date, datetime, timezone
+from unittest.mock import MagicMock
 
 
 def _make_notice(*, status, deadline=None, status_changed_at=None, created_at=None):

@@ -67,7 +67,7 @@ def test_transition_to_submitted_with_approved_response_allowed():
         patch("app.compliance.services.notice_service.log_activity"),
         patch("app.compliance.services.notice_service.log_audit_event"),
     ):
-        result = transition_notice_status(
+        transition_notice_status(
             db, notice.id, NoticeStatus.SUBMITTED, user
         )
 

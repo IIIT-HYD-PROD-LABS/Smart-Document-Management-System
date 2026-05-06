@@ -29,7 +29,7 @@ def test_submit_for_review_from_draft_sets_reviewer_pending():
     db = MagicMock()
     with patch("app.compliance.services.response_service.log_activity"), \
          patch("app.compliance.services.response_service.log_audit_event"):
-        result = submit_for_review(db, response=r, user_id=42)
+        submit_for_review(db, response=r, user_id=42)
     assert r.status == "reviewer_pending"
 
 

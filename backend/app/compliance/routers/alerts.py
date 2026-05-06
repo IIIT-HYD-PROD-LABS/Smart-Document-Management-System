@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -25,7 +25,7 @@ from app.compliance.dependencies import (
     is_cross_client_mode,
     require_compliance_permission,
 )
-from app.compliance.models.alert import NoticeAlertLog, NoticeAlertRule
+from app.compliance.models.alert import NoticeAlertRule
 from app.compliance.models.membership import ClientMembership
 from app.compliance.services.alert_service import list_pending_alerts
 from app.compliance.services.permission_registry import CompliancePermission
