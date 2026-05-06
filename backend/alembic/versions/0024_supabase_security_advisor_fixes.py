@@ -78,9 +78,37 @@ _FIX_SEARCH_PATH_FUNCS = (
 
 
 def upgrade() -> None:
-    # ── 1. Enable RLS on v1.0 tables (postgres role bypasses, no behavior change) ──
+    # ── 1. Enable RLS on v1.0 tables ──
+    # postgres role (production FastAPI) and the CI POSTGRES_USER both
+    # bypass RLS via superuser/BYPASSRLS, so prod paths are unaffected.
+    # However, test fixtures explicitly `SET ROLE app_runtime` to subject
+    # the test body to RLS; without an `app_runtime`-permissive policy,
+    # tests like test_compliance_notices::test_notice_upload_links_document
+    # fail on INSERT into `documents`. Add a TO app_runtime ALL policy on
+    # each v1.0 table so the FastAPI runtime role can do anything.
+    #
+    # This is NOT the same anti-pattern as the dropped "always true"
+    # policy: that one targeted `PUBLIC` (effectively any signed-in
+    # Supabase user). A `TO app_runtime` policy is scoped to the
+    # internal runtime role only — anon, authenticated, service_role
+    # still get zero access, satisfying the advisor while not breaking
+    # the v1.0 single-tenant model (user_id filtering at app layer).
     for tbl in _RLS_ENABLE_TABLES:
         op.execute(f"ALTER TABLE public.{tbl} ENABLE ROW LEVEL SECURITY;")
+        # alembic_version is metadata; the runtime role doesn't touch it.
+        if tbl == "alembic_version":
+            continue
+        op.execute(f"""
+        DO $do$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
+                EXECUTE 'DROP POLICY IF EXISTS app_runtime_full ON public.{tbl}';
+                EXECUTE 'CREATE POLICY app_runtime_full ON public.{tbl} '
+                        'AS PERMISSIVE FOR ALL TO app_runtime '
+                        'USING (true) WITH CHECK (true)';
+            END IF;
+        END $do$;
+        """)
 
     # ── 2. Replace the "always true" permissive policy on document_permissions ──
     # The existing "Allow all for authenticated" policy uses USING(true) WITH
@@ -272,6 +300,9 @@ def downgrade() -> None:
         'AS PERMISSIVE FOR ALL TO PUBLIC USING (true) WITH CHECK (true);'
     )
 
-    # Disable RLS on the v1.0 tables (matches pre-0024 state)
+    # Drop the app_runtime permissive policies and disable RLS on the
+    # v1.0 tables (matches pre-0024 state)
     for tbl in _RLS_ENABLE_TABLES:
+        if tbl != "alembic_version":
+            op.execute(f"DROP POLICY IF EXISTS app_runtime_full ON public.{tbl};")
         op.execute(f"ALTER TABLE public.{tbl} DISABLE ROW LEVEL SECURITY;")
