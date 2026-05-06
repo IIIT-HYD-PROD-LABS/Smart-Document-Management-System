@@ -55,9 +55,21 @@ def classify_and_score_notice(self, notice_id: int) -> dict:
         dict summary of what was computed and persisted.
     """
     # Lazy imports — avoid pulling SQLAlchemy/torch into worker bootstrap.
+    from app.compliance.middleware.tenant_context import (
+        set_tenant_context_for_celery,
+    )
     from app.compliance.models.notice import ComplianceNotice
     from app.database import SessionLocal
     from app.ml.compliance import regex_patterns, risk_scorer
+
+    # CRITICAL hardening (#1) — Celery workers do NOT inherit middleware. Set
+    # cross-client mode FIRST so the initial notice lookup works under RLS:
+    # cross-client mode is the only ContextVar value the system-internal
+    # classify path can use without knowing the notice's client_id yet.
+    # Once we have notice.client_id we narrow context to that client for the
+    # rest of the work (defence in depth — even if BYPASSRLS role were
+    # mis-deployed, queries respect the intended tenant boundary).
+    set_tenant_context_for_celery(client_id=None, user_id=None, cross_mode=True)
 
     db = SessionLocal()
     try:
@@ -65,6 +77,11 @@ def classify_and_score_notice(self, notice_id: int) -> dict:
         if notice is None:
             logger.warning("classify_and_score_notice: notice %d not found", notice_id)
             return {"error": "notice_not_found", "notice_id": notice_id}
+
+        # Narrow tenant context to this notice's client.
+        set_tenant_context_for_celery(
+            client_id=notice.client_id, user_id=None, cross_mode=False
+        )
 
         # Step 1: Aggregate all available text. Future-proof: when document
         # OCR text is available we'll have a much richer corpus to mine.
@@ -123,28 +140,99 @@ def classify_and_score_notice(self, notice_id: int) -> dict:
             has_show_cause_chain=has_show_cause_chain,
         )
 
-        # Step 8: Persist results to compliance_notices.
+        # Step 8: Persist results to compliance_notices. We persist top_factors
+        # in ner_extracted_fields under 'risk_top_factors' so the frontend
+        # WhyThisRiskScore panel can read explanations without a second query.
         now = datetime.now(timezone.utc)
+        ner_extracted_with_risk = {
+            **ner_extracted,
+            "risk_top_factors": [
+                {
+                    "feature": f.feature,
+                    "contribution": round(f.contribution, 2),
+                    "phrase": f.natural_language,
+                }
+                for f in assessment.top_factors
+            ],
+        }
         notice.risk_score = Decimal(str(assessment.score))
         notice.risk_tier = assessment.tier
         notice.model_version = assessment.model_version
-        notice.ner_extracted_fields = ner_extracted
+        notice.ner_extracted_fields = ner_extracted_with_risk
         notice.classified_at = now
         notice.risk_scored_at = now
         # NOTE: classifier_authority_confidence + classifier_type_confidence
-        # remain NULL until the BERT classifier ships.
+        # remain NULL until the BERT classifier ships (v2.1).
         db.commit()
         db.refresh(notice)
 
-        # Step 7: Escalation hook (Phase 11 dep — emits event, no-op for now).
+        # Step 8b: Review queue enqueue when EITHER classifier confidence is
+        # below threshold. v2.0: confidences stay NULL (BERT deferred to v2.1)
+        # so this is a no-op today. The hook is wired so v2.1 just produces
+        # confidences and the queue starts populating automatically.
+        if (
+            notice.classifier_authority_confidence is not None
+            or notice.classifier_type_confidence is not None
+        ):
+            try:
+                from app.compliance.services.review_queue_service import (
+                    enqueue_low_confidence,
+                )
+                enqueue_low_confidence(
+                    db,
+                    notice=notice,
+                    predicted_authority=notice.authority,
+                    predicted_authority_confidence=(
+                        notice.classifier_authority_confidence
+                    ),
+                    predicted_type_id=notice.notice_type_id,
+                    predicted_type_confidence=notice.classifier_type_confidence,
+                    model_version=notice.model_version or "unknown",
+                )
+                db.commit()
+            except Exception:
+                logger.exception(
+                    "review queue enqueue failed for notice %d "
+                    "(non-fatal — risk score already persisted)",
+                    notice_id,
+                )
+                db.rollback()
+
+        # Step 7: Escalation — Phase 10 Plan 10-02 implementation.
+        # Critical tier auto-reassigns to compliance_head + writes activity +
+        # immutable audit log. Cross-channel alert delivery (email/SMS/push)
+        # remains Phase 11's responsibility — this only emits the activity
+        # row that Phase 11 will subscribe to.
         if assessment.tier == "critical":
-            logger.info(
-                "Notice %d hit Critical tier (score=%.2f) — escalation event "
-                "would fire here once Phase 11 alert pipeline is wired",
-                notice_id, assessment.score,
-            )
-            # TODO(Phase 11): emit NOTICE_ESCALATION event to alert pipeline
-            # TODO(Phase 11): assign to compliance_head queue per client config
+            try:
+                from app.ml.compliance import escalation as escalation_mod
+                if escalation_mod.should_escalate(
+                    db, notice=notice, risk_tier=assessment.tier
+                ):
+                    head_user_id = escalation_mod.escalate(
+                        db,
+                        notice=notice,
+                        assessment=assessment,
+                        actor_user_id=None,
+                    )
+                    logger.info(
+                        "Notice %d escalated (Critical tier, score=%.2f) → "
+                        "assigned_user_id=%s",
+                        notice_id, assessment.score, head_user_id,
+                    )
+                else:
+                    logger.info(
+                        "Notice %d Critical tier but within escalation "
+                        "cooldown — skipping",
+                        notice_id,
+                    )
+            except Exception:
+                logger.exception(
+                    "escalation failed for notice %d "
+                    "(non-fatal — risk score already persisted)",
+                    notice_id,
+                )
+                db.rollback()
 
         result = {
             "notice_id": notice_id,
@@ -174,7 +262,9 @@ def classify_and_score_notice(self, notice_id: int) -> dict:
         try:
             raise self.retry(exc=exc)
         except self.MaxRetriesExceededError:
-            return {"error": "retries_exhausted", "notice_id": notice_id, "exc": str(exc)}
+            # Hardening #9 — re-raise so Celery records FAILURE (returning a
+            # dict was treated as task SUCCESS, masking dead-letter visibility).
+            raise
     finally:
         db.close()
 
@@ -196,8 +286,17 @@ def recompute_all_risk_scores(self) -> dict:
     """
     from sqlalchemy import select
 
+    from app.compliance.middleware.tenant_context import (
+        set_tenant_context_for_celery,
+    )
     from app.compliance.models.notice import ComplianceNotice
     from app.database import SessionLocal
+
+    # CRITICAL hardening (#1) — system-wide cron runs across all tenants.
+    # cross_mode=True is the only legitimate ContextVar config that allows
+    # the SELECT below to enumerate notice IDs across clients. Per-notice
+    # tasks dispatched below set their own per-client tenant context.
+    set_tenant_context_for_celery(client_id=None, user_id=None, cross_mode=True)
 
     db = SessionLocal()
     try:

@@ -2,6 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * TaxSync — Compliance Noir design system
+ *
+ * Aesthetic: refined dark editorial × financial-grade precision.
+ * Typography: IBM Plex Sans (body) + IBM Plex Mono (numerics).
+ * Color: hex tokens with /1a alpha pills for accents.
+ * Motion: 150–200ms transitions, prefers-reduced-motion respected.
+ */
+
+:root {
+    /* Surfaces — graduated from page → card → elevated */
+    --bg-page: #09090b;
+    --bg-surface: #0c0c0f;
+    --bg-elevated: #111113;
+    --bg-hover: #18181b;
+
+    /* Borders — three weights for hierarchy */
+    --border-subtle: #1a1a1d;
+    --border-default: #1f1f23;
+    --border-emphasis: #27272a;
+
+    /* Typography colors */
+    --text-primary: #fafafa;
+    --text-secondary: #d4d4d8;
+    --text-muted: #a1a1aa;
+    --text-subtle: #71717a;
+    --text-disabled: #52525b;
+
+    /* Brand accent — single sharp blue (Linear-grade restraint) */
+    --accent: #3b82f6;
+    --accent-soft: rgba(59, 130, 246, 0.1);
+    --accent-edge: rgba(59, 130, 246, 0.4);
+
+    /* Semantic — success, warning, danger, info */
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --info: #06b6d4;
+}
 
 * {
     box-sizing: border-box;
@@ -10,20 +49,135 @@
 }
 
 html, body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background: #09090b;
-    color: #fafafa;
+    font-family: var(--font-plex-sans), 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "ss02", "ss03", "cv02";  /* Plex Sans alternates: nicer 'a', 'g', '$' */
+    letter-spacing: -0.005em;  /* tighten Plex slightly to match hairline rhythm */
 }
 
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #09090b; }
-::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+/* Numeric / monospace — used for risk scores, percentages, money,
+ * dates, file sizes, counts — anywhere precision matters. */
+.font-mono, code, pre {
+    font-family: var(--font-plex-mono), 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-feature-settings: "zero", "ss01";  /* slashed zero, alternate styles */
+}
+
+/* Tabular numerals everywhere — counts in stats cards, percentages
+ * in confidence badges align column-perfect. */
+.tabular-nums {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Scrollbar — quiet, doesn't compete with content */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-page); }
+::-webkit-scrollbar-thumb { background: var(--border-emphasis); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
 
+/* Selection — Plex character is preserved, just colored */
+::selection {
+    background: var(--accent-soft);
+    color: var(--text-primary);
+}
+
+/* Focus rings — keyboard-only, never on click (mouse users get hover) */
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* ───────────────────────────────────────────────────────────
+ * Atmosphere — subtle grain on the page background gives the
+ * matte black surfaces depth without competing with content.
+ * Single fixed gradient + repeating noise SVG keeps it cheap.
+ * ─────────────────────────────────────────────────────────── */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.04), transparent 70%),
+        radial-gradient(ellipse 50% 40% at 80% 110%, rgba(16, 185, 129, 0.025), transparent 70%);
+}
+
+/* Page content rides above the atmosphere */
+body > * { position: relative; z-index: 1; }
+
+/* ───────────────────────────────────────────────────────────
+ * Component-grade utilities — composable but opinionated.
+ * Used as className additions on the existing components.
+ * ─────────────────────────────────────────────────────────── */
+
+/* Primary surface card — used for stat cards, panels, lists */
+.surface-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    transition: border-color 200ms ease;
+}
+.surface-card:hover { border-color: var(--border-emphasis); }
+
+/* Stat-card hairline accent strip (top edge) */
+.stat-strip {
+    position: relative;
+}
+.stat-strip::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, currentColor, transparent);
+    opacity: 0.6;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+/* List row — refined hover with subtle border-left accent */
+.list-row {
+    position: relative;
+    transition: background-color 150ms ease;
+}
+.list-row:hover { background: rgba(255, 255, 255, 0.015); }
+.list-row:hover::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--accent);
+}
+
+/* Microtype — uppercase labels in sidebar groups, stat card labels */
+.microtype {
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    color: var(--text-subtle);
+}
+
+/* ───────────────────────────────────────────────────────────
+ * v1.0 leftovers — kept for compatibility
+ * ─────────────────────────────────────────────────────────── */
 .dropzone-active {
     border-color: #10b981 !important;
     background: rgba(16, 185, 129, 0.04) !important;
+}
+
+/* ───────────────────────────────────────────────────────────
+ * Reduced motion — honor OS-level preference
+ * ─────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }

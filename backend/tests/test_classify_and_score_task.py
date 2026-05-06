@@ -194,22 +194,74 @@ def test_classify_bert_pending_until_model_trained():
     assert result["bert_classification"] == "pending_fine_tune"
 
 
-def test_critical_tier_logged_for_escalation_hook():
-    """Critical-tier classification logs a future-Phase-11 escalation hook."""
+def test_critical_tier_triggers_escalation():
+    """Critical-tier classification calls the Plan 10-02 escalation pipeline."""
     notice = _make_notice(
         authority="RBI",
         penalty=Decimal("50000000"),  # ₹5 crore
         deadline=date(2026, 4, 28),  # today (overdue pressure max)
         legal_sections=["u/s 271(1)(c)", "Section 132"],
     )
+    notice.client_id = 7
+    notice.assigned_user_id = None
     session = _patched_session({1: notice})
 
-    # Patch date.today() to make overdue calculation deterministic.
     with patch("app.tasks.compliance_tasks.date") as mock_date, \
-         patch("app.database.SessionLocal", return_value=session):
+         patch("app.database.SessionLocal", return_value=session), \
+         patch(
+             "app.ml.compliance.escalation.should_escalate", return_value=True
+         ) as mock_should, \
+         patch(
+             "app.ml.compliance.escalation.escalate", return_value=42
+         ) as mock_escalate:
         mock_date.today.return_value = date(2026, 4, 28)
-        # Allow date(...) constructor to still work normally.
         mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
         result = classify_and_score_notice.run(1)
 
     assert result["risk_tier"] == "critical"
+    assert mock_should.called
+    assert mock_escalate.called
+
+
+def test_classify_persists_risk_top_factors_in_ner_extracted_fields():
+    """Plan 10-03 — risk_top_factors must be persisted in ner_extracted_fields
+    so the WhyThisRiskScore frontend panel can read them on the detail page."""
+    notice = _make_notice(
+        authority="GST",
+        penalty=Decimal("1000000"),
+        deadline=date(2026, 5, 5),
+    )
+    session = _patched_session({1: notice})
+
+    with patch("app.database.SessionLocal", return_value=session):
+        classify_and_score_notice.run(1)
+
+    assert notice.ner_extracted_fields is not None
+    assert "risk_top_factors" in notice.ner_extracted_fields
+    factors = notice.ner_extracted_fields["risk_top_factors"]
+    assert isinstance(factors, list)
+    assert len(factors) <= 3
+    for f in factors:
+        assert "feature" in f
+        assert "contribution" in f
+        assert "phrase" in f
+
+
+def test_no_review_queue_enqueue_when_classifier_confidences_null():
+    """v2.0 default — both classifier confidences are NULL → no enqueue."""
+    notice = _make_notice(
+        authority="GST",
+        penalty=Decimal("100000"),
+    )
+    notice.classifier_authority_confidence = None
+    notice.classifier_type_confidence = None
+    session = _patched_session({1: notice})
+
+    with patch("app.database.SessionLocal", return_value=session), \
+         patch(
+             "app.compliance.services.review_queue_service.enqueue_low_confidence"
+         ) as mock_enqueue:
+        classify_and_score_notice.run(1)
+
+    # Hook is wired but must NOT call enqueue when both confidences are NULL.
+    mock_enqueue.assert_not_called()

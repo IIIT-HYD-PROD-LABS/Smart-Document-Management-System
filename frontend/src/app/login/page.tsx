@@ -30,7 +30,18 @@ function LoginInner() {
     }, [user, isLoading, router, redirectTo]);
 
     useEffect(() => {
-        oauthApi.getProviders().then((res) => setProviders(res.data.providers)).catch(() => {});
+        // Always offer Google + Microsoft alongside whatever the backend
+        // confirms. Backend filters by configured creds; we let users see
+        // the SSO option and surface a clear error if not yet provisioned.
+        oauthApi
+            .getProviders()
+            .then((res) => {
+                const merged = Array.from(
+                    new Set([...res.data.providers, "google", "microsoft"])
+                );
+                setProviders(merged);
+            })
+            .catch(() => setProviders(["local", "google", "microsoft"]));
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -51,18 +62,27 @@ function LoginInner() {
         }
     };
 
-    const inputClass = "w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] transition-colors focus:outline-none focus:border-[#3f3f46] focus-visible:ring-2 focus-visible:ring-[#10b981]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111113]";
-    const focusRing = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]";
+    const inputClass = "w-full px-3 h-10 bg-[var(--bg-page)] border border-[var(--border-emphasis)] rounded-md text-[13px] text-white placeholder:text-[var(--text-disabled)] transition-colors focus:outline-none focus:border-[var(--text-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-elevated)]";
+    const focusRing = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]";
 
     return (
-        <div className="min-h-screen bg-[#09090b] flex items-center justify-center px-6">
+        <div className="min-h-screen bg-[var(--bg-page)] flex items-center justify-center px-6">
             <div className="w-full max-w-sm">
-                <div className="text-center mb-8">
-                    <Link href="/" className={`text-sm font-semibold text-white tracking-tight rounded-sm ${focusRing}`}>TaxSync</Link>
-                    <h1 className="text-xl font-semibold text-white mt-6">Sign in</h1>
-                    <p className="text-sm text-[#71717a] mt-1">Welcome back to your account</p>
+                <div className="flex flex-col items-center mb-8">
+                    <Link
+                        href="/"
+                        className={`flex items-center gap-2 group rounded-sm ${focusRing}`}
+                        aria-label="TaxSync home"
+                    >
+                        <span className="w-7 h-7 rounded-md bg-[var(--accent-soft)] border border-[var(--accent-edge)] flex items-center justify-center">
+                            <span className="font-mono text-[13px] font-semibold text-[var(--accent)]">Tx</span>
+                        </span>
+                        <span className="text-[14px] font-semibold text-white tracking-tight">TaxSync</span>
+                    </Link>
+                    <h1 className="text-[22px] font-semibold text-white mt-7 tracking-tight">Sign in</h1>
+                    <p className="text-[13px] text-[var(--text-subtle)] mt-1">Welcome back to your account</p>
                 </div>
-                <div className="bg-[#111113] border border-[#27272a] rounded-lg p-6">
+                <div className="surface-card p-6">
                     <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading}>
                         <div>
                             <label htmlFor="login-email" className="text-xs font-medium text-[#a1a1aa] mb-1.5 block">Email</label>
@@ -97,17 +117,17 @@ function LoginInner() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className={`w-full py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2 ${focusRing}`}
+                            className={`w-full h-10 text-[13px] font-medium bg-[var(--accent)] text-white rounded-md hover:bg-[#2563eb] transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2 ${focusRing}`}
                         >
-                            {loading ? "Signing in..." : "Sign in"}
+                            {loading ? "Signing in…" : "Sign in"}
                         </button>
                     </form>
                     {(providers.includes("google") || providers.includes("microsoft")) && (
                         <>
-                            <div className="flex items-center gap-3 my-4">
-                                <div className="flex-1 h-px bg-[#27272a]" />
-                                <span className="text-[11px] text-[#52525b] uppercase">or continue with</span>
-                                <div className="flex-1 h-px bg-[#27272a]" />
+                            <div className="flex items-center gap-3 my-5">
+                                <div className="flex-1 h-px bg-[var(--border-default)]" />
+                                <span className="microtype">or continue with</span>
+                                <div className="flex-1 h-px bg-[var(--border-default)]" />
                             </div>
                             <div className="space-y-2">
                                 {providers.includes("google") && (
@@ -117,7 +137,14 @@ function LoginInner() {
                                             try {
                                                 const res = await oauthApi.getGoogleUrl();
                                                 window.location.href = res.data.url;
-                                            } catch { toast.error("Failed to start Google sign-in"); }
+                                            } catch (err: unknown) {
+                                                const status = (err as { response?: { status?: number } })?.response?.status;
+                                                if (status === 404) {
+                                                    toast.error("Google sign-in not yet configured. Set GOOGLE_CLIENT_ID in backend .env to enable.");
+                                                } else {
+                                                    toast.error("Failed to start Google sign-in");
+                                                }
+                                            }
                                         }}
                                         className={`w-full py-2 text-sm font-medium bg-[#09090b] border border-[#27272a] text-white rounded-md hover:bg-[#18181b] transition-colors cursor-pointer flex items-center justify-center gap-2 ${focusRing}`}
                                     >
@@ -132,7 +159,14 @@ function LoginInner() {
                                             try {
                                                 const res = await oauthApi.getMicrosoftUrl();
                                                 window.location.href = res.data.url;
-                                            } catch { toast.error("Failed to start Microsoft sign-in"); }
+                                            } catch (err: unknown) {
+                                                const status = (err as { response?: { status?: number } })?.response?.status;
+                                                if (status === 404) {
+                                                    toast.error("Microsoft sign-in not yet configured. Set MICROSOFT_CLIENT_ID in backend .env to enable.");
+                                                } else {
+                                                    toast.error("Failed to start Microsoft sign-in");
+                                                }
+                                            }
                                         }}
                                         className={`w-full py-2 text-sm font-medium bg-[#09090b] border border-[#27272a] text-white rounded-md hover:bg-[#18181b] transition-colors cursor-pointer flex items-center justify-center gap-2 ${focusRing}`}
                                     >
@@ -144,8 +178,8 @@ function LoginInner() {
                         </>
                     )}
                 </div>
-                <p className="text-center text-xs text-[#52525b] mt-5">
-                    No account?{" "}<Link href="/" className={`text-[#a1a1aa] hover:text-white transition-colors rounded-sm ${focusRing}`}>Request early access</Link>
+                <p className="text-center text-[12px] text-[var(--text-subtle)] mt-5">
+                    No account?{" "}<Link href="/" className={`text-[var(--text-secondary)] hover:text-white transition-colors rounded-sm ${focusRing}`}>Request early access</Link>
                 </p>
             </div>
         </div>
@@ -156,7 +190,7 @@ export default function LoginPage() {
     return (
         <Suspense
             fallback={
-                <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+                <div className="min-h-screen bg-[var(--bg-page)] flex items-center justify-center">
                     <LoadingSpinner />
                 </div>
             }

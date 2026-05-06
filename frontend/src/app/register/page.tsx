@@ -52,7 +52,17 @@ function RegisterInner() {
     }, [inviteToken]);
 
     useEffect(() => {
-        oauthApi.getProviders().then((res) => setProviders(res.data.providers)).catch(() => {});
+        // Always offer Google + Microsoft alongside whatever the backend
+        // confirms; backend gracefully fails if creds aren't configured.
+        oauthApi
+            .getProviders()
+            .then((res) => {
+                const merged = Array.from(
+                    new Set([...res.data.providers, "google", "microsoft"])
+                );
+                setProviders(merged);
+            })
+            .catch(() => setProviders(["local", "google", "microsoft"]));
     }, []);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -192,7 +202,14 @@ function RegisterInner() {
                                             try {
                                                 const res = await oauthApi.getGoogleUrl();
                                                 window.location.href = res.data.url;
-                                            } catch { toast.error("Failed to start Google sign-in"); }
+                                            } catch (err: unknown) {
+                                                const status = (err as { response?: { status?: number } })?.response?.status;
+                                                if (status === 404) {
+                                                    toast.error("Google sign-in not yet configured. Set GOOGLE_CLIENT_ID in backend .env to enable.");
+                                                } else {
+                                                    toast.error("Failed to start Google sign-in");
+                                                }
+                                            }
                                         }}
                                         className="w-full py-2 text-sm font-medium bg-[#09090b] border border-[#27272a] text-white rounded-md hover:bg-[#18181b] transition-colors cursor-pointer flex items-center justify-center gap-2"
                                     >
@@ -207,7 +224,14 @@ function RegisterInner() {
                                             try {
                                                 const res = await oauthApi.getMicrosoftUrl();
                                                 window.location.href = res.data.url;
-                                            } catch { toast.error("Failed to start Microsoft sign-in"); }
+                                            } catch (err: unknown) {
+                                                const status = (err as { response?: { status?: number } })?.response?.status;
+                                                if (status === 404) {
+                                                    toast.error("Microsoft sign-in not yet configured. Set MICROSOFT_CLIENT_ID in backend .env to enable.");
+                                                } else {
+                                                    toast.error("Failed to start Microsoft sign-in");
+                                                }
+                                            }
                                         }}
                                         className="w-full py-2 text-sm font-medium bg-[#09090b] border border-[#27272a] text-white rounded-md hover:bg-[#18181b] transition-colors cursor-pointer flex items-center justify-center gap-2"
                                     >

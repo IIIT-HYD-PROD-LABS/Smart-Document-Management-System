@@ -1,6 +1,7 @@
 """Celery application configuration."""
 
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import worker_process_init
 from app.config import settings
 
@@ -11,13 +12,28 @@ celery_app = Celery(
     include=[
         "app.tasks.document_tasks",
         "app.tasks.compliance_tasks",
+        "app.tasks.alert_tasks",
     ],
 )
 
 # Phase 10 — route ML inference tasks to dedicated compliance worker (queue=compliance,
 # 2GB ceiling) so BERT/XGBoost loads don't starve v1.0 OCR throughput on the default queue.
+# Phase 11 — alert dispatch shares the compliance queue.
 celery_app.conf.task_routes = {
     "app.tasks.compliance_tasks.*": {"queue": "compliance"},
+    "app.tasks.alert_tasks.*": {"queue": "compliance"},
+}
+
+# Phase 10 D-16 — daily 02:00 IST recompute of risk scores (deadline pressure
+# drifts as deadlines approach). 02:00 IST = 20:30 UTC previous day.
+# This is the cron that notice_service.transition_notice_status comments
+# claim "will pick this up" if the on-transition dispatch fails.
+celery_app.conf.beat_schedule = {
+    "recompute-all-risk-scores-daily": {
+        "task": "app.tasks.compliance_tasks.recompute_all_risk_scores",
+        "schedule": crontab(hour=20, minute=30),  # 02:00 IST
+        "options": {"queue": "compliance"},
+    },
 }
 
 # Handle rediss:// (TLS) connections for managed Redis (e.g. Render)

@@ -1,0 +1,97 @@
+"""Phase 13 unified search router — /api/compliance/search/unified.
+
+v2.0 implementation backs onto PostgreSQL FTS. v2.1 swaps the underlying
+service to Elasticsearch without touching this surface.
+
+Hardening (CRIT-1 second pass): the router now passes the authenticated
+user_id into the search service so documents results are scoped by
+ownership/sharing. This closes a cross-user document leak.
+"""
+import logging
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from app.compliance.dependencies import require_compliance_permission
+from app.compliance.models.membership import ClientMembership
+from app.compliance.services.permission_registry import CompliancePermission
+from app.compliance.services.unified_search_service import (
+    UnifiedSearchHit,
+    search,
+)
+from app.database import get_db
+from app.models.user import User
+from app.utils.security import get_current_user
+
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/search", tags=["compliance-search"])
+
+
+class UnifiedSearchHitOut(BaseModel):
+    entity_type: Literal["notice", "document"]
+    entity_id: int
+    rank: float
+    title: str
+    snippet: str
+    metadata: dict
+
+
+class UnifiedSearchResponse(BaseModel):
+    items: list[UnifiedSearchHitOut]
+    query: str
+    page: int
+    page_size: int
+    backend: str  # 'postgres-fts' in v2.0; 'elasticsearch' in v2.1
+
+
+@router.get(
+    "/unified",
+    response_model=UnifiedSearchResponse,
+    summary="Cross-entity search across compliance_notices + documents",
+)
+def unified_search(
+    q: str = Query(..., min_length=1, max_length=200),
+    entity_types: str = Query(
+        "notice,document",
+        description="Comma-separated subset of {notice, document}",
+    ),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    membership: ClientMembership = Depends(
+        require_compliance_permission(CompliancePermission.NOTICE_VIEW)
+    ),
+    db: Session = Depends(get_db),
+):
+    types_list = [
+        t.strip()
+        for t in entity_types.split(",")
+        if t.strip() in ("notice", "document")
+    ]
+    try:
+        hits: list[UnifiedSearchHit] = search(
+            db,
+            query=q,
+            user_id=int(current_user.id),
+            entity_types=types_list,
+            page=page,
+            page_size=page_size,
+        )
+    except SQLAlchemyError:
+        # Hardening (F4) — surface a 503 instead of FastAPI default 500.
+        logger.exception("unified_search_failed: q=%r user_id=%s", q, current_user.id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Search temporarily unavailable; please retry.",
+        )
+    return UnifiedSearchResponse(
+        items=[UnifiedSearchHitOut(**h.__dict__) for h in hits],
+        query=q,
+        page=page,
+        page_size=page_size,
+        backend="postgres-fts",
+    )

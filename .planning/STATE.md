@@ -2,16 +2,23 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
-status: Phase 9 SHIPPED 2026-04-28 (manual smoke verified by user); current focus Phase 10 (ML Classification + Risk Scoring) — Wave 0 infra setup in progress
-stopped_at: "v2.0 Phase 9 SHIPPED 2026-04-28 — user completed 21-step manual smoke; all 26 requirements (LIFE-01..08, AUDIT-01..02, RBAC-01..06, CLIENT-01..07, INFRA-05..07) validated. Phase 10 (ML Classification + Risk Scoring) Wave 0 setup in progress: ML dependencies + dedicated compliance-worker Celery service + module skeleton + research doc. Open blockers per 10-CONTEXT.md: BERT base model selection, training data sourcing (300+ examples × 40+ classes target). Next: /gsd:research-phase 10 to empirically validate model selection, /gsd:plan-phase 10 to produce executable plans. Phase 15 CONTEXT seeded 2026-04-28."
-last_updated: "2026-04-30T10:21:00.000Z"
+status: Phase 10-13 v2.0 CODE-COMPLETE + smokes PASSED. SECOND hardening pass shipped: 5 CRITICAL + 9 HIGH fixes from 5-agent end-to-end audit covering Phase 1-13. Closed cross-user document leak (CRIT-1), APScheduler RLS regression (CRIT-2), audit dead-letter durability (CRIT-3), regulatory audit failure visibility (CRIT-4), LLM extraction status mislabeling (CRIT-5), plus 9 Tier B fixes. 163 backend tests GREEN. See HARDENING-PLAN-2.md.
+stopped_at: "v2.0 Phases 10-13 CODE-COMPLETE 2026-05-05. Phase 13 ships: PostgreSQL-FTS-backed unified cross-entity search across compliance_notices + documents, with 4 new endpoints (/api/compliance/search/unified + /api/compliance/reports/{penalty-by-authority,notice-volume-by-status,response-time}); migration 0023 adds search_vector TSVECTOR + GIN index + trigger to compliance_notices (mirrors Phase 4 documents pattern); frontend cross-entity search page at /dashboard/compliance/search + reports analytics cards (penalty by authority, notice volume by status, response time percentiles). Phase 13 v2.1 deferrals binding: Elastic Cloud, outbox pattern, indexer worker, daily reconciliation, ES degraded-mode banner, severity-weighted compliance score, real-time search-as-you-type, vector/semantic search, server-side snippet sanitization. Phase 13 v2.0 chosen split per 13-RESEARCH-FINAL.md: criteria 1-3 (unified search + cross-system + sub-3s reports) deliverable today on PG; criteria 4-5 (ES fallback + reconciliation) are scale infrastructure that only matter once ES exists. Saves recurring Elastic Cloud subscription until v2.1 evidence-based justification. End-to-end smoke PASSED: 'GST' query returned 3 notice + 8 document hits ranked correctly (top rank 0.8529); SEBI query filtered to single critical notice; aggregations returned correct shapes. 161 backend tests GREEN. Frontend XSS hardening: search snippets render as plain text (HTML stripped) — security hook caught the unsafe HTML render path on first commit and the code was rewritten before review. Migration head=0023_phase13_search_vector_on_notices. Phase 14 CONTEXT seeded with external blockers (GSP empanelment, IT API access); Phase 15 CONTEXT seeded 2026-04-28. Next: /gsd:discuss-phase 14 once external decisions land, OR /gsd:discuss-phase 15 (Gmail MCP — fewer blockers)."
+last_updated: "2026-05-06T18:30:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 7
-  completed_plans: 7
-  percent: 14
+  v2_phase_10_v2_0_code_complete_at: "2026-05-05"
+  v2_phase_11_v2_0_code_complete_at: "2026-05-05"
+  v2_phase_12_v2_0_code_complete_at: "2026-05-05"
+  v2_phase_13_v2_0_code_complete_at: "2026-05-05"
+  v2_0_1_patch_user_facing_fixes_at: "2026-05-06"
+  v2_0_1_patch_supabase_advisor_at: "2026-05-06"
+  total_plans: 15
+  completed_plans: 15
+  percent: 63
   v2_phase_9_shipped_at: "2026-04-28"
+  alembic_head: "0024_supabase_security_advisor_fixes"
 ---
 
 # Project State
@@ -25,13 +32,20 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 10 (ml-classification-risk-scoring) — Wave 0 setup (ML deps, compliance-worker, module skeleton, research draft)
-Next: /gsd:research-phase 10 to empirically validate BERT model selection on a held-out test set; then /gsd:plan-phase 10
+Phase: 11 (alerts-and-calendar) — v2.0 CODE-COMPLETE 2026-05-05.
+Phases 12, 13, 14 CONTEXTS seeded (12 unblocked, 14 has hard external blockers).
+Phase 15 CONTEXT was seeded 2026-04-28.
+Next:
+  1. Manual user smoke of Phase 10 + 11 (browser flows): create notice, transition to Under Review, see ConfidenceBadge + risk panel, navigate to /calendar (37 deadlines visible), open NotificationBell (WebSocket connects).
+  2. /gsd:discuss-phase 12 → /gsd:research-phase 12 → /gsd:plan-phase 12 (Response Drafting + Evidence Management).
+  3. Phase 14 awaits external decisions (GSP empanelment, IT API access) — see 14-CONTEXT.md Open Blockers.
 
 ## Shipped Milestones
 
 - **v1.0** (2026-03-30): Smart Document Management System — 8 phases, 42 requirements, 127 commits
-- **v2.0 Phase 9** (2026-04-28, SHIPPED): Compliance Foundation — 26 requirements satisfied (LIFE-01..08, AUDIT-01..02, RBAC-01..06, CLIENT-01..07, INFRA-05..07), 7 plans, all merge gates GREEN, 21-step manual smoke verified by user 2026-04-28
+- **v2.0 Phase 9** (2026-04-28, SHIPPED): Compliance Foundation — 26 requirements satisfied, 7 plans, 21-step manual smoke verified by user 2026-04-28
+- **v2.0 Phase 10 v2.0** (2026-05-05, CODE-COMPLETE + smoke PASSED): ML Classification + Risk Scoring — RISK-01..05 + INFRA-01 + CLASS-04 (review queue infra) satisfied via rule-based scorer + escalation + review queue infrastructure; CLASS-01..03/05..08 deferred to v2.1. End-to-end smoke green: Critical-tier 90.8 score, escalation activity + audit log written, 3 SHAP factors persisted.
+- **v2.0 Phase 11 v2.0** (2026-05-05, CODE-COMPLETE — pending user browser smoke): Alerts + Calendar — APScheduler + multi-channel alert pipeline (email + WebSocket; SMS scaffolded), Indian holiday-aware deadline adjustment, statutory calendar with 37 FY 2025-26 deadlines pre-seeded, compliance-score chip, NotificationBell with auto-reconnecting WebSocket. 95 backend tests GREEN.
 
 ## Accumulated Context
 
@@ -84,10 +98,14 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
-Previous session: 2026-04-27T10:34:46Z
-Stopped at: 2026-04-30 — fixed three end-to-end issues in the auth/early-access flow: (1) `?invite=` ↔ `?token=` parameter mismatch in approval-email URL silently routed approved users to the early-access gate; (2) no Sign-in CTA on landing-page navbar; (3) `send_approval_email` was fire-and-forget via `BackgroundTasks` so SMTP failures were invisible to the admin (root cause for "no mail coming": `SMTP_HOST` unset in `.env`). Surface fixes shipped: backend now sends synchronously and returns `email_sent`/`email_error`; admin UI distinguishes delivery success vs. failure; landing navbar gets a quiet `Sign in` link; login + register pages get focus-visible rings + autoComplete + autoFocus + ARIA. `.env.example` rewritten with a multi-provider SMTP walkthrough (Resend recommended; Gmail App Password as fallback). SMTP wired against Resend (host=smtp.resend.com:587, user=resend, sender=onboarding@resend.dev, default sandbox); two test sends to munnasrav45@gmail.com returned `email_sent: True`. Two Gmail App Passwords were attempted earlier and rejected with 535 — likely 2-Step Verification was off; Gmail block left as documented fallback only. Phase 10 work is unchanged from 2026-04-28.
-Resume command: /gsd:research-phase 10 (Phase 10 still awaits empirical BERT model validation; no Phase 10 commits this session)
+Last session: 2026-05-05T10:00:00Z (Phase 10 v2.0 ship — review queue infra + auto-escalation + frontend SHAP UI)
+Previous session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
+
+Stopped at: 2026-05-05 — Phase 10 v2.0 code-complete. Three plans (10-01 review queue backend, 10-02 auto-escalation, 10-03 frontend SHAP UI) all landed. Backend delivers: NoticeReviewQueue ORM + Pydantic schemas + service layer + 3 review endpoints (/api/compliance/review/{pending,id,id/assign}); escalation.py with should_escalate + escalate functions wired into compliance_tasks.classify_and_score_notice; NOTICE_REVIEW permission added to compliance_head, ca_consultant, legal_team. Frontend delivers: ConfidenceBadge + WhyThisRiskScore + RiskTierDot upgrade (with motion-safe pulse on Critical) + /dashboard/compliance/review page + sidebar nav entry. 82 unit + service tests GREEN; integration tests for client_with_membership fixture error on Supabase pooler (pre-existing — needs local Postgres for SET ROLE). Pre-Phase-10 Wave 0 already had migration 0020, the ML columns ORM, the compliance-worker Celery service, the rule-based risk scorer, regex_patterns, and 3 supporting test files.
+
+v2.1 deferral commit: 10-RESEARCH-FINAL.md locks InLegalBERT as the v2.1 primary base model recommendation, training-data strategy (SEBI scrape + LLM-template synthetic + hand-labeled real held-out test set), and authority severity weights (CA/CFO sign-off pending — placeholders ship for v2.0).
+
+Resume command: docker compose up && manual-smoke Phase 10 v2.0 → /gsd:discuss-phase 11 → /gsd:research-phase 11 → /gsd:plan-phase 11
 
 ## Plan 09-03 Completion (resolved 2026-04-27)
 

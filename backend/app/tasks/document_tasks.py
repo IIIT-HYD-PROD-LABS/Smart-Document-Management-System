@@ -169,7 +169,15 @@ def process_document_task(self, document_id: int):
             doc.ai_summary = ai_result.get("summary")
             doc.ai_extracted_fields = ai_result.get("fields")
             doc.ai_provider = ai_result.get("provider")
-            doc.ai_extraction_status = "completed"
+            # CRIT-5 second hardening — if extract_with_llm fell back to the
+            # regex stub because every real provider failed, mark the status
+            # distinctly. Operators + UI can show "AI extraction degraded
+            # (real providers down — used local stub)" instead of pretending
+            # the extraction ran end-to-end.
+            if ai_result.get("degraded_local_fallback"):
+                doc.ai_extraction_status = "degraded_local"
+            else:
+                doc.ai_extraction_status = "completed"
         else:
             doc.ai_extraction_status = "skipped"
 

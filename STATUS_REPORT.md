@@ -1,8 +1,43 @@
 # Smart Document Management System — Status Report
 
 **Organization:** Product Labs, IIIT Hyderabad
-**Last Updated:** 2026-04-30
-**Overall Progress:** v1.0 shipped (8/8 phases). v2.0 Phase 9 (Compliance Foundation) shipped 2026-04-28. Phase 10 (ML Classification + Risk Scoring) Wave 0 in progress.
+**Last Updated:** 2026-05-06 (v2.0.1 patch)
+**Overall Progress:** v1.0 shipped (8/8 phases, March 2026). v2.0 Phase 9 shipped 2026-04-28. v2.0 Phases 10 + 11 + 12 + 13 CODE-COMPLETE 2026-05-05; Phase 10 + Phase 12 + Phase 13 end-to-end smokes PASSED. Two consecutive hardening passes shipped (5-agent end-to-end audit covering Phases 1-13): first pass landed 13 fixes between Phases 11 and 12; second pass landed 5 CRITICAL + 9 HIGH fixes including a regressed APScheduler RLS bypass and a cross-user document leak in Phase 13 unified search. UI polish pass landed IBM Plex typography system + design tokens + refined sidebar grouping + brand mark. **389 backend tests GREEN (non-integration)**. Phase 14 CONTEXT seeded; external-credential blockers documented (GSP empanelment, IT API access). Phase 15 CONTEXT seeded 2026-04-28.
+
+**v2.0.1 patch (2026-05-06)** — End-to-end agent-team review of Phases 1-13 surfaced and fixed three user-facing gaps:
+1. **Compliance report download was unimplemented** (Phase 13 explicitly deferred CSV/PDF/Excel exports to v2.1). Retrofitted 4 CSV export endpoints (`/reports/{penalty-by-authority,notice-volume-by-status,response-time,health-summary}/export`) using stdlib `csv` + `StreamingResponse` (no new deps); added `Download CSV` buttons to the four report cards on `/dashboard/compliance/reports`. Verified end-to-end with browser-driven download (`penalty_by_authority_20260506.csv` produced via real button click).
+2. **Compliance notice upload never dispatched OCR/classification** — Phase 09's `POST /notices/{id}/upload` reused v1.0 storage (`save_file`) but skipped the Celery `process_document_task.delay()` step that the regular doc upload (Phase 02) wires. Notice documents stayed in `status=PENDING` forever, breaking Phase 10's classification chain. Added Celery dispatch with degraded-mode error logging (failure non-fatal — file already saved). Verified: notice document transitions PENDING→COMPLETED in 2s with extracted text + AI fields.
+3. **Sign in with Google button was missing** on login + register pages. Code was 100% implemented (backend OAuth service, callback handler, frontend buttons + click handlers) but conditionally hidden because `/auth/providers` filters Google out when `GOOGLE_CLIENT_ID` env var is empty. Updated frontend to always show Google + Microsoft buttons; backend gracefully fails with helpful toast (`"Google sign-in not yet configured. Set GOOGLE_CLIENT_ID in backend .env to enable."`) when creds missing. Buttons render unconditionally, OAuth dance still gated server-side on creds. Real Google OAuth credentials were configured later same day (`GOOGLE_CLIENT_ID=764178367858-…`); `/auth/providers` now returns `["local","google"]` and the Google sign-in flow works end-to-end (verified Playwright redirect to `accounts.google.com/v3/signin/identifier?...client_id=…&redirect_uri=…/api/auth/callback/google`).
+
+**v2.0.1 patch — Supabase Security Advisor (migration 0024)** — Closed 5 CRITICAL + 6 HIGH advisor findings in one migration:
+- **5 CRITICAL** — RLS now enabled on `users`, `documents`, `refresh_tokens`, `alembic_version` (postgres role bypasses, zero behavior change); dropped the "Allow all for authenticated" `USING(true) WITH CHECK(true)` policy on `document_permissions`.
+- **3 HIGH (SECURITY DEFINER privilege)** — REVOKE EXECUTE on `is_cross_client_eligible`, `user_has_client_membership`, `rls_auto_enable` from PUBLIC + anon + authenticated + service_role; GRANT only to `app_runtime` (or postgres for the admin helper). Verified via `has_function_privilege()`: only the intended roles can execute.
+- **3 HIGH (search_path)** — Pinned `search_path = pg_catalog, public` on `documents_search_vector_update`, `compliance_notices_search_vector_update`, `reject_audit_log_modification`.
+- **40+ noisy advisor warnings collapsed** — Revoked ALL privileges (TABLES + SEQUENCES + FUNCTIONS + default privileges) from Supabase's `anon` and `authenticated` roles. Those roles are unused by FastAPI (custom JWT, not `auth.uid()`), so the revoke has zero functional impact but eliminates every "Public/Signed-In Users Can See Object in GraphQL Schema" warning.
+- **Out of scope (deliberate)** — "Auth RLS Initialization Plan" warnings on compliance_* tables: false positives because the policies use `current_setting('app.current_client_id')`, not `auth.uid()`. The advisor's pattern-match is overzealous; no fix needed.
+- **Verification**: 389 backend tests GREEN; login + document list + compliance notices + reports CSV export all return correct data; `has_function_privilege` and `has_table_privilege` confirm the revokes landed.
+
+**Current ship state:**
+- v1.0 (Phases 1-8): SHIPPED 2026-03-30 — Smart Document Management System with OCR, ML classification (85.06%), full-text search, LLM extraction, RBAC + OAuth.
+- v2.0 Phase 9 (Compliance Foundation): SHIPPED 2026-04-28 — Multi-tenant compliance notice tracking with RLS isolation, audit immutability, 7 compliance roles × 12-permission matrix.
+- v2.0 Phase 10 (ML Classification + Risk Scoring): CODE-COMPLETE + smoke PASSED 2026-05-05 — Rule-based scorer + SHAP explanations + auto-escalation; BERT bake-off deferred to v2.1.
+- v2.0 Phase 11 (Alerts + Calendar): CODE-COMPLETE + hardening pass 2026-05-05 — APScheduler + multi-channel alerts (email + WebSocket; SMS scaffolded); 37 statutory deadlines for FY 2025-26 seeded.
+- v2.0 Phase 12 (Response Drafting + Evidence): CODE-COMPLETE + smoke PASSED 2026-05-05 — 4-stage approval workflow (Drafter → Reviewer → Legal → CFO) + versioned drafts + evidence linking; LLM drafts deferred to v2.1.
+- v2.0 Phase 13 (Cross-Entity Search + Reports): CODE-COMPLETE + smoke PASSED 2026-05-05 — PG-FTS unified search across notices + documents + analytics aggregations; Elastic Cloud deferred to v2.1.
+- Phase 14 (Government Portal Integration): CONTEXT seeded — BLOCKED on GSP empanelment + IT API access decisions.
+- Phase 15 (Gmail MCP Integration): CONTEXT seeded — ready for /gsd:discuss-phase 15.
+
+**Audit + hardening summary:**
+- First hardening pass (4 agents): 43 findings → 17 block-fixes landed + 26 deferred (`.planning/HARDENING-PLAN.md`)
+- Second hardening pass (5 agents covering Phases 1-13): 25 distinct issues → 5 CRITICAL + 9 HIGH fixes landed + 14 deferred (`.planning/HARDENING-PLAN-2.md`). Notable: closed cross-user document leak in unified search; fixed regressed APScheduler RLS bypass that was silently no-op'ing every production deadline alert; made audit dead-letter file durable across container restarts.
+
+**UI/UX state:**
+- "Compliance Noir" design system — refined dark editorial × financial-grade precision
+- IBM Plex Sans (body) + IBM Plex Mono (numerics) replace generic Inter
+- Design tokens via CSS variables (`--bg-page`, `--accent`, `--text-subtle`, etc.)
+- Sidebar grouped into Core / Documents / Compliance / Admin with microtype dividers
+- 2px brand-blue accent bar on active nav item; subtle radial-gradient atmosphere
+- Tx brand mark (Plex Mono tile in accent-soft) appears in sidebar + login
 
 ---
 

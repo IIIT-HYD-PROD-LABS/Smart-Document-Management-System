@@ -14,6 +14,14 @@ import type {
     NoticeType,
     AuditLogEntry,
     Authority,
+    ReviewQueueListResponse,
+    ReviewQueueItem,
+    ReviewAssignRequest,
+    CalendarEntry,
+    AlertLogEntry,
+    AlertRule,
+    ComplianceScore,
+    AdjustDeadlineResult,
 } from "@/types/compliance";
 
 /**
@@ -251,6 +259,220 @@ export const complianceApi = {
             "/compliance/reports/health-summary",
             payload,
             withTenant()
+        ),
+
+    // ──── Phase 10 — Review Queue ────
+    listPendingReview: (page: number = 1, page_size: number = 50) =>
+        api.get<ReviewQueueListResponse>("/compliance/review/pending", {
+            ...withTenant(),
+            params: { page, page_size },
+        }),
+
+    getReviewItem: (reviewId: number) =>
+        api.get<ReviewQueueItem>(
+            `/compliance/review/${reviewId}`,
+            withTenant()
+        ),
+
+    assignReviewLabel: (reviewId: number, payload: ReviewAssignRequest) =>
+        api.patch<{
+            review_id: number;
+            notice_id: number;
+            assigned_authority: string | null;
+            assigned_notice_type_id: number | null;
+            reviewed_at: string;
+        }>(
+            `/compliance/review/${reviewId}/assign`,
+            payload,
+            withTenant()
+        ),
+
+    // ──── Phase 11 — Calendar ────
+    listCalendarEntriesV2: (params: {
+        year: number;
+        month?: number;
+        authority?: string;
+        category?: string;
+    }) =>
+        api.get<CalendarEntry[]>("/compliance/calendar/entries", {
+            ...withTenant(),
+            params,
+        }),
+
+    adjustDeadline: (payload: { deadline: string; state_code?: string }) =>
+        api.post<AdjustDeadlineResult>(
+            "/compliance/calendar/adjust-deadline",
+            payload,
+            withTenant()
+        ),
+
+    getComplianceScore: (windowDays: number = 90) =>
+        api.get<ComplianceScore>("/compliance/calendar/compliance-score", {
+            ...withTenant(),
+            params: { window_days: windowDays },
+        }),
+
+    // ──── Phase 11 — Alerts ────
+    listPendingAlerts: (page: number = 1, page_size: number = 50) =>
+        api.get<{
+            items: AlertLogEntry[];
+            total: number;
+            page: number;
+            page_size: number;
+        }>("/compliance/alerts/pending", {
+            ...withTenant(),
+            params: { page, page_size },
+        }),
+
+    listAlertRules: () =>
+        api.get<AlertRule[]>("/compliance/alerts/rules", withTenant()),
+
+    upsertAlertRule: (payload: {
+        notice_type_id?: number | null;
+        rules: Record<string, unknown>;
+        is_active: boolean;
+    }) =>
+        api.put<AlertRule>("/compliance/alerts/rules", payload, withTenant()),
+
+    // ──── Phase 12 — Response workflow ────
+    getResponse: (noticeId: number) =>
+        api.get<import("@/types/compliance").NoticeResponseDetail>(
+            `/compliance/notices/${noticeId}/responses`,
+            withTenant(),
+        ),
+
+    createOrUpdateResponse: (
+        noticeId: number,
+        payload: import("@/types/compliance").ResponseDraftPayload,
+    ) =>
+        api.post<import("@/types/compliance").NoticeResponseDetail>(
+            `/compliance/notices/${noticeId}/responses`,
+            payload,
+            withTenant(),
+        ),
+
+    patchResponse: (
+        noticeId: number,
+        payload: import("@/types/compliance").ResponseDraftPayload,
+    ) =>
+        api.patch<import("@/types/compliance").NoticeResponseDetail>(
+            `/compliance/notices/${noticeId}/responses`,
+            payload,
+            withTenant(),
+        ),
+
+    submitResponse: (noticeId: number) =>
+        api.post<import("@/types/compliance").NoticeResponse>(
+            `/compliance/notices/${noticeId}/responses/submit`,
+            {},
+            withTenant(),
+        ),
+
+    withdrawResponse: (noticeId: number) =>
+        api.post<import("@/types/compliance").NoticeResponse>(
+            `/compliance/notices/${noticeId}/responses/withdraw`,
+            {},
+            withTenant(),
+        ),
+
+    rollbackResponse: (noticeId: number, target_version_id: number) =>
+        api.post<import("@/types/compliance").NoticeResponseDetail>(
+            `/compliance/notices/${noticeId}/responses/rollback`,
+            { target_version_id },
+            withTenant(),
+        ),
+
+    approveResponse: (noticeId: number, reason?: string) =>
+        api.post<import("@/types/compliance").ResponseApproval>(
+            `/compliance/notices/${noticeId}/responses/approve`,
+            { decision: "approved", reason },
+            withTenant(),
+        ),
+
+    rejectResponse: (noticeId: number, reason: string) =>
+        api.post<import("@/types/compliance").ResponseApproval>(
+            `/compliance/notices/${noticeId}/responses/reject`,
+            { decision: "rejected", reason },
+            withTenant(),
+        ),
+
+    // ──── Phase 12 — Evidence attachments ────
+    listEvidence: (noticeId: number) =>
+        api.get<import("@/types/compliance").EvidenceAttachment[]>(
+            `/compliance/notices/${noticeId}/evidence`,
+            withTenant(),
+        ),
+
+    attachEvidence: (
+        noticeId: number,
+        payload: { document_id: number; description?: string; display_order?: number },
+    ) =>
+        api.post<import("@/types/compliance").EvidenceAttachment>(
+            `/compliance/notices/${noticeId}/evidence`,
+            payload,
+            withTenant(),
+        ),
+
+    detachEvidence: (noticeId: number, document_id: number) =>
+        api.delete(
+            `/compliance/notices/${noticeId}/evidence/${document_id}`,
+            withTenant(),
+        ),
+
+    // ──── Phase 13 — Unified search + analytics ────
+    unifiedSearch: (params: {
+        q: string;
+        entity_types?: string;
+        page?: number;
+        page_size?: number;
+    }) =>
+        api.get<import("@/types/compliance").UnifiedSearchResponse>(
+            "/compliance/search/unified",
+            { ...withTenant(), params },
+        ),
+
+    penaltyByAuthority: (window_days: number = 90) =>
+        api.get<import("@/types/compliance").PenaltyByAuthorityRow[]>(
+            "/compliance/reports/penalty-by-authority",
+            { ...withTenant(), params: { window_days } },
+        ),
+
+    noticeVolumeByStatus: (window_days: number = 90) =>
+        api.get<import("@/types/compliance").NoticeVolumeByStatusRow[]>(
+            "/compliance/reports/notice-volume-by-status",
+            { ...withTenant(), params: { window_days } },
+        ),
+
+    responseTimeDistribution: (window_days: number = 90) =>
+        api.get<import("@/types/compliance").ResponseTimeStats>(
+            "/compliance/reports/response-time",
+            { ...withTenant(), params: { window_days } },
+        ),
+
+    // ──── Phase 13 v2.0.1 — CSV exports (Blob downloads) ────
+    exportPenaltyByAuthority: (window_days: number = 90) =>
+        api.get<Blob>(
+            "/compliance/reports/penalty-by-authority/export",
+            { ...withTenant(), params: { window_days }, responseType: "blob" },
+        ),
+
+    exportNoticeVolumeByStatus: (window_days: number = 90) =>
+        api.get<Blob>(
+            "/compliance/reports/notice-volume-by-status/export",
+            { ...withTenant(), params: { window_days }, responseType: "blob" },
+        ),
+
+    exportResponseTime: (window_days: number = 90) =>
+        api.get<Blob>(
+            "/compliance/reports/response-time/export",
+            { ...withTenant(), params: { window_days }, responseType: "blob" },
+        ),
+
+    exportHealthSummary: (payload: { client_id: number; month: string }) =>
+        api.post<Blob>(
+            "/compliance/reports/health-summary/export",
+            payload,
+            { ...withTenant(), responseType: "blob" },
         ),
 };
 

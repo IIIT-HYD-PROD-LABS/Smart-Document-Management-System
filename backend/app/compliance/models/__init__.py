@@ -51,6 +51,14 @@ from app.compliance.models.notice import (  # noqa: F401
 )
 from app.compliance.models.notice_type import NoticeType  # noqa: F401
 from app.compliance.models.regulatory_calendar import RegulatoryCalendar  # noqa: F401
+from app.compliance.models.review_queue import NoticeReviewQueue  # noqa: F401
+from app.compliance.models.alert import NoticeAlertLog, NoticeAlertRule  # noqa: F401
+from app.compliance.models.response import (  # noqa: F401
+    NoticeResponse,
+    NoticeResponseVersion,
+    NoticeResponseApproval,
+    NoticeEvidenceAttachment,
+)
 
 __all__ = [
     "Client",
@@ -60,5 +68,12 @@ __all__ = [
     "NoticeActivity",
     "NoticeTag",
     "NoticeType",
+    "NoticeReviewQueue",
+    "NoticeAlertLog",
+    "NoticeAlertRule",
+    "NoticeResponse",
+    "NoticeResponseVersion",
+    "NoticeResponseApproval",
+    "NoticeEvidenceAttachment",
     "RegulatoryCalendar",
 ]

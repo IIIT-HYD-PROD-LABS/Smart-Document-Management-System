@@ -299,6 +299,10 @@ def update_notice(
         )
     diff = payload.model_dump(exclude_unset=True)
     before = {k: getattr(n, k) for k in diff.keys()}
+    deadline_changed = (
+        "response_deadline" in diff
+        and diff.get("response_deadline") != before.get("response_deadline")
+    )
     for key, value in diff.items():
         setattr(n, key, value)
     try:
@@ -310,6 +314,28 @@ def update_notice(
             detail="Failed to update notice",
         )
     db.refresh(n)
+
+    # Phase 11 hardening — when response_deadline changes, cancel old
+    # T-7/T-3/T-1/overdue jobs and reschedule against the new deadline so
+    # alerts fire on the correct date.
+    if deadline_changed:
+        try:
+            from app.compliance.services.scheduler import (
+                cancel_deadline_alerts,
+                schedule_deadline_alerts,
+            )
+            cancel_deadline_alerts(n.id)
+            if n.response_deadline is not None and n.status in (
+                "received", "under_review", "response_drafted"
+            ):
+                schedule_deadline_alerts(n.id, n.response_deadline)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "deadline-change reschedule failed for notice %d (non-fatal)",
+                n.id,
+            )
+
     log_audit_event(
         user_id=current_user.id,
         action="notice_updated",
@@ -479,6 +505,24 @@ def upload_notice_file(
             detail="Failed to record uploaded document",
         )
     db.refresh(d)
+    # Dispatch async OCR + classification (mirrors v1.0 documents router).
+    # Failure is non-fatal: the file is saved and re-processing can be
+    # re-dispatched later; raising would lose the audit trail and force
+    # the user to re-upload.
+    try:
+        from app.tasks.document_tasks import process_document_task
+        task = process_document_task.delay(d.id)
+        d.celery_task_id = task.id
+        db.commit()
+    except Exception as e:  # pragma: no cover - depends on broker availability
+        import structlog
+        structlog.get_logger().error(
+            "notice_celery_dispatch_failed",
+            notice_id=notice_id,
+            document_id=d.id,
+            error=str(e),
+        )
+        db.rollback()
     # First upload becomes the notice's primary file so the detail page
     # has somewhere to link the "View original" button.
     if n.document_id is None:
