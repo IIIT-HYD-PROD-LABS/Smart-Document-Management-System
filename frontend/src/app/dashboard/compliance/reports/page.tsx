@@ -74,7 +74,9 @@ export default function ReportsPage() {
                 throw new Error("Select a client first.");
             const res = await complianceApi.healthSummary({
                 client_id: activeClientId,
-                month: `${month}-01`,
+                // Backend schema enforces YYYY-MM (regex ^\d{4}-\d{2}$).
+                // Earlier code appended `-01` and got 422.
+                month,
             });
             return res.data as HealthSummary;
         },
@@ -94,7 +96,7 @@ export default function ReportsPage() {
                 throw new Error("Select a client first.");
             const res = await complianceApi.exportHealthSummary({
                 client_id: activeClientId,
-                month: `${month}-01`,
+                month,  // YYYY-MM, see comment above
             });
             const filename = `health_summary_${month.replace("-", "")}.csv`;
             downloadBlob(res.data, filename);

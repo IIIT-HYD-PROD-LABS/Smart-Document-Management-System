@@ -54,7 +54,10 @@ class UnifiedSearchResponse(BaseModel):
     summary="Cross-entity search across compliance_notices + documents",
 )
 def unified_search(
-    q: str = Query(..., min_length=1, max_length=200),
+    # min_length=2: PostgreSQL FTS with 1-char tokens (e.g. "a") falls back
+    # to a sequential scan because GIN indexes don't store single-char
+    # lexemes by default. 2 is the minimum that reliably uses the index.
+    q: str = Query(..., min_length=2, max_length=200),
     entity_types: str = Query(
         "notice,document",
         description="Comma-separated subset of {notice, document}",
