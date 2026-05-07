@@ -4,7 +4,15 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import type { RowSelectionState } from "@tanstack/react-table";
-import { FiUpload, FiChevronLeft, FiChevronRight } from "react-icons/fi";
+import {
+    FiUpload,
+    FiChevronLeft,
+    FiChevronRight,
+    FiAlertTriangle,
+    FiShield,
+    FiMail,
+    FiInfo,
+} from "react-icons/fi";
 import { useCurrentClient } from "@/stores/currentClientStore";
 import { complianceApi } from "@/lib/api/compliance";
 import {
@@ -19,42 +27,34 @@ import {
 import { BulkActionBar } from "@/components/compliance/BulkActionBar";
 
 /**
- * Compliance dashboard — UI-SPEC §1.
+ * Compliance dashboard — Enterprise hero redesign.
  *
- * Composition: 4 stat cards + collapsible filter sidebar + paginated notice
- * table + floating bulk action bar. Tenant scoping is implicit — the
- * `complianceApi.tenantHeaders()` call attaches `X-Client-Id` from the
- * Zustand store on every request.
+ * Hero header:
+ *   • Total notice count + risk-distribution stacked bar (low / medium /
+ *     high / critical) with semantic color pills.
+ *   • Quick stats row: Total · Overdue · Authorities · Unscored.
+ *
+ * Body:
+ *   • Filter sidebar (existing component, retokenized).
+ *   • NoticeTable (existing component, retokenized).
+ *
+ * Empty state (no notices for tenant):
+ *   • Friendly illustration + "Connect Gmail to auto-import" + "Upload first
+ *     notice" CTAs.
  */
 
 const PAGE_SIZE = 25;
 
-interface StatCardProps {
+const RISK_CONFIG: Array<{
+    key: "low" | "medium" | "high" | "critical";
     label: string;
-    value: string | number;
-    color?: string;
-    isLoading?: boolean;
-}
-
-function StatCard({ label, value, color = "#ffffff", isLoading }: StatCardProps) {
-    return (
-        <div className="bg-[#111113] border border-[#27272a] rounded-md p-4">
-            <p className="text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1">
-                {label}
-            </p>
-            {isLoading ? (
-                <div className="h-7 w-16 bg-[#18181b] rounded animate-pulse" />
-            ) : (
-                <p
-                    className="text-2xl font-semibold tabular-nums"
-                    style={{ color }}
-                >
-                    {value}
-                </p>
-            )}
-        </div>
-    );
-}
+    color: string;
+}> = [
+    { key: "low", label: "Low", color: "var(--success)" },
+    { key: "medium", label: "Medium", color: "var(--warning)" },
+    { key: "high", label: "High", color: "#f97316" },
+    { key: "critical", label: "Critical", color: "var(--danger)" },
+];
 
 function isFiltersDirty(f: NoticeFilters): boolean {
     return (
@@ -135,70 +135,160 @@ export default function ComplianceDashboardPage() {
     const distinctAuthorities = dashboard
         ? Object.keys(dashboard.by_authority ?? {}).length
         : 0;
-    const unscored = dashboard?.by_risk_tier?.unscored ?? totalNotices;
+    const byRiskTier = dashboard?.by_risk_tier ?? {};
+    const unscored = byRiskTier.unscored ?? totalNotices;
+    const scoredTotal = RISK_CONFIG.reduce(
+        (sum, r) => sum + (byRiskTier[r.key] ?? 0),
+        0
+    );
 
     return (
-        <div className="px-6 py-8 max-w-5xl mx-auto">
-            <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-                <div>
-                    <h1 className="text-lg font-semibold text-white mb-0.5">
-                        Compliance dashboard
-                    </h1>
-                    <p className="text-[13px] text-[#71717a]">
-                        {crossClientMode
-                            ? "Viewing notices across all clients you have access to."
-                            : "Track notices for the active client through their workflow."}
-                    </p>
+        <div className="space-y-6">
+            {/* ── Hero header ─────────────────────────────────────── */}
+            <header className="space-y-2">
+                <p className="microtype">Compliance · Notices</p>
+                <div className="flex items-end justify-between gap-4 flex-wrap">
+                    <div>
+                        <h1 className="text-[28px] leading-[1.15] font-semibold text-[var(--text-primary)] tracking-tight">
+                            Notice classification
+                        </h1>
+                        <p className="text-[14px] text-[var(--text-muted)] mt-1.5 max-w-2xl">
+                            {crossClientMode
+                                ? "Cross-client view — notices across every client you have access to."
+                                : "Track notices through their authority, status, risk, and deadline lifecycle for the active client."}
+                        </p>
+                    </div>
+                    {tenantSelected && (
+                        <Link
+                            href="/dashboard/compliance/notices/new"
+                            className="
+                                inline-flex items-center gap-2 h-10 px-4 rounded-md
+                                bg-[var(--accent)] hover:bg-[var(--accent-strong)]
+                                text-[14px] font-medium text-white
+                                transition-colors duration-150 cursor-pointer
+                                shadow-sm
+                            "
+                        >
+                            <FiUpload className="w-3.5 h-3.5" />
+                            Upload notice
+                        </Link>
+                    )}
                 </div>
-                {tenantSelected && (
-                    <Link
-                        href="/dashboard/compliance/notices/new"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#3b82f6] text-white text-[12px] font-medium hover:bg-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
-                    >
-                        <FiUpload className="w-3.5 h-3.5" />
-                        Upload notice
-                    </Link>
-                )}
-            </div>
+            </header>
 
             {!tenantSelected ? (
-                <div className="bg-[#111113] border border-[#27272a] rounded-md p-12 text-center">
-                    <h2 className="text-sm font-semibold text-white mb-1">
-                        No client selected
-                    </h2>
-                    <p className="text-[13px] text-[#71717a]">
-                        Select a client from the switcher to view notices.
-                    </p>
-                </div>
+                <NoTenantSelected />
             ) : (
                 <>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-                        <StatCard
-                            label="Total notices"
-                            value={totalNotices}
-                            isLoading={dashboardQ.isLoading}
-                        />
-                        <StatCard
-                            label="Overdue"
-                            value={overdue}
-                            color="#ef4444"
-                            isLoading={dashboardQ.isLoading}
-                        />
-                        <StatCard
-                            label="By authority"
-                            value={distinctAuthorities}
-                            color="#3b82f6"
-                            isLoading={dashboardQ.isLoading}
-                        />
-                        <StatCard
-                            label="Unscored"
-                            value={unscored}
-                            color="#71717a"
-                            isLoading={dashboardQ.isLoading}
-                        />
-                    </div>
+                    {/* ── Risk distribution + quick stats ─────────────── */}
+                    <section
+                        className="surface-card p-5"
+                        aria-label="Risk distribution and counts"
+                    >
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                            <div className="md:col-span-7">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div>
+                                        <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">
+                                            Risk distribution
+                                        </h2>
+                                        <p className="text-[12.5px] text-[var(--text-muted)] mt-0.5">
+                                            {scoredTotal > 0
+                                                ? `${scoredTotal} scored notice${scoredTotal === 1 ? "" : "s"}`
+                                                : "No notices have been risk-scored yet"}
+                                        </p>
+                                    </div>
+                                    <span className="font-mono tabular-nums text-[26px] font-semibold text-[var(--text-primary)]">
+                                        {totalNotices.toLocaleString("en-IN")}
+                                    </span>
+                                </div>
+                                <RiskDistributionBar
+                                    counts={byRiskTier}
+                                    isLoading={dashboardQ.isLoading}
+                                />
+                                <div className="flex flex-wrap gap-2 mt-3">
+                                    {RISK_CONFIG.map((r) => {
+                                        const count = byRiskTier[r.key] ?? 0;
+                                        return (
+                                            <span
+                                                key={r.key}
+                                                className="pill"
+                                                style={{
+                                                    backgroundColor: `color-mix(in srgb, ${r.color} 12%, transparent)`,
+                                                    borderColor: `color-mix(in srgb, ${r.color} 30%, transparent)`,
+                                                    color: r.color,
+                                                }}
+                                            >
+                                                <span
+                                                    className="w-1.5 h-1.5 rounded-full"
+                                                    style={{
+                                                        backgroundColor: r.color,
+                                                    }}
+                                                    aria-hidden
+                                                />
+                                                <span>{r.label}</span>
+                                                <span className="font-mono tabular-nums opacity-90 ml-1">
+                                                    {count}
+                                                </span>
+                                            </span>
+                                        );
+                                    })}
+                                    {unscored > 0 && (
+                                        <span
+                                            className="pill"
+                                            style={{
+                                                backgroundColor: "var(--bg-hover)",
+                                                borderColor: "var(--border-emphasis)",
+                                                color: "var(--text-muted)",
+                                            }}
+                                        >
+                                            <span
+                                                className="w-1.5 h-1.5 rounded-full border border-[var(--text-disabled)]"
+                                                aria-hidden
+                                            />
+                                            <span>Unscored</span>
+                                            <span className="font-mono tabular-nums opacity-90 ml-1">
+                                                {unscored}
+                                            </span>
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="md:col-span-5 grid grid-cols-2 gap-3">
+                                <QuickStat
+                                    label="Total"
+                                    value={totalNotices}
+                                    tint="var(--accent)"
+                                    icon={FiShield}
+                                    isLoading={dashboardQ.isLoading}
+                                />
+                                <QuickStat
+                                    label="Overdue"
+                                    value={overdue}
+                                    tint="var(--danger)"
+                                    icon={FiAlertTriangle}
+                                    isLoading={dashboardQ.isLoading}
+                                />
+                                <QuickStat
+                                    label="Authorities"
+                                    value={distinctAuthorities}
+                                    tint="var(--info)"
+                                    icon={FiShield}
+                                    isLoading={dashboardQ.isLoading}
+                                />
+                                <QuickStat
+                                    label="Unscored"
+                                    value={unscored}
+                                    tint="var(--text-muted)"
+                                    icon={FiInfo}
+                                    isLoading={dashboardQ.isLoading}
+                                />
+                            </div>
+                        </div>
+                    </section>
 
-                    <div className="flex flex-col lg:flex-row gap-6">
+                    {/* ── Filters + table ─────────────────────────────── */}
+                    <div className="flex flex-col lg:flex-row gap-5">
                         <NoticeFilterSidebar
                             filters={filters}
                             onChange={(next) => {
@@ -211,24 +301,7 @@ export default function ComplianceDashboardPage() {
                             {!noticesQ.isLoading &&
                             rows.length === 0 &&
                             !isFiltersDirty(filters) ? (
-                                <div className="bg-[#111113] border border-[#27272a] rounded-md p-12 text-center">
-                                    <h2 className="text-sm font-semibold text-white mb-1">
-                                        No notices yet
-                                    </h2>
-                                    <p className="text-[13px] text-[#71717a] mb-4">
-                                        Upload a compliance notice to start
-                                        tracking it through the workflow. Drag a
-                                        PDF, JPG, or PNG below — or click
-                                        upload.
-                                    </p>
-                                    <Link
-                                        href="/dashboard/compliance/notices/new"
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#3b82f6] text-white text-[12px] font-medium hover:bg-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
-                                    >
-                                        <FiUpload className="w-3.5 h-3.5" />
-                                        Upload first notice
-                                    </Link>
-                                </div>
+                                <EmptyNoticesState />
                             ) : (
                                 <>
                                     <NoticeTable
@@ -238,7 +311,7 @@ export default function ComplianceDashboardPage() {
                                         onRowSelectionChange={setRowSelection}
                                     />
                                     {total > PAGE_SIZE && (
-                                        <div className="mt-3 flex items-center justify-between text-[12px] text-[#a1a1aa]">
+                                        <div className="mt-4 flex items-center justify-between text-[13px] text-[var(--text-muted)]">
                                             <span className="tabular-nums">
                                                 Page {page} of {totalPages}
                                             </span>
@@ -251,7 +324,14 @@ export default function ComplianceDashboardPage() {
                                                         )
                                                     }
                                                     disabled={page <= 1}
-                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-[#27272a] text-white hover:bg-[#18181b] disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
+                                                    className="
+                                                        inline-flex items-center gap-1 px-3 py-1.5 rounded-md
+                                                        border border-[var(--border-default)]
+                                                        bg-[var(--bg-elevated)] text-[var(--text-primary)]
+                                                        hover:bg-[var(--bg-hover)] hover:border-[var(--border-emphasis)]
+                                                        disabled:opacity-40 disabled:cursor-not-allowed
+                                                        focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
+                                                    "
                                                     aria-label="Previous page"
                                                 >
                                                     <FiChevronLeft className="w-3.5 h-3.5" />
@@ -270,7 +350,14 @@ export default function ComplianceDashboardPage() {
                                                     disabled={
                                                         page >= totalPages
                                                     }
-                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-[#27272a] text-white hover:bg-[#18181b] disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
+                                                    className="
+                                                        inline-flex items-center gap-1 px-3 py-1.5 rounded-md
+                                                        border border-[var(--border-default)]
+                                                        bg-[var(--bg-elevated)] text-[var(--text-primary)]
+                                                        hover:bg-[var(--bg-hover)] hover:border-[var(--border-emphasis)]
+                                                        disabled:opacity-40 disabled:cursor-not-allowed
+                                                        focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
+                                                    "
                                                     aria-label="Next page"
                                                 >
                                                     Next
@@ -288,9 +375,6 @@ export default function ComplianceDashboardPage() {
                         selectedIds={selectedIds}
                         onClear={() => setRowSelection({})}
                         onUpdated={(failedIds) => {
-                            // Refresh notices and dashboard stats; clear selection
-                            // for non-failed rows, keep red-tinted failures selected
-                            // so the user can see what didn't go through.
                             noticesQ.refetch();
                             dashboardQ.refetch();
                             if (!failedIds || failedIds.length === 0) {
@@ -305,6 +389,174 @@ export default function ComplianceDashboardPage() {
                     />
                 </>
             )}
+        </div>
+    );
+}
+
+/* ── Risk distribution stacked bar ─────────────────────────── */
+function RiskDistributionBar({
+    counts,
+    isLoading,
+}: {
+    counts: Record<string, number>;
+    isLoading: boolean;
+}) {
+    if (isLoading) {
+        return (
+            <div className="h-3 rounded-full bg-[var(--bg-hover)] animate-pulse" />
+        );
+    }
+    const total = RISK_CONFIG.reduce(
+        (sum, r) => sum + (counts[r.key] ?? 0),
+        0
+    );
+    if (total === 0) {
+        return (
+            <div
+                className="h-3 rounded-full border border-dashed border-[var(--border-emphasis)]"
+                aria-label="No risk data yet"
+            />
+        );
+    }
+    return (
+        <div
+            className="h-3 rounded-full overflow-hidden flex bg-[var(--bg-hover)]"
+            role="img"
+            aria-label={`Risk distribution: ${RISK_CONFIG.map(
+                (r) => `${counts[r.key] ?? 0} ${r.label}`
+            ).join(", ")}`}
+        >
+            {RISK_CONFIG.map((r) => {
+                const count = counts[r.key] ?? 0;
+                if (count === 0) return null;
+                const pct = (count / total) * 100;
+                return (
+                    <span
+                        key={r.key}
+                        className="h-full transition-all"
+                        style={{
+                            width: `${pct}%`,
+                            backgroundColor: r.color,
+                        }}
+                        title={`${r.label}: ${count}`}
+                    />
+                );
+            })}
+        </div>
+    );
+}
+
+/* ── Quick stat tile ───────────────────────────────────────── */
+function QuickStat({
+    label,
+    value,
+    tint,
+    icon: Icon,
+    isLoading,
+}: {
+    label: string;
+    value: number;
+    tint: string;
+    icon: React.ComponentType<{ className?: string }>;
+    isLoading: boolean;
+}) {
+    return (
+        <div
+            className="rounded-lg border border-[var(--border-default)] p-3 flex items-center gap-3"
+            style={{
+                backgroundColor: `color-mix(in srgb, ${tint} 6%, var(--bg-elevated))`,
+            }}
+        >
+            <div
+                className="w-9 h-9 rounded-md flex items-center justify-center shrink-0"
+                style={{
+                    backgroundColor: `color-mix(in srgb, ${tint} 14%, transparent)`,
+                    color: tint,
+                }}
+            >
+                <Icon className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+                <p className="microtype text-[var(--text-muted)]">{label}</p>
+                {isLoading ? (
+                    <div className="h-5 w-12 mt-1 bg-[var(--bg-hover)] rounded animate-pulse" />
+                ) : (
+                    <p
+                        className="font-mono tabular-nums text-[20px] leading-none font-semibold mt-0.5"
+                        style={{ color: "var(--text-primary)" }}
+                    >
+                        {value.toLocaleString("en-IN")}
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/* ── Empty / error states ──────────────────────────────────── */
+function NoTenantSelected() {
+    return (
+        <div className="surface-card p-12 text-center">
+            <div className="w-14 h-14 rounded-full bg-[var(--accent-soft)] border border-[var(--accent-edge)] flex items-center justify-center mx-auto mb-4">
+                <FiShield className="w-6 h-6 text-[var(--accent)]" />
+            </div>
+            <h2 className="text-[16px] font-semibold text-[var(--text-primary)] mb-1.5">
+                Select a client to begin
+            </h2>
+            <p className="text-[13.5px] text-[var(--text-muted)] max-w-md mx-auto">
+                Choose a client from the switcher above to view notices, track
+                deadlines, and manage compliance workflows. Or enable
+                cross-client mode to see everything you have access to.
+            </p>
+        </div>
+    );
+}
+
+function EmptyNoticesState() {
+    return (
+        <div className="surface-card p-10 text-center">
+            <div className="relative w-20 h-20 mx-auto mb-5">
+                <div className="absolute inset-0 rounded-full bg-[var(--accent-soft)] blur-xl opacity-60" />
+                <div className="relative w-full h-full rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-default)] flex items-center justify-center shadow-[var(--shadow-md)]">
+                    <FiShield className="w-8 h-8 text-[var(--accent)]" />
+                </div>
+            </div>
+            <h2 className="text-[18px] font-semibold text-[var(--text-primary)] mb-1.5">
+                No notices yet
+            </h2>
+            <p className="text-[13.5px] text-[var(--text-muted)] mb-6 max-w-md mx-auto">
+                Connect Gmail to auto-import compliance notices, or upload a
+                PDF / image directly to start tracking it through the workflow.
+            </p>
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+                <Link
+                    href="/dashboard/email/connect"
+                    className="
+                        inline-flex items-center gap-2 h-10 px-4 rounded-md
+                        bg-[var(--accent)] hover:bg-[var(--accent-strong)]
+                        text-[14px] font-medium text-white
+                        transition-colors duration-150 cursor-pointer
+                        shadow-sm
+                    "
+                >
+                    <FiMail className="w-3.5 h-3.5" />
+                    Connect Gmail
+                </Link>
+                <Link
+                    href="/dashboard/compliance/notices/new"
+                    className="
+                        inline-flex items-center gap-2 h-10 px-4 rounded-md
+                        border border-[var(--border-default)]
+                        bg-[var(--bg-elevated)]
+                        text-[14px] font-medium text-[var(--text-primary)]
+                        hover:bg-[var(--bg-hover)] hover:border-[var(--border-emphasis)]
+                        transition-colors duration-150 cursor-pointer
+                    "
+                >
+                    <FiUpload className="w-3.5 h-3.5" />
+                    Upload first notice
+                </Link>
+            </div>
         </div>
     );
 }

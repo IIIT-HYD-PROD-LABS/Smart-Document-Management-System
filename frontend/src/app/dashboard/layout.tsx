@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LoadingSpinner } from "@/components";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
     FiHome,
     FiUpload,
@@ -139,20 +140,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="fixed top-0 left-0 right-0 h-14 bg-[var(--bg-page)]/95 backdrop-blur border-b border-[var(--border-default)] flex items-center px-4 z-50 md:hidden">
                 <button
                     onClick={() => setSidebarOpen(true)}
-                    className="text-[var(--text-muted)] hover:text-white p-1 cursor-pointer"
+                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 cursor-pointer"
                     aria-label="Open menu"
                 >
                     <FiMenu className="w-5 h-5" />
                 </button>
-                <span className="ml-3 text-sm font-semibold text-white tracking-tight">
+                <span className="ml-3 text-sm font-semibold text-[var(--text-primary)] tracking-tight">
                     TaxSync
                 </span>
+                <div className="ml-auto">
+                    <ThemeToggle />
+                </div>
             </div>
 
             {/* Mobile backdrop */}
             {sidebarOpen && (
                 <div
-                    className="fixed inset-0 bg-black/60 z-40 md:hidden"
+                    className="fixed inset-0 bg-[var(--text-primary)]/40 backdrop-blur-sm z-40 md:hidden"
                     onClick={() => setSidebarOpen(false)}
                     aria-hidden
                 />
@@ -162,7 +166,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <aside
                 className={`
                     w-60 fixed left-0 top-0 h-full
-                    bg-[var(--bg-page)] border-r border-[var(--border-default)]
+                    bg-[var(--bg-surface)] border-r border-[var(--border-default)]
                     flex flex-col z-50
                     transition-transform duration-200 ease-in-out
                     ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
@@ -176,18 +180,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         className="flex items-center gap-2 group"
                         aria-label="TaxSync home"
                     >
-                        <span className="w-6 h-6 rounded-md bg-[var(--accent-soft)] border border-[var(--accent-edge)] flex items-center justify-center">
-                            <span className="font-mono text-[11px] font-semibold text-[var(--accent)]">
+                        <span className="w-7 h-7 rounded-md bg-[var(--accent)] flex items-center justify-center shadow-sm">
+                            <span className="font-mono text-[12px] font-semibold text-white">
                                 Tx
                             </span>
                         </span>
-                        <span className="text-[13px] font-semibold text-white tracking-tight group-hover:text-[var(--text-primary)]">
+                        <span className="text-[14px] font-semibold text-[var(--text-primary)] tracking-tight">
                             TaxSync
                         </span>
                     </Link>
                     <button
                         onClick={() => setSidebarOpen(false)}
-                        className="text-[var(--text-subtle)] hover:text-white md:hidden cursor-pointer"
+                        className="text-[var(--text-subtle)] hover:text-[var(--text-primary)] md:hidden cursor-pointer"
                         aria-label="Close menu"
                     >
                         <FiX className="w-4 h-4" />
@@ -214,13 +218,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                                 <Link
                                                     href={item.href}
                                                     className={`
-                                                        relative flex items-center gap-2.5 px-3 py-1.5 rounded-md
-                                                        text-[13px] cursor-pointer
+                                                        relative flex items-center gap-2.5 px-3 py-2 rounded-md
+                                                        text-[13.5px] cursor-pointer
                                                         transition-colors duration-150
                                                         ${
                                                             isActive
-                                                                ? "bg-[var(--bg-hover)] text-white font-medium"
-                                                                : "text-[var(--text-subtle)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
+                                                                ? "bg-[var(--accent-soft)] text-[var(--accent)] font-medium"
+                                                                : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
                                                         }
                                                     `}
                                                 >
@@ -244,20 +248,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                 {/* User cluster */}
                 <div className="border-t border-[var(--border-default)] p-3">
-                    <div className="flex items-center gap-2.5 px-2 py-2 mb-1 rounded-md hover:bg-[var(--bg-elevated)] transition-colors">
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--accent-soft)] to-[var(--bg-hover)] border border-[var(--border-emphasis)] flex items-center justify-center text-[11px] font-medium text-white shrink-0">
+                    <div className="flex items-center gap-2.5 px-2 py-2 mb-1 rounded-md hover:bg-[var(--bg-hover)] transition-colors">
+                        <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-[12px] font-semibold text-white shrink-0 shadow-sm">
                             {user.username?.[0]?.toUpperCase() || "U"}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-[12.5px] font-medium text-white truncate">
+                            <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">
                                 {user.username}
                             </p>
-                            <div className="flex items-center gap-1.5 text-[10.5px] text-[var(--text-disabled)]">
+                            <div className="flex items-center gap-1.5 text-[11.5px] text-[var(--text-subtle)]">
                                 <span className="truncate">{user.email}</span>
                             </div>
                         </div>
                         {user.role && (
-                            <span className="microtype shrink-0 px-1.5 py-0.5 rounded bg-[var(--bg-hover)] border border-[var(--border-emphasis)] text-[var(--text-subtle)]">
+                            <span className="microtype shrink-0 px-1.5 py-0.5 rounded bg-[var(--bg-hover)] border border-[var(--border-default)] text-[var(--text-muted)]">
                                 {user.role}
                             </span>
                         )}
@@ -267,7 +271,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             await logout();
                             router.push("/login");
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 text-[12.5px] text-[var(--text-disabled)] hover:text-[var(--danger)] rounded-md hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
+                        className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[var(--text-muted)] hover:text-[var(--danger)] rounded-md hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
                     >
                         <FiLogOut className="w-3.5 h-3.5" />
                         Sign out
@@ -275,8 +279,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
             </aside>
 
-            <main className="flex-1 md:ml-60 ml-0 p-6 md:p-10 mt-14 md:mt-0">
-                <div className="max-w-6xl">{children}</div>
+            <main className="flex-1 md:ml-60 ml-0 mt-14 md:mt-0">
+                {/* Desktop topbar — theme toggle lives here */}
+                <div className="hidden md:flex sticky top-0 z-30 h-14 px-6 lg:px-10 items-center justify-end gap-3 border-b border-[var(--border-default)] bg-[var(--bg-page)]/85 backdrop-blur">
+                    <ThemeToggle />
+                </div>
+                <div className="p-6 md:p-10">
+                    <div className="max-w-7xl mx-auto">{children}</div>
+                </div>
             </main>
         </div>
     );

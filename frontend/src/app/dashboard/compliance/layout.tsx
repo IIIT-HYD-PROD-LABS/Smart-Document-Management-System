@@ -38,12 +38,13 @@ export default function ComplianceLayout({
             <div className="min-h-screen">
                 <header
                     className="
-                        sticky top-0 z-30 bg-[#09090b] border-b border-[#1f1f23]
-                        h-14 flex items-center justify-between px-6 -mx-6 -mt-6 md:-mx-8 md:-mt-8
+                        sticky top-0 z-20 bg-[var(--bg-page)]/90 backdrop-blur
+                        border-b border-[var(--border-default)]
+                        h-12 flex items-center justify-between px-6 -mx-6 -mt-6 md:-mx-10 md:-mt-10
                         mb-6
                     "
                 >
-                    <h2 className="text-sm font-semibold text-white tracking-tight">
+                    <h2 className="text-[13.5px] font-semibold text-[var(--text-primary)] tracking-tight">
                         Compliance
                     </h2>
                     <div className="flex items-center gap-3">

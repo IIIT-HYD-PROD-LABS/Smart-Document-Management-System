@@ -71,9 +71,10 @@ export function NoticeFilterSidebar({
                     onClick={() => setCollapsed(false)}
                     className="
                         w-10 h-10 flex items-center justify-center
-                        bg-[#111113] border border-[#27272a] rounded-md
-                        text-[#a1a1aa] hover:text-white hover:bg-[#18181b]
-                        focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                        bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md
+                        text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]
+                        focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
+                        shadow-[var(--shadow-sm)]
                     "
                     aria-label="Open filters"
                 >
@@ -85,15 +86,15 @@ export function NoticeFilterSidebar({
 
     return (
         <aside className="w-[280px] shrink-0">
-            <div className="bg-[#111113] border border-[#27272a] rounded-md p-4">
+            <div className="surface-card p-4">
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[11px] uppercase tracking-wider text-[#a1a1aa] font-medium">
+                    <h3 className="text-[12px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
                         Filters
                     </h3>
                     <button
                         type="button"
                         onClick={() => setCollapsed(true)}
-                        className="text-[#71717a] hover:text-white p-1"
+                        className="text-[var(--text-subtle)] hover:text-[var(--text-primary)] p-1"
                         aria-label="Collapse filters"
                     >
                         <FiChevronDown className="w-3.5 h-3.5 rotate-90" />
@@ -104,7 +105,7 @@ export function NoticeFilterSidebar({
                 <div className="mb-4">
                     <label
                         htmlFor="filter-authority"
-                        className="block text-[11px] uppercase tracking-wider text-[#71717a] mb-1.5"
+                        className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5 font-semibold"
                     >
                         Authority
                     </label>
@@ -115,9 +116,9 @@ export function NoticeFilterSidebar({
                             set({ authority: e.target.value as Authority | "" })
                         }
                         className="
-                            w-full bg-[#18181b] border border-[#27272a] rounded
-                            px-2.5 py-1.5 text-[13px] text-white
-                            focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40
+                            w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md
+                            px-2.5 py-2 text-[13.5px] text-[var(--text-primary)]
+                            focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]
                         "
                     >
                         <option value="">All authorities</option>
@@ -133,7 +134,7 @@ export function NoticeFilterSidebar({
                 <div className="mb-4">
                     <label
                         htmlFor="filter-status"
-                        className="block text-[11px] uppercase tracking-wider text-[#71717a] mb-1.5"
+                        className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5 font-semibold"
                     >
                         Status
                     </label>
@@ -144,9 +145,9 @@ export function NoticeFilterSidebar({
                             set({ status: e.target.value as NoticeStatus | "" })
                         }
                         className="
-                            w-full bg-[#18181b] border border-[#27272a] rounded
-                            px-2.5 py-1.5 text-[13px] text-white
-                            focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40
+                            w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md
+                            px-2.5 py-2 text-[13.5px] text-[var(--text-primary)]
+                            focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]
                         "
                     >
                         <option value="">All statuses</option>
@@ -162,7 +163,7 @@ export function NoticeFilterSidebar({
                 <div className="mb-4">
                     <label
                         htmlFor="filter-deadline-from"
-                        className="block text-[11px] uppercase tracking-wider text-[#71717a] mb-1.5"
+                        className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5 font-semibold"
                     >
                         Deadline from
                     </label>
@@ -174,9 +175,9 @@ export function NoticeFilterSidebar({
                             set({ response_deadline_after: e.target.value })
                         }
                         className="
-                            w-full bg-[#18181b] border border-[#27272a] rounded
-                            px-2.5 py-1.5 text-[13px] text-white
-                            focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40
+                            w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md
+                            px-2.5 py-2 text-[13.5px] text-[var(--text-primary)]
+                            focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]
                         "
                     />
                 </div>
@@ -185,7 +186,7 @@ export function NoticeFilterSidebar({
                 <div className="mb-4">
                     <label
                         htmlFor="filter-deadline-to"
-                        className="block text-[11px] uppercase tracking-wider text-[#71717a] mb-1.5"
+                        className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5 font-semibold"
                     >
                         Deadline to
                     </label>
@@ -197,9 +198,9 @@ export function NoticeFilterSidebar({
                             set({ response_deadline_before: e.target.value })
                         }
                         className="
-                            w-full bg-[#18181b] border border-[#27272a] rounded
-                            px-2.5 py-1.5 text-[13px] text-white
-                            focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40
+                            w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md
+                            px-2.5 py-2 text-[13.5px] text-[var(--text-primary)]
+                            focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]
                         "
                     />
                 </div>
@@ -208,7 +209,7 @@ export function NoticeFilterSidebar({
                 <div className="mb-4">
                     <label
                         htmlFor="filter-gstin"
-                        className="block text-[11px] uppercase tracking-wider text-[#71717a] mb-1.5"
+                        className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5 font-semibold"
                     >
                         GSTIN / PAN
                     </label>
@@ -221,9 +222,9 @@ export function NoticeFilterSidebar({
                             set({ gstin_or_pan: e.target.value.toUpperCase() })
                         }
                         className="
-                            w-full bg-[#18181b] border border-[#27272a] rounded
-                            px-2.5 py-1.5 text-[13px] text-white placeholder:text-[#52525b]
-                            focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40
+                            w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md
+                            px-2.5 py-2 text-[13.5px] text-[var(--text-primary)] placeholder:text-[var(--text-disabled)]
+                            focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]
                         "
                     />
                 </div>
@@ -233,8 +234,8 @@ export function NoticeFilterSidebar({
                         type="button"
                         onClick={() => onChange(EMPTY_FILTERS)}
                         className="
-                            inline-flex items-center gap-1 text-[12px] text-[#3b82f6] hover:text-[#60a5fa]
-                            focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 rounded px-1
+                            inline-flex items-center gap-1 text-[12.5px] text-[var(--accent)] hover:text-[var(--accent-strong)]
+                            focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)] rounded px-1
                         "
                     >
                         <FiX className="w-3 h-3" />

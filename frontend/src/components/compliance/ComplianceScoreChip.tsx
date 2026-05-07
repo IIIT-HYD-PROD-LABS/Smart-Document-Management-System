@@ -23,15 +23,19 @@ export function ComplianceScoreChip() {
 
     if (scoreQ.isLoading || !scoreQ.data) {
         return (
-            <div className="hidden md:inline-flex items-center gap-1.5 px-3 h-8 rounded bg-[#0c0c0f] border border-[#1f1f23]">
-                <div className="w-12 h-3 bg-[#18181b] rounded animate-pulse" />
+            <div className="hidden md:inline-flex items-center gap-1.5 px-3 h-8 rounded-md bg-[var(--bg-elevated)] border border-[var(--border-default)]">
+                <div className="w-12 h-3 bg-[var(--bg-hover)] rounded animate-pulse" />
             </div>
         );
     }
 
     const { score, notices_total } = scoreQ.data;
     const color =
-        score >= 90 ? "#10b981" : score >= 70 ? "#f59e0b" : "#ef4444";
+        score >= 90
+            ? "var(--success)"
+            : score >= 70
+                ? "var(--warning)"
+                : "var(--danger)";
     const Icon =
         score >= 90 ? FiTrendingUp : score >= 70 ? FiMinus : FiTrendingDown;
 
@@ -39,14 +43,14 @@ export function ComplianceScoreChip() {
         <div
             className="
                 hidden md:inline-flex items-center gap-2 px-3 h-8
-                rounded border bg-[#0c0c0f]
+                rounded-md border bg-[var(--bg-elevated)]
             "
-            style={{ borderColor: `${color}40` }}
+            style={{ borderColor: `color-mix(in srgb, ${color} 30%, transparent)` }}
             aria-label={`Compliance score ${score}% over rolling 90 days based on ${notices_total} notices`}
             title={`${notices_total} notices in 90-day window`}
         >
             <Icon className="w-3.5 h-3.5" style={{ color }} />
-            <span className="text-[11px] uppercase tracking-wider text-[#71717a]">
+            <span className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
                 90d
             </span>
             <span

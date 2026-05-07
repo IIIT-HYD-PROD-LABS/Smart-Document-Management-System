@@ -136,14 +136,14 @@ export function ClientSwitcher() {
                     border transition-colors
                     ${
                         crossClientMode
-                            ? "bg-[#3b82f6]/10 border-[#3b82f6]/40 text-[#3b82f6]"
-                            : "bg-[#111113] border-[#27272a] text-white hover:border-[#3f3f46]"
+                            ? "bg-[var(--accent-soft)] border-[var(--accent-edge)] text-[var(--accent)]"
+                            : "bg-[var(--bg-elevated)] border-[var(--border-default)] text-[var(--text-primary)] hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-hover)]"
                     }
                 `}
             >
                 {crossClientMode && <FiGlobe className="w-3.5 h-3.5" />}
                 <span className="truncate max-w-[160px]">{triggerLabel}</span>
-                <FiChevronDown className="w-3.5 h-3.5 text-[#71717a]" />
+                <FiChevronDown className="w-3.5 h-3.5 text-[var(--text-subtle)]" />
             </button>
 
             {open && (
@@ -151,25 +151,25 @@ export function ClientSwitcher() {
                     role="menu"
                     className="
                         absolute right-0 mt-2 w-[320px] max-h-[480px] overflow-y-auto
-                        bg-[#111113] border border-[#27272a] rounded-md shadow-xl
+                        bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md shadow-[var(--shadow-lg)]
                         z-50
                     "
                 >
                     {/* Search input */}
-                    <div className="p-2 border-b border-[#27272a]">
+                    <div className="p-2 border-b border-[var(--border-default)]">
                         <div className="relative">
-                            <FiSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#71717a]" />
+                            <FiSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-subtle)]" />
                             <input
                                 type="text"
                                 placeholder="Search clients"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 className="
-                                    w-full pl-8 pr-2 py-1.5 text-[13px]
-                                    bg-[#18181b] border border-[#27272a] rounded
-                                    text-white placeholder:text-[#52525b]
-                                    focus:outline-none focus:border-[#3b82f6]/40
-                                    focus:ring-2 focus:ring-[#3b82f6]/20
+                                    w-full pl-8 pr-2 py-1.5 text-[13.5px]
+                                    bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md
+                                    text-[var(--text-primary)] placeholder:text-[var(--text-disabled)]
+                                    focus:outline-none focus:border-[var(--accent)]
+                                    focus:ring-2 focus:ring-[var(--accent-edge)]
                                 "
                                 aria-label="Search clients"
                             />
@@ -181,14 +181,14 @@ export function ClientSwitcher() {
                             {[0, 1, 2].map((i) => (
                                 <div
                                     key={i}
-                                    className="h-8 rounded bg-[#18181b] animate-pulse"
+                                    className="h-8 rounded bg-[var(--bg-hover)] animate-pulse"
                                 />
                             ))}
                         </div>
                     )}
 
                     {!isLoading && memberships && memberships.length === 0 && (
-                        <div className="p-4 text-[13px] text-[#71717a] text-center">
+                        <div className="p-4 text-[13px] text-[var(--text-muted)] text-center">
                             No clients yet
                         </div>
                     )}
@@ -197,7 +197,7 @@ export function ClientSwitcher() {
                         memberships &&
                         memberships.length > 0 &&
                         filtered.length === 0 && (
-                            <div className="p-4 text-[13px] text-[#71717a] text-center">
+                            <div className="p-4 text-[13px] text-[var(--text-muted)] text-center">
                                 No clients match {`"${query}"`}
                             </div>
                         )}
@@ -217,26 +217,26 @@ export function ClientSwitcher() {
                                             handleClientClick(m.client_id)
                                         }
                                         className={`
-                                            w-full flex items-center gap-2 px-3 py-2 text-[13px]
-                                            text-left hover:bg-[#18181b] transition-colors
+                                            w-full flex items-center gap-2 px-3 py-2 text-[13.5px]
+                                            text-left hover:bg-[var(--bg-hover)] transition-colors
                                             ${
                                                 isActive
-                                                    ? "border-l-[3px] border-[#3b82f6] pl-[9px]"
+                                                    ? "border-l-[3px] border-[var(--accent)] pl-[9px] bg-[var(--accent-soft)]"
                                                     : ""
                                             }
                                         `}
                                     >
-                                        <span className="flex-1 text-white truncate">
+                                        <span className="flex-1 text-[var(--text-primary)] truncate">
                                             Client #{m.client_id}
                                         </span>
-                                        <span className="text-[11px] text-[#71717a] uppercase">
+                                        <span className="text-[11px] text-[var(--text-muted)] uppercase font-semibold">
                                             {m.compliance_role.replace(
                                                 "_",
                                                 " "
                                             )}
                                         </span>
                                         {isActive && (
-                                            <FiCheck className="w-3.5 h-3.5 text-[#3b82f6]" />
+                                            <FiCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
                                         )}
                                     </button>
                                 );
@@ -247,7 +247,7 @@ export function ClientSwitcher() {
                     {/* Cross-client toggle (D-23) — gated by eligibility */}
                     {eligibleForCrossClient && (
                         <>
-                            <div className="border-t border-[#27272a]" />
+                            <div className="border-t border-[var(--border-default)]" />
                             <button
                                 type="button"
                                 role="menuitem"
@@ -256,12 +256,12 @@ export function ClientSwitcher() {
                                     setOpen(false);
                                 }}
                                 className={`
-                                    w-full flex items-center gap-2 px-3 py-2 text-[13px]
-                                    transition-colors hover:bg-[#18181b]
+                                    w-full flex items-center gap-2 px-3 py-2 text-[13.5px]
+                                    transition-colors hover:bg-[var(--bg-hover)]
                                     ${
                                         crossClientMode
-                                            ? "bg-[#3b82f6]/10 text-[#3b82f6]"
-                                            : "text-white"
+                                            ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                                            : "text-[var(--text-primary)]"
                                     }
                                 `}
                             >
@@ -277,13 +277,13 @@ export function ClientSwitcher() {
                     )}
 
                     {/* Onboard new client */}
-                    <div className="border-t border-[#27272a]" />
+                    <div className="border-t border-[var(--border-default)]" />
                     <Link
                         href="/dashboard/compliance/clients/new"
                         onClick={() => setOpen(false)}
                         className="
-                            w-full flex items-center gap-2 px-3 py-2 text-[13px]
-                            text-[#3b82f6] hover:bg-[#18181b] transition-colors
+                            w-full flex items-center gap-2 px-3 py-2 text-[13.5px]
+                            text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors
                         "
                     >
                         <FiPlus className="w-3.5 h-3.5" />

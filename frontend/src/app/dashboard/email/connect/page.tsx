@@ -63,7 +63,7 @@ function ConnectInner() {
     return (
         <div className="space-y-6 max-w-3xl">
             <section>
-                <h2 className="text-[15px] font-semibold tracking-tight text-white">
+                <h2 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">
                     Connection
                 </h2>
                 <p className="text-[12.5px] text-[var(--text-muted)] mt-1 mb-4">

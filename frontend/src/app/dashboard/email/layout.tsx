@@ -80,7 +80,7 @@ export default function EmailLayout({
                     -mx-6 -mt-6 px-6 pt-6 pb-3 md:-mx-10 md:-mt-10 md:px-10 md:pt-10
                 "
             >
-                <h1 className="text-[20px] font-semibold tracking-tight text-white">
+                <h1 className="text-[24px] font-semibold tracking-tight text-[var(--text-primary)]">
                     Gmail
                 </h1>
                 <p className="text-[13px] text-[var(--text-muted)] mt-1">
@@ -98,11 +98,11 @@ export default function EmailLayout({
                                 key={item.href}
                                 href={item.href}
                                 className={`
-                                    relative px-3 py-1.5 text-[12.5px] rounded-t-md
+                                    relative px-3 py-1.5 text-[13px] rounded-t-md
                                     transition-colors duration-150
                                     ${
                                         active
-                                            ? "text-white"
+                                            ? "text-[var(--text-primary)]"
                                             : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                                     }
                                 `}
@@ -136,7 +136,7 @@ export default function EmailLayout({
                         text-[13px]
                     "
                 >
-                    <p className="text-white font-medium">
+                    <p className="text-[var(--text-primary)] font-medium">
                         No client memberships found
                     </p>
                     <p className="text-[var(--text-muted)] mt-1">

@@ -3,43 +3,104 @@
 @tailwind utilities;
 
 /*
- * TaxSync — Compliance Noir design system
+ * TaxSync — Enterprise design system (v2)
  *
- * Aesthetic: refined dark editorial × financial-grade precision.
- * Typography: IBM Plex Sans (body) + IBM Plex Mono (numerics).
- * Color: hex tokens with /1a alpha pills for accents.
+ * Goals:
+ *   1. Default to a clean enterprise LIGHT palette (Linear / Notion business
+ *      / Stripe dashboard inspired). Dark theme available as an opt-in via
+ *      `data-theme="dark"` on the <html> element.
+ *   2. Bumped sizing scale — base body 14px (was 13), heading +1 tier.
+ *   3. Subtle, role-based color usage (success/warning/danger/info) tinted
+ *      pills and tinted left edges on metric cards.
+ *
+ * Typography: IBM Plex Sans (body) + IBM Plex Mono (numerics) — kept.
  * Motion: 150–200ms transitions, prefers-reduced-motion respected.
  */
 
-:root {
-    /* Surfaces — graduated from page → card → elevated */
+/* ───────────────────────────────────────────────────────────
+ * LIGHT THEME — default (no attribute, or data-theme="light")
+ * ─────────────────────────────────────────────────────────── */
+:root,
+:root[data-theme="light"] {
+    /* Surfaces — graduated soft-white → card white → hover */
+    --bg-page: #fafafa;          /* never pure white — softer on eyes */
+    --bg-surface: #ffffff;
+    --bg-elevated: #ffffff;
+    --bg-hover: #f4f4f5;
+    --bg-muted: #f5f5f7;
+
+    /* Borders — three weights */
+    --border-subtle: #f1f1f3;
+    --border-default: #e4e4e7;
+    --border-emphasis: #d4d4d8;
+
+    /* Typography — strong contrast pyramid on light */
+    --text-primary: #09090b;
+    --text-secondary: #18181b;
+    --text-muted: #52525b;
+    --text-subtle: #71717a;
+    --text-disabled: #a1a1aa;
+
+    /* Brand accent — deeper blue for AA on white */
+    --accent: #2563eb;
+    --accent-strong: #1d4ed8;
+    --accent-soft: rgba(37, 99, 235, 0.08);
+    --accent-edge: rgba(37, 99, 235, 0.25);
+
+    /* Semantic — calibrated for legibility on light backgrounds */
+    --success: #047857;
+    --success-soft: rgba(4, 120, 87, 0.08);
+    --warning: #b45309;
+    --warning-soft: rgba(180, 83, 9, 0.08);
+    --danger: #b91c1c;
+    --danger-soft: rgba(185, 28, 28, 0.08);
+    --info: #0e7490;
+    --info-soft: rgba(14, 116, 144, 0.08);
+
+    /* Soft elevation — bordered, NOT shadow-heavy */
+    --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+    --shadow-md: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+    --shadow-lg: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 4px 0 rgba(15, 23, 42, 0.04);
+}
+
+/* ───────────────────────────────────────────────────────────
+ * DARK THEME — opt-in via data-theme="dark"
+ * (Original Compliance Noir palette preserved.)
+ * ─────────────────────────────────────────────────────────── */
+:root[data-theme="dark"] {
     --bg-page: #09090b;
     --bg-surface: #0c0c0f;
     --bg-elevated: #111113;
     --bg-hover: #18181b;
+    --bg-muted: #111113;
 
-    /* Borders — three weights for hierarchy */
     --border-subtle: #1a1a1d;
     --border-default: #1f1f23;
     --border-emphasis: #27272a;
 
-    /* Typography colors */
     --text-primary: #fafafa;
     --text-secondary: #d4d4d8;
     --text-muted: #a1a1aa;
     --text-subtle: #71717a;
     --text-disabled: #52525b;
 
-    /* Brand accent — single sharp blue (Linear-grade restraint) */
     --accent: #3b82f6;
+    --accent-strong: #2563eb;
     --accent-soft: rgba(59, 130, 246, 0.1);
     --accent-edge: rgba(59, 130, 246, 0.4);
 
-    /* Semantic — success, warning, danger, info */
     --success: #10b981;
+    --success-soft: rgba(16, 185, 129, 0.12);
     --warning: #f59e0b;
+    --warning-soft: rgba(245, 158, 11, 0.12);
     --danger: #ef4444;
+    --danger-soft: rgba(239, 68, 68, 0.12);
     --info: #06b6d4;
+    --info-soft: rgba(6, 182, 212, 0.12);
+
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
 }
 
 * {
@@ -53,38 +114,42 @@ html, body {
     background: var(--bg-page);
     color: var(--text-primary);
     min-height: 100vh;
+    /* Bumped from 13px → 14px — addresses stakeholder feedback that elements
+     * "appear too small at 100% scaling". */
+    font-size: 14px;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: "ss02", "ss03", "cv02";  /* Plex Sans alternates: nicer 'a', 'g', '$' */
-    letter-spacing: -0.005em;  /* tighten Plex slightly to match hairline rhythm */
+    font-feature-settings: "ss02", "ss03", "cv02";
+    letter-spacing: -0.005em;
 }
 
-/* Numeric / monospace — used for risk scores, percentages, money,
- * dates, file sizes, counts — anywhere precision matters. */
+/* Headings tighten leading & weight — used by Tailwind utility classes. */
+h1, h2, h3, h4, h5, h6 {
+    line-height: 1.3;
+    color: var(--text-primary);
+}
+
+/* Numeric / monospace */
 .font-mono, code, pre {
     font-family: var(--font-plex-mono), 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
-    font-feature-settings: "zero", "ss01";  /* slashed zero, alternate styles */
+    font-feature-settings: "zero", "ss01";
 }
 
-/* Tabular numerals everywhere — counts in stats cards, percentages
- * in confidence badges align column-perfect. */
-.tabular-nums {
-    font-variant-numeric: tabular-nums;
-}
+.tabular-nums { font-variant-numeric: tabular-nums; }
 
-/* Scrollbar — quiet, doesn't compete with content */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-page); }
-::-webkit-scrollbar-thumb { background: var(--border-emphasis); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+/* Scrollbar — quiet */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-emphasis); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-disabled); }
 
-/* Selection — Plex character is preserved, just colored */
 ::selection {
     background: var(--accent-soft);
     color: var(--text-primary);
 }
 
-/* Focus rings — keyboard-only, never on click (mouse users get hover) */
+/* Focus rings — WCAG 2.2 §2.4.11: ≥2px outline, contrast against bg */
 :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -92,11 +157,10 @@ html, body {
 }
 
 /* ───────────────────────────────────────────────────────────
- * Atmosphere — subtle grain on the page background gives the
- * matte black surfaces depth without competing with content.
- * Single fixed gradient + repeating noise SVG keeps it cheap.
+ * Atmosphere — ambient gradients only on the dark theme.
+ * Light theme stays clean — no noise/grain (enterprise convention).
  * ─────────────────────────────────────────────────────────── */
-body::before {
+:root[data-theme="dark"] body::before {
     content: "";
     position: fixed;
     inset: 0;
@@ -107,44 +171,63 @@ body::before {
         radial-gradient(ellipse 50% 40% at 80% 110%, rgba(16, 185, 129, 0.025), transparent 70%);
 }
 
-/* Page content rides above the atmosphere */
 body > * { position: relative; z-index: 1; }
 
 /* ───────────────────────────────────────────────────────────
- * Component-grade utilities — composable but opinionated.
- * Used as className additions on the existing components.
+ * Component utilities
  * ─────────────────────────────────────────────────────────── */
 
-/* Primary surface card — used for stat cards, panels, lists */
+/* Surface card — main content container. Bordered, gentle elevation. */
 .surface-card {
     background: var(--bg-elevated);
     border: 1px solid var(--border-default);
-    border-radius: 8px;
-    transition: border-color 200ms ease;
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 200ms ease, box-shadow 200ms ease;
 }
-.surface-card:hover { border-color: var(--border-emphasis); }
+.surface-card:hover {
+    border-color: var(--border-emphasis);
+    box-shadow: var(--shadow-md);
+}
 
-/* Stat-card hairline accent strip (top edge) */
+/* Top-edge accent strip on metric cards — color comes from inline `style.color` */
 .stat-strip {
     position: relative;
+    overflow: hidden;
 }
 .stat-strip::before {
     content: "";
     position: absolute;
     inset: 0 0 auto 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, currentColor, transparent);
-    opacity: 0.6;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
+    height: 3px;
+    background: currentColor;
+    opacity: 0.85;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
 }
 
-/* List row — refined hover with subtle border-left accent */
+/* Left-edge variant — for activity rows / compliance card stripes */
+.stat-stripe-left {
+    position: relative;
+}
+.stat-stripe-left::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: currentColor;
+    border-top-left-radius: 10px;
+    border-bottom-left-radius: 10px;
+}
+
+/* List row — refined hover with subtle background */
 .list-row {
     position: relative;
     transition: background-color 150ms ease;
 }
-.list-row:hover { background: rgba(255, 255, 255, 0.015); }
+.list-row:hover { background: var(--bg-hover); }
 .list-row:hover::before {
     content: "";
     position: absolute;
@@ -156,22 +239,52 @@ body > * { position: relative; z-index: 1; }
 /* Microtype — uppercase labels in sidebar groups, stat card labels */
 .microtype {
     text-transform: uppercase;
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 0.08em;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* Quick-action tiles on dashboard — brand-tinted backgrounds */
+.tile {
+    border-radius: 12px;
+    border: 1px solid var(--border-default);
+    background: var(--bg-elevated);
+    transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+.tile:hover {
+    border-color: var(--accent-edge);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+/* Pill — semantic colored pill, used for status / risk tier indicators */
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 10px;
+    font-size: 12px;
     font-weight: 500;
-    color: var(--text-subtle);
+    border-radius: 999px;
+    border: 1px solid transparent;
 }
 
-/* ───────────────────────────────────────────────────────────
- * v1.0 leftovers — kept for compatibility
- * ─────────────────────────────────────────────────────────── */
+/* Dropzone leftover — re-tint for both themes */
 .dropzone-active {
-    border-color: #10b981 !important;
-    background: rgba(16, 185, 129, 0.04) !important;
+    border-color: var(--success) !important;
+    background: var(--success-soft) !important;
+}
+
+/* WCAG 2.2 §2.5.8: minimum 24×24 target size for interactive elements */
+.touch-target {
+    min-width: 24px;
+    min-height: 24px;
 }
 
 /* ───────────────────────────────────────────────────────────
- * Reduced motion — honor OS-level preference
+ * Reduced motion
  * ─────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
