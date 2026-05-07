@@ -52,8 +52,8 @@ created: 2026-05-07
 | 15-03-* | 03 | 2 | EMAIL-01..10 (services) | unit + integration | `pytest tests/compliance/email/test_*service*.py` | ✅ pytest | ⬜ pending |
 | 15-04-* | 04 | 2 | EMAIL-02/09 (MCP tools) | integration | `pytest tests/compliance/email/test_mcp_*.py` | ✅ pytest | ⬜ pending |
 | 15-05-* | 05 | 3 | EMAIL-01..10 (routers) | integration | `pytest tests/compliance/email/test_router_*.py` | ✅ pytest | ⬜ pending |
-| 15-06-* | 06 | 3 | BILL-01..06 (frontend) | vitest | `pnpm vitest run --dir src/components/email` | ✅ vitest | ⬜ pending |
-| 15-07-* | 07 | 4 | end-to-end smoke | smoke test | `python scripts/smoke_phase15_v20.py` | ❌ Wave 4 | ⬜ pending |
+| 15-06-* | 06 | 4 | BILL-01..06 (frontend) | vitest | `pnpm vitest run --dir src/components/email` | ✅ vitest | ⬜ pending |
+| 15-07-* | 07 | 5 | end-to-end smoke | smoke test | `python scripts/smoke_phase15_v20.py` | ❌ Wave 5 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
