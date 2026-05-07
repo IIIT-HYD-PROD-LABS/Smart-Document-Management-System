@@ -6,8 +6,35 @@
  * (see src/lib/api.ts:38-44). Reconciliation #3: JWT is read from the
  * js-cookie package via the shared interceptor — do not duplicate the
  * cookie read here, and do not introduce browser-storage shortcuts.
+ *
+ * Email routes are gated by `require_compliance_permission('email_integration:use')`
+ * on the backend, which means Phase 9's TenantContextMiddleware requires the
+ * `X-Client-Id` header on every call. We replicate the `tenantHeaders()`
+ * pattern from `src/lib/api/compliance.ts:40` so the active client (or
+ * cross-client mode) is sent on every email request.
  */
+import type { AxiosRequestConfig } from "axios";
 import api from "@/lib/api";
+import { useCurrentClient } from "@/stores/currentClientStore";
+
+function tenantHeaders(): Record<string, string> {
+    const state = useCurrentClient.getState();
+    if (state.crossClientMode) return { "X-Client-Id": "*" };
+    if (state.activeClientId !== null) {
+        return { "X-Client-Id": String(state.activeClientId) };
+    }
+    return {};
+}
+
+function withTenant(config?: AxiosRequestConfig): AxiosRequestConfig {
+    return {
+        ...(config ?? {}),
+        headers: {
+            ...(config?.headers ?? {}),
+            ...tenantHeaders(),
+        },
+    };
+}
 
 export interface GmailCredentialResponse {
     id: number;
@@ -114,52 +141,75 @@ export interface SourceEmailView {
 
 export const emailApi = {
     connectGmail: () =>
-        api.post<{ authorize_url: string }>("/email/gmail/oauth/authorize"),
+        api.post<{ authorize_url: string }>(
+            "/email/gmail/oauth/authorize",
+            null,
+            withTenant(),
+        ),
 
     listCredentials: () =>
-        api.get<GmailCredentialResponse[]>("/email/credentials"),
+        api.get<GmailCredentialResponse[]>("/email/credentials", withTenant()),
 
     updateCredential: (id: number, body: { cadence_minutes?: number }) =>
-        api.patch<GmailCredentialResponse>(`/email/credentials/${id}`, body),
+        api.patch<GmailCredentialResponse>(
+            `/email/credentials/${id}`,
+            body,
+            withTenant(),
+        ),
 
     deleteCredential: (id: number) =>
-        api.delete(`/email/credentials/${id}`),
+        api.delete(`/email/credentials/${id}`, withTenant()),
 
     listFilterRules: (credId: number) =>
-        api.get<GmailFilterRule[]>(`/email/credentials/${credId}/filter-rules`),
+        api.get<GmailFilterRule[]>(
+            `/email/credentials/${credId}/filter-rules`,
+            withTenant(),
+        ),
 
     createFilterRule: (credId: number, body: Partial<GmailFilterRule>) =>
         api.post<GmailFilterRule>(
             `/email/credentials/${credId}/filter-rules`,
             body,
+            withTenant(),
         ),
 
     updateFilterRule: (id: number, body: Partial<GmailFilterRule>) =>
-        api.patch<GmailFilterRule>(`/email/filter-rules/${id}`, body),
+        api.patch<GmailFilterRule>(
+            `/email/filter-rules/${id}`,
+            body,
+            withTenant(),
+        ),
 
     deleteFilterRule: (id: number) =>
-        api.delete(`/email/filter-rules/${id}`),
+        api.delete(`/email/filter-rules/${id}`, withTenant()),
 
     listActivity: (credId: number, limit = 50) =>
         api.get<GmailFetchLog[]>(
             `/email/credentials/${credId}/activity`,
-            { params: { limit } },
+            withTenant({ params: { limit } }),
         ),
 
     listBills: (filters: BillFilters = {}) =>
-        api.get<Bill[]>("/email/bills", { params: filters }),
+        api.get<Bill[]>("/email/bills", withTenant({ params: filters })),
 
     getBill: (id: number) =>
-        api.get<Bill>(`/email/bills/${id}`),
+        api.get<Bill>(`/email/bills/${id}`, withTenant()),
 
     markBillPaid: (id: number, body: MarkPaidPayload) =>
-        api.post<Bill>(`/email/bills/${id}/mark-paid`, body),
+        api.post<Bill>(`/email/bills/${id}/mark-paid`, body, withTenant()),
 
     bulkMarkBillsPaid: (body: BulkMarkPaidPayload) =>
-        api.post<BulkMarkPaidResponse>("/email/bills/bulk-mark-paid", body),
+        api.post<BulkMarkPaidResponse>(
+            "/email/bills/bulk-mark-paid",
+            body,
+            withTenant(),
+        ),
 
     viewSourceEmail: (messageLogId: number) =>
-        api.get<SourceEmailView>(`/email/messages/${messageLogId}/view`),
+        api.get<SourceEmailView>(
+            `/email/messages/${messageLogId}/view`,
+            withTenant(),
+        ),
 };
 
 export default emailApi;

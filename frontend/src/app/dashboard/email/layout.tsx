@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { complianceApi } from "@/lib/api/compliance";
+import { useCurrentClient } from "@/stores/currentClientStore";
 
 const SUB_NAV = [
     { href: "/dashboard/email/connect", label: "Connect" },
@@ -23,6 +26,45 @@ export default function EmailLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
+    const activeClientId = useCurrentClient((s) => s.activeClientId);
+    const setActiveClientId = useCurrentClient((s) => s.setActiveClientId);
+    const [bootstrapping, setBootstrapping] = useState(activeClientId === null);
+    const [noMemberships, setNoMemberships] = useState(false);
+
+    /**
+     * Auto-select the user's first ClientMembership if no active client is set.
+     * Email routes are gated by `require_compliance_permission('email_integration:use')`
+     * which requires X-Client-Id on every call. Without this bootstrap, a fresh
+     * login on /dashboard/email/* would 400 every API call until the user
+     * navigated through Compliance to pick a client.
+     */
+    useEffect(() => {
+        if (activeClientId !== null) {
+            setBootstrapping(false);
+            return;
+        }
+        let cancelled = false;
+        complianceApi
+            .listMyMemberships()
+            .then((r) => {
+                if (cancelled) return;
+                const first = r.data?.[0];
+                if (first?.client_id) {
+                    setActiveClientId(first.client_id);
+                } else {
+                    setNoMemberships(true);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setNoMemberships(true);
+            })
+            .finally(() => {
+                if (!cancelled) setBootstrapping(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [activeClientId, setActiveClientId]);
 
     const isActive = (href: string) => {
         if (pathname === href) return true;
@@ -82,7 +124,35 @@ export default function EmailLayout({
                 </nav>
             </header>
 
-            <div>{children}</div>
+            {bootstrapping ? (
+                <div className="text-[13px] text-[var(--text-muted)]">
+                    Loading active client…
+                </div>
+            ) : noMemberships ? (
+                <div
+                    className="
+                        rounded-md p-4
+                        bg-[var(--bg-elevated)] border border-[var(--border-default)]
+                        text-[13px]
+                    "
+                >
+                    <p className="text-white font-medium">
+                        No client memberships found
+                    </p>
+                    <p className="text-[var(--text-muted)] mt-1">
+                        Email features require an active client. Visit{" "}
+                        <Link
+                            href="/dashboard/compliance/clients"
+                            className="text-[var(--accent)] hover:underline"
+                        >
+                            Compliance → Clients
+                        </Link>{" "}
+                        to onboard or join a client.
+                    </p>
+                </div>
+            ) : (
+                <div>{children}</div>
+            )}
         </div>
     );
 }
