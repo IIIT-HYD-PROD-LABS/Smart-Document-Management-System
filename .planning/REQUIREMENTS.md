@@ -144,7 +144,7 @@ Requirements for the Compliance Management System milestone. Each maps to roadma
 ### Email Integration (Gmail MCP)
 
 - [x] **EMAIL-01**: User can connect their Gmail account via OAuth 2.0 with offline access (refresh-token flow), per (user, client) pair
-- [ ] **EMAIL-02**: System exposes Gmail as 6 MCP (Model Context Protocol) tools — `gmail_search`, `gmail_read_message`, `gmail_list_attachments`, `gmail_get_attachment`, `gmail_list_labels`, `gmail_modify_labels`
+- [x] **EMAIL-02**: System exposes Gmail as 6 MCP (Model Context Protocol) tools — `gmail_search`, `gmail_read_message`, `gmail_list_attachments`, `gmail_get_attachment`, `gmail_list_labels`, `gmail_modify_labels`
 - [x] **EMAIL-03**: Refresh-token storage at the field level (Fernet-encrypted, reuses Phase 9 INFRA-06 helper); access tokens never persisted (Redis-cached with TTL)
 - [x] **EMAIL-04**: Configurable filter rules per credential — sender pattern, subject pattern, label include/exclude, route_to (compliance_notice / bill / dms_only / ignore); seeded defaults for gov.in domains and known billers
 - [x] **EMAIL-05**: Automated attachment ingestion to DMS reusing the v1.0 upload pipeline (storage_service + document_tasks); Document.source_email_id FK records provenance
@@ -294,7 +294,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PORT-07 | Phase 14 | Pending |
 | PORT-08 | Phase 14 | Pending |
 | EMAIL-01 | Phase 15 | Complete |
-| EMAIL-02 | Phase 15 | Pending |
+| EMAIL-02 | Phase 15 | Complete |
 | EMAIL-03 | Phase 15 | Complete |
 | EMAIL-04 | Phase 15 | Complete |
 | EMAIL-05 | Phase 15 | Complete |
