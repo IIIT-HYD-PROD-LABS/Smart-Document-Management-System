@@ -24,7 +24,11 @@ from sqlalchemy.orm import Session
 
 from app.compliance.dependencies import require_compliance_permission
 from app.compliance.models.membership import ClientMembership
-from app.compliance.services.permission_registry import CompliancePermission
+from app.compliance.services.permission_registry import (
+    CompliancePermission,
+    ComplianceRole,
+    has_permission,
+)
 from app.config import settings
 from app.database import get_db
 from app.email.services.credential_vault import save_credential
@@ -86,15 +90,22 @@ async def gmail_callback(
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
     db: Session = Depends(get_db),
-    membership: ClientMembership = Depends(
-        require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
-    ),
 ):
     """Validate state JWT, exchange code, persist refresh_token, schedule scanner.
 
+    NOTE: This endpoint is NOT cookie-auth gated. Google's redirect comes
+    from accounts.google.com cross-site, so SameSite=Strict cookies (our
+    JWT, see api.ts) are NOT sent on this request — adding
+    require_compliance_permission here would always 401 with
+    'Not authenticated'. The signed state JWT (HS256 with our SECRET_KEY,
+    nonce + user_id + client_id + exp) is the authentication of record
+    here: it proves the request originated from a logged-in user who hit
+    /authorize on this server in the last few minutes (and survived a
+    round-trip through Google). Same pattern used by /api/auth/oauth/google
+    callback (auth.py:336) for v1.0 SSO.
+
     Error redirects route to the frontend with a query parameter so the
-    UI can render an actionable message (matching the existing Google
-    login OAuth callback pattern at auth.py:336).
+    UI can render an actionable message.
     """
     frontend = _frontend_url()
     if error:
@@ -102,22 +113,59 @@ async def gmail_callback(
             url=f"{frontend}/dashboard/email/connect?error=oauth_denied"
         )
     if not code:
-        raise HTTPException(400, "Missing authorization code")
+        return RedirectResponse(
+            url=f"{frontend}/dashboard/email/connect?error=missing_code"
+        )
     if not state:
-        raise HTTPException(400, "Missing OAuth state")
+        return RedirectResponse(
+            url=f"{frontend}/dashboard/email/connect?error=missing_state"
+        )
     try:
         payload = jwt.decode(state, settings.SECRET_KEY, algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(400, "OAuth state expired -- please try again")
+        return RedirectResponse(
+            url=f"{frontend}/dashboard/email/connect?error=state_expired"
+        )
     except jwt.InvalidTokenError:
-        raise HTTPException(400, "Invalid OAuth state -- possible CSRF")
+        return RedirectResponse(
+            url=f"{frontend}/dashboard/email/connect?error=state_invalid"
+        )
 
     state_user_id = payload.get("user_id")
     state_client_id = payload.get("client_id")
-    if state_user_id != membership.user_id:
-        raise HTTPException(403, "OAuth state user mismatch")
-    if state_client_id != membership.client_id:
-        raise HTTPException(403, "OAuth state client mismatch")
+    if not state_user_id or not state_client_id:
+        return RedirectResponse(
+            url=f"{frontend}/dashboard/email/connect?error=state_malformed"
+        )
+
+    # Re-verify the user still has email_integration:use on this client at
+    # callback time — the state JWT was minted at /authorize but membership
+    # could have been revoked while the user was on Google's consent screen.
+    membership = (
+        db.query(ClientMembership)
+        .filter(
+            ClientMembership.user_id == int(state_user_id),
+            ClientMembership.client_id == int(state_client_id),
+        )
+        .first()
+    )
+    if membership is None:
+        return RedirectResponse(
+            url=f"{frontend}/dashboard/email/connect?error=membership_revoked"
+        )
+    try:
+        role_enum = ComplianceRole(membership.compliance_role)
+    except ValueError:
+        return RedirectResponse(
+            url=f"{frontend}/dashboard/email/connect?error=role_invalid"
+        )
+    if not has_permission(
+        role_enum,
+        CompliancePermission.EMAIL_INTEGRATION_USE,
+    ):
+        return RedirectResponse(
+            url=f"{frontend}/dashboard/email/connect?error=permission_revoked"
+        )
 
     try:
         token_data = await GmailOAuth.exchange_code(
@@ -125,10 +173,13 @@ async def gmail_callback(
         )
     except HTTPException:
         raise
-    except Exception as e:  # noqa: BLE001 — propagate as 502
+    except Exception as e:  # noqa: BLE001 — propagate as redirect with error
         logger.exception("gmail_oauth_token_exchange_failed")
-        raise HTTPException(
-            502, f"OAuth token exchange failed: {type(e).__name__}"
+        return RedirectResponse(
+            url=(
+                f"{frontend}/dashboard/email/connect"
+                f"?error=token_exchange_failed&detail={type(e).__name__}"
+            )
         )
 
     cred = save_credential(
