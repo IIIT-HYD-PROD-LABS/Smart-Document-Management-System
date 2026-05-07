@@ -26,7 +26,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 - [~] **Phase 12: Response Drafting + Evidence Management** v2.0 CODE-COMPLETE 2026-05-05 + smoke PASSED — 4-stage approval workflow (Drafter → Reviewer → Legal → CFO) + versioned drafts + evidence linking + frontend response editor; LLM draft generation + 20+ response templates + evidence PDF merge + GST ITC reconciliation + regulation library deferred to v2.1
 - [~] **Phase 13: Elasticsearch + Cross-Entity Search + Reporting** v2.0 CODE-COMPLETE 2026-05-05 + smoke PASSED — PG-FTS-backed unified search across notices + documents + reports analytics (penalty by authority + volume by status + response time percentiles); Elastic Cloud + outbox + reconciliation deferred to v2.1
 - [ ] **Phase 14: Government Portal Integration** — GST/IT/MCA auto-fetch, RBI/SEBI scraping, IMAP email parsing — CONTEXT seeded 2026-05-05; **BLOCKED on external decisions: GSP empanelment status, IT e-filing API access path**
-- [ ] **Phase 15: Gmail MCP Integration & Email Document Ingestion** — Gmail OAuth + MCP server, auto-ingest notice/bill attachments — 7 plans planned 2026-05-07
+- [x] **Phase 15: Gmail MCP Integration & Email Document Ingestion** — Gmail OAuth + MCP server, auto-ingest notice/bill attachments — 7 plans planned 2026-05-07 (completed 2026-05-07)
 
 ## Phase Details
 
@@ -140,7 +140,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 - [x] 15-04-PLAN.md — Wave 2B MCP server (FastMCP with 6 tools + in-memory client per reconciliation #1 + lifespan handler in main.py)
 - [x] 15-05-PLAN.md — Wave 3A backend routers (7 routers under /api/email gated by email_integration:use)
 - [x] 15-06-PLAN.md — Wave 3B frontend (typed email-api + 7 components + 6 pages + sidebar nav; reconciliation #3 enforced — js-cookie not localStorage)
-- [ ] 15-07-PLAN.md — Wave 4 smoke + manual checklist (12 automated checks + 12-step manual verification)
+- [x] 15-07-PLAN.md — Wave 4 smoke + manual checklist (12 automated checks + 12-step manual verification)
 **UI hint**: yes
 
 ## Progress
@@ -155,7 +155,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 | 12. Response Drafting + Evidence Management | v2.0 | 1/1 v2.0 + 0/N v2.1 | v2.0 CODE-COMPLETE + smoke PASSED; v2.1 deferred (templates + LLM drafts + PDF merge + ITC recon + regulation library) | 2026-05-05 |
 | 13. Elasticsearch + Cross-Entity Search | v2.0 | 1/1 v2.0 + 0/N v2.1 | v2.0 CODE-COMPLETE + smoke PASSED via PG-FTS; v2.1 deferred (Elastic Cloud + outbox + reconciliation) | 2026-05-05 |
 | 14. Government Portal Integration | v2.0 | 0/TBD | CONTEXT seeded 2026-05-05 — **BLOCKED on GSP empanelment + IT API decisions** | - |
-| 15. Gmail MCP Integration | v2.0 | 6/7 | In Progress|  |
+| 15. Gmail MCP Integration | v2.0 | 7/7 | Complete   | 2026-05-07 |
 | 12. Response Drafting + Evidence Management | v2.0 | 0/TBD | Not started | - |
 | 13. Elasticsearch + Cross-Entity Search + Reporting | v2.0 | 0/TBD | Not started | - |
 | 14. Government Portal Integration | v2.0 | 0/TBD | Not started | - |
