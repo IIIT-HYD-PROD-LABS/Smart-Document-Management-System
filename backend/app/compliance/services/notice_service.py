@@ -247,6 +247,18 @@ def bulk_update_status(
     """
     results: list[dict] = []
     for nid in notice_ids:
+        # Idempotent: if the notice is already in the target state, treat as
+        # no-op success. This prevents spurious failures when the UI sends a
+        # bulk request after a single-row transition already moved the notice
+        # to the desired state (stale selection / concurrent edit).
+        current_status = (
+            db.query(ComplianceNotice.status)
+            .filter(ComplianceNotice.id == nid)
+            .scalar()
+        )
+        if current_status is not None and current_status == new_status.value:
+            results.append({"id": nid, "success": True, "error": None})
+            continue
         try:
             transition_notice_status(db, nid, new_status, user, reason)
         except InvalidTransitionError as exc:
