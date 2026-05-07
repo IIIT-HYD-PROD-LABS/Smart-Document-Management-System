@@ -158,8 +158,11 @@ export const documentsApi = {
     getStatus: (documentId: number) =>
         api.get(`/documents/${documentId}/status`),
 
-    getAll: (page = 1, perPage = 50) =>
-        api.get(`/documents/all?page=${page}&per_page=${perPage}`),
+    getAll: (page = 1, perPage = 50, sourceFilter?: "manual" | "gmail" | "portal" | "all") => {
+        const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+        if (sourceFilter) params.append("source_filter", sourceFilter);
+        return api.get(`/documents/all?${params.toString()}`);
+    },
 
     getById: (id: number) =>
         api.get(`/documents/${id}`),

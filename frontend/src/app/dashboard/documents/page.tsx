@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
 import { ConfidenceBadge, StatusBadge, CategoryBadge, LoadingSpinner } from "@/components";
-import { FiFileText, FiTrash2, FiFilter, FiCheckSquare, FiSquare, FiX } from "react-icons/fi";
+import { FiFileText, FiTrash2, FiFilter, FiCheckSquare, FiSquare, FiX, FiMail } from "react-icons/fi";
 import toast from "react-hot-toast";
 
 const categories = ["all", "bills", "upi", "tickets", "tax", "bank", "invoices", "unknown"];
@@ -18,6 +18,7 @@ interface DocumentListItem {
     confidence_score: number | null;
     status: string;
     created_at: string;
+    source?: string;
 }
 
 export default function DocumentsPage() {
@@ -174,7 +175,15 @@ export default function DocumentsPage() {
 
                             <FiFileText className="w-4 h-4 text-[#52525b] shrink-0" />
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm text-white truncate">{doc.original_filename}</p>
+                                <div className="flex items-center gap-1.5">
+                                    {(doc.source === "gmail" || doc.source === "gmail_body") && (
+                                        <FiMail
+                                            className="w-3.5 h-3.5 text-[#3b82f6] shrink-0"
+                                            title={doc.source === "gmail_body" ? "Ingested from Gmail body" : "Ingested from Gmail attachment"}
+                                        />
+                                    )}
+                                    <p className="text-sm text-white truncate">{doc.original_filename}</p>
+                                </div>
                                 <p className="text-xs text-[#52525b] mt-0.5">
                                     {doc.file_size != null ? `${(doc.file_size / 1024).toFixed(1)} KB` : "Unknown size"} · {new Date(doc.created_at).toLocaleDateString()}
                                 </p>
