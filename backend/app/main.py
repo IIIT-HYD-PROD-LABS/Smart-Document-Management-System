@@ -1,5 +1,7 @@
 """FastAPI application entry point."""
 
+from contextlib import asynccontextmanager
+
 import structlog
 from asgi_correlation_id import CorrelationIdMiddleware
 from fastapi import FastAPI, Request
@@ -30,6 +32,45 @@ setup_logging()
 # Existing database (from create_all): cd backend && alembic stamp head
 # New migration: cd backend && alembic revision --autogenerate -m "description"
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Phase 15: APScheduler warm-up + MCP server init.
+
+    Reconciliation #1 (D-38): MCP transport is in-memory
+    (Client(server_instance)); no child process to spawn here.
+    Reconciliation #5: this is the FIRST lifespan handler in main.py.
+
+    APScheduler init is best-effort. The runtime DB role (app_runtime) does
+    not own schema public, so the scheduler's lazy CREATE TABLE for
+    apscheduler_jobs raises InsufficientPrivilege when the table is absent.
+    A separate migration owns table creation; the lifespan only triggers
+    the scheduler when it can.
+    """
+    import structlog as _structlog
+
+    _bootlog = _structlog.stdlib.get_logger()
+
+    import app.email.mcp.server  # noqa: F401  -- register module-level FastMCP instance
+
+    try:
+        from app.compliance.services.scheduler import get_scheduler
+
+        get_scheduler()  # lazy-init; pulls persisted jobs from apscheduler_jobs
+    except Exception as exc:  # noqa: BLE001 — scheduler must not block app startup
+        _bootlog.warning(
+            "scheduler_init_skipped",
+            reason=type(exc).__name__,
+            detail=str(exc)[:240],
+            note=(
+                "FastAPI startup proceeded; deadline alerts will be scheduled "
+                "lazily on next /api/compliance/* request that triggers add_job."
+            ),
+        )
+    yield
+    # Shutdown: APScheduler atexit handler closes the scheduler if it started.
+
+
 # Initialize FastAPI
 app = FastAPI(
     title=settings.APP_NAME,
@@ -40,6 +81,7 @@ app = FastAPI(
     ),
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
+    lifespan=lifespan,
 )
 
 # Rate limiting
