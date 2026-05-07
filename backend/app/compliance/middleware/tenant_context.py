@@ -177,8 +177,13 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         if any(path.startswith(p) for p in self.PUBLIC_PREFIXES):
             return await call_next(request)
 
-        # Only enforce on /api/compliance/* — v1.0 routes stay user-scoped.
-        if not path.startswith("/api/compliance"):
+        # Enforce on /api/compliance/* + /api/email/* (Phase 15 routes are
+        # gated by require_compliance_permission and need the same tenant
+        # context). v1.0 routes stay user-scoped.
+        if not (
+            path.startswith("/api/compliance")
+            or path.startswith("/api/email")
+        ):
             return await call_next(request)
 
         client_header = request.headers.get("X-Client-Id")
