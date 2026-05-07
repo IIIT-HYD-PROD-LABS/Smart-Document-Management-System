@@ -90,21 +90,37 @@ def record_fetch_outcome(
             and all(r.status == GmailFetchLog.STATUS_FETCH_FAILED for r in recent)
         ):
             try:
-                from app.compliance.services.alert_service import dispatch_alert
-
-                dispatch_alert(
-                    event_type="gmail.fetch.repeated_failure",
-                    client_id=None,
-                    user_id=None,
-                    details={"credential_id": credential_id},
+                from app.compliance.services.alert_service import (
+                    dispatch_non_notice_alert,
+                    resolve_recipients,
                 )
-            except (ImportError, TypeError) as e:
-                # Phase 11 dispatch_alert has a different positional signature
-                # (notice + recipients); a credential-level alert pathway lands
-                # in Plan 05.
+                from app.email.models.credential import GmailCredential
+
+                cred = (
+                    db.query(GmailCredential)
+                    .filter(GmailCredential.id == credential_id)
+                    .first()
+                )
+                if cred is not None:
+                    recipients = resolve_recipients(
+                        db,
+                        client_id=cred.client_id,
+                        recipient_roles=("compliance_head", "ca_consultant"),
+                    )
+                    dispatch_non_notice_alert(
+                        db,
+                        client_id=cred.client_id,
+                        alert_type="gmail_fetch_repeated_failure",
+                        channels=["email", "websocket"],
+                        recipients=recipients,
+                        payload={
+                            "credential_id": credential_id,
+                            "consecutive_failures": 2,
+                        },
+                    )
+            except Exception as e:
                 logger.warning(
-                    "fetch.repeated_failure alert emit skipped (%s): %s",
-                    type(e).__name__,
+                    "fetch.repeated_failure alert emit failed: %s",
                     e,
                 )
     return log
