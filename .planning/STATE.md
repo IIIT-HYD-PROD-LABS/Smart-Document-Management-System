@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
 status: Ready to execute
-stopped_at: Completed 15-03-PLAN.md (services); ready for Plan 15-04 (MCP tools — fastmcp 3.2.4 / FastAPI 0.104.1 starlette conflict needs resolution before MCP server can boot)
-last_updated: "2026-05-07T18:00:33.448Z"
+stopped_at: Completed 15-04-PLAN.md (MCP tools + lifespan + dep reconciliation); ready for Plan 15-05 (routers)
+last_updated: "2026-05-07T18:24:15.509Z"
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 18
-  completed_plans: 15
+  completed_plans: 16
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 15 (gmail-mcp-integration) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 
 ## Shipped Milestones
 
@@ -81,6 +81,10 @@ See .planning/milestones/v1.0-ROADMAP.md for v1.0 decisions.
 - [Phase 15-gmail-mcp-integration]: Plan 03: Phase 11 dispatch_alert signature mismatch handled with try/except (TypeError + ImportError) in 3 callsites — bill/credential alerts have no parent ComplianceNotice. Plan 05 router will wire credential/bill-shaped alert pathway. Cool-down state still updates locally.
 - [Phase 15-gmail-mcp-integration]: Plan 03: Review-queue enqueue at score=0.5 deferred to Plan 05 — review_queue_service.enqueue_low_confidence requires parent notice + per-field confidences; v2.0 logs the routing decision with PII-redacted refs (sender_domain + body_sha256).
 - [Phase 15-gmail-mcp-integration]: Plan 03: B3 split — bill_reminder_task.fire_reminder is canonical APScheduler entry; bill_service.fire_bill_reminder is a thin wrapper for legacy schedule registrations. schedule_bill_reminders registers 3 jobs (bill_t3/bill_t1/bill_overdue) matching VALID_ALERT_TYPES exactly.
+- [Phase 15-gmail-mcp-integration]: Plan 04: fastmcp/FastAPI dep conflict (open from Plan 03) resolved by upgrading FastAPI 0.104.1 -> 0.120.4 + starlette 0.49.3 + anyio 4.13.0; pip check exits 0; v1.0 + Phase 9 + Phase 15 service tests 503 pass / 0 fail at the new pins
+- [Phase 15-gmail-mcp-integration]: Plan 04: in-memory FastMCP transport (D-38) verified — grep -r subprocess across MCP module + main.py returns 0; Client(mcp) is the only call path; native Python exceptions propagate (RuntimeError on bad transport, ToolError on Gmail API errors)
+- [Phase 15-gmail-mcp-integration]: Plan 04: FastAPI lifespan handler is the project's first; warmups APScheduler + registers MCP module at boot. get_scheduler() wrapped in try/except so a missing apscheduler_jobs table cannot block startup. Migration 0026 pre-creates the table with CRUD grants to app_runtime so Phase 11 boot path is finally healthy.
+- [Phase 15-gmail-mcp-integration]: Plan 04: gmail_list_attachments uses format='full' not format='metadata' — Gmail metadata format omits payload.parts[].body.attachmentId so attachments would always come back []. Quota cost equals gmail_read_message; correctness > quota optimization.
 
 ### Pending Todos
 
@@ -96,10 +100,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-07T18:00:33.445Z
+Last session: 2026-05-07T18:24:01.872Z
 Previous session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
 
-Stopped at: Completed 15-03-PLAN.md (services); ready for Plan 15-04 (MCP tools — fastmcp 3.2.4 / FastAPI 0.104.1 starlette conflict needs resolution before MCP server can boot)
+Stopped at: Completed 15-04-PLAN.md (MCP tools + lifespan + dep reconciliation); ready for Plan 15-05 (routers)
 
 v2.1 deferral commit: 10-RESEARCH-FINAL.md locks InLegalBERT as the v2.1 primary base model recommendation, training-data strategy (SEBI scrape + LLM-template synthetic + hand-labeled real held-out test set), and authority severity weights (CA/CFO sign-off pending — placeholders ship for v2.0).
 
