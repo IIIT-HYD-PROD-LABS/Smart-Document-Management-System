@@ -42,6 +42,12 @@ VALID_ALERT_TYPES = (
     "status_change",
     "received",
     "escalation",
+    # Phase 15 BILL-04 — bill reminder tiers (D-22). T-3 / T-1 / overdue
+    # piggyback on Phase 11 alert pipeline; cool-down + max-3 semantics
+    # land in Plan 03's bill_service.
+    "bill_t3",
+    "bill_t1",
+    "bill_overdue",
 )
 
 VALID_CHANNELS = ("email", "sms", "websocket")

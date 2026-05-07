@@ -30,6 +30,8 @@ class CompliancePermission(str, Enum):
     REPORT_EXPORT = "report:export"
     AUDIT_VIEW = "audit:view"
     ESCALATION_TRIGGER = "escalation:trigger"
+    # Phase 15 — gates Gmail OAuth + MCP tool invocation (D-05).
+    EMAIL_INTEGRATION_USE = "email_integration:use"
 
 
 class ComplianceRole(str, Enum):
@@ -57,6 +59,7 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.REPORT_VIEW,
         CompliancePermission.REPORT_EXPORT,
         CompliancePermission.ESCALATION_TRIGGER,
+        CompliancePermission.EMAIL_INTEGRATION_USE,
     }),
     ComplianceRole.LEGAL_TEAM: frozenset({
         CompliancePermission.NOTICE_VIEW,
@@ -91,6 +94,7 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.CLIENT_MANAGE_TEAM,
         CompliancePermission.REPORT_VIEW,
         CompliancePermission.REPORT_EXPORT,
+        CompliancePermission.EMAIL_INTEGRATION_USE,
     }),
     ComplianceRole.STAFF: frozenset({
         CompliancePermission.NOTICE_VIEW,
@@ -98,6 +102,7 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.NOTICE_DRAFT_RESPONSE,
         CompliancePermission.NOTICE_ATTACH_EVIDENCE,
         CompliancePermission.ESCALATION_TRIGGER,
+        CompliancePermission.EMAIL_INTEGRATION_USE,
     }),
     ComplianceRole.CFO: frozenset({
         CompliancePermission.NOTICE_VIEW,
@@ -105,6 +110,7 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.REPORT_VIEW,
         CompliancePermission.REPORT_EXPORT,
         CompliancePermission.ESCALATION_TRIGGER,
+        CompliancePermission.EMAIL_INTEGRATION_USE,
     }),
 }
 
