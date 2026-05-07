@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
-status: "Phase 10-13 v2.0 CODE-COMPLETE + smokes PASSED. SECOND hardening pass shipped: 5 CRITICAL + 9 HIGH fixes from 5-agent end-to-end audit covering Phase 1-13. Closed cross-user document leak (CRIT-1), APScheduler RLS regression (CRIT-2), audit dead-letter durability (CRIT-3), regulatory audit failure visibility (CRIT-4), LLM extraction status mislabeling (CRIT-5), plus 9 Tier B fixes. 163 backend tests GREEN. See HARDENING-PLAN-2.md."
-stopped_at: "Phase 15 context refined — 40 decisions locked (28 seed + 12 new). Ready for /gsd:plan-phase 15."
-last_updated: "2026-05-07T16:00:26.979Z"
+status: Ready to execute
+stopped_at: Completed 15-01-PLAN.md (Wave 0 test infrastructure); ready for Plan 15-02 (DB foundations + 5+ migrations)
+last_updated: "2026-05-07T17:23:20.365Z"
 progress:
   total_phases: 7
   completed_phases: 3
-  total_plans: 11
-  completed_plans: 12
+  total_plans: 18
+  completed_plans: 13
 ---
 
 # Project State
@@ -19,19 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Automated classification and intelligent management of documents and compliance notices
-**Current focus:** v2.0.1 patch shipped (2026-05-06); next milestone-bearing work is Phase 15 (Gmail MCP) — Phase 14 (Portals) blocked on external decisions.
+**Current focus:** Phase 15 — gmail-mcp-integration
 
 ## Current Position
 
-Phases 09, 10, 11, 12, 13 v2.0 CODE-COMPLETE (2026-05-05). Smokes PASSED for 10/12/13; Phase 11 awaits user browser smoke. v2.0.1 patch (2026-05-06) closed 7 user-facing bugs + Supabase Security Advisor migration `0024` (5 CRIT + 6 HIGH).
-Phase 14 (portal integration): CONTEXT seeded; BLOCKED on external (GSP empanelment, IT e-filing API access). Slice **14a** (RBI/SEBI scrapers + generic IMAP + credential vault + fetch-log infra) is buildable today without external creds — see Phase 14 brainstorm 2026-05-07.
-Phase 15 (Gmail MCP): CONTEXT seeded 2026-04-28 — ready for /gsd:discuss-phase 15.
-
-Next:
-
-  1. Manual user smoke of Phase 11 (browser): /calendar shows 37 FY 2025-26 deadlines; NotificationBell connects WebSocket; ConfidenceBadge + risk panel render on a notice transitioned Received → Under Review.
-  2. /gsd:discuss-phase 15 → /gsd:research-phase 15 → /gsd:plan-phase 15 (Gmail MCP read-only ingestion + Bills entity).
-  3. Optional parallel track: /gsd:discuss-phase 14 framed as Slice 14a only (RBI/SEBI scrapers + IMAP + portal credential vault), defer 14b (GST/IT/MCA portals) until empanelment + API access decisions land.
+Phase: 15 (gmail-mcp-integration) — EXECUTING
+Plan: 2 of 7
 
 ## Shipped Milestones
 
@@ -76,6 +69,9 @@ See .planning/milestones/v1.0-ROADMAP.md for v1.0 decisions.
 - [Phase 09-compliance-foundation]: Plan 06: getValues() not watch() for RHF — placeholders for dynamic field arrays (StepRegistrations) computed inside JSX render via getValues() per RESEARCH Pattern 6 (React 19 + RHF v7 watch() compatibility caveat).
 - [Phase 09-compliance-foundation]: Plan 06: Membership validation on switcher mount — when /memberships/me returns, ClientSwitcher cross-checks the persisted activeClientId; if missing (auditor expired, revoked) the store clears it so the next request doesn't 403. Cross-client mode sends 'X-Client-Id: *' (not omitted); backend Plan 04 enforces eligibility.
 - [Phase 09-compliance-foundation]: Plan 06: Auditor 3-tier expiry visualization (D-27): default neutral / amber 'Expires in N days' if <7 days remain / red 'Expired' + opacity-50 if past access_end. Pure derived state from access_end + now().
+- [Phase 15]: [Phase 15] Plan 01: Wave 0 RED-state test infrastructure — 17 backend pytest stubs + 4 frontend vitest stubs + 8-fixture conftest gating Plans 02-07; in-memory FastMCP Client(mcp) pattern (D-38) documented in test_mcp_tools.py
+- [Phase 15]: [Phase 15] Plan 01: Fernet test key derived via SHA-256(stable phrase) producing valid 32-byte raw key — plan's literal urlsafe_b64encode would have raised ValueError 'Fernet key must be 32 url-safe base64-encoded bytes'; Rule 1 deviation in conftest.py
+- [Phase 15]: [Phase 15] Plan 01: Reconciliation contracts locked in stubs — rbi.org.in sender domain (test_compliance_router.py recon #4), priority column on GmailFilterRule (test_filter_rules.py open Q #5), in-memory FastMCP Client (test_mcp_tools.py recon #1), body never persisted (test_pii_lifecycle.py D-34)
 
 ### Pending Todos
 
@@ -91,10 +87,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-07T16:00:26.971Z
+Last session: 2026-05-07T17:23:20.362Z
 Previous session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
 
-Stopped at: Phase 15 context refined — 40 decisions locked (28 seed + 12 new). Ready for /gsd:plan-phase 15.
+Stopped at: Completed 15-01-PLAN.md (Wave 0 test infrastructure); ready for Plan 15-02 (DB foundations + 5+ migrations)
 
 v2.1 deferral commit: 10-RESEARCH-FINAL.md locks InLegalBERT as the v2.1 primary base model recommendation, training-data strategy (SEBI scrape + LLM-template synthetic + hand-labeled real held-out test set), and authority severity weights (CA/CFO sign-off pending — placeholders ship for v2.0).
 
