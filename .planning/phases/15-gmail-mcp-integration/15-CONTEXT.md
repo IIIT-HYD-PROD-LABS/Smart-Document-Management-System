@@ -42,8 +42,9 @@
 - **D-04:** All MCP tool invocations write a row to `audit_log` with actor=user, action=`MCP_TOOL_CALL`, target=tool name, before/after capturing args (PII-redacted via Phase 9 INFRA-06 pattern). Phase 9 immutability triggers apply automatically.
 - **D-05:** MCP server is gated by the same `require_compliance_permission` dependency factory introduced in Plan 09-04 — only users with the `email_integration:use` permission can connect or invoke tools.
 - **D-29 [2026-05-07]:** **MCP library = FastMCP**. Decorator-based tool registration over the official `mcp` Python SDK; spec-compliant; ~5x less boilerplate per tool than raw SDK; mirrors FastAPI ergonomics. Builds on `mcp` so spec drift is impossible. (Alternatives weighed: raw `mcp` SDK — too verbose for 6 tools; custom stdio loop — no reason to re-implement protocol parsing.)
-- **D-30 [2026-05-07]:** **Transport in v2.0 = stdio only**. All in-scope MCP consumers are internal Phase 12 agents running inside the backend container. No HTTP/SSE listener bound. Side effect: D-27's localhost-only constraint becomes structural — there is no listener to attack. HTTP/SSE deferred to v2.1 if external/in-cluster agents materialize.
-- **D-31 [2026-05-07]:** **MCP server lifecycle = backend entrypoint spawns child via `subprocess.Popen`**. FastAPI app's startup hook launches the MCP sidecar; dies when backend dies (no orphan); shares env (DATABASE_URL, encryption keys, ALEMBIC head) without re-loading. Health-checked via the parent backend's `/health` endpoint (proxies "MCP child alive" status).
+- **D-30 [2026-05-07]** **[SUPERSEDED 2026-05-07 by D-38 — see researcher reconciliation #1]:** Original decision: "Transport in v2.0 = stdio only". Superseded — see D-38. Stdio remains on shelf as v2.1 fallback if Phase 12 agents move out-of-process.
+- **D-31 [2026-05-07]** **[SUPERSEDED 2026-05-07 by D-38 — see researcher reconciliation #1]:** Original decision: "MCP server lifecycle = backend entrypoint spawns child via subprocess.Popen". Superseded — see D-38. subprocess.Popen lifecycle remains on shelf as v2.1 fallback if external agent host materializes.
+- **D-38 [2026-05-07]:** **MCP transport = in-memory `Client(server_instance)` from FastMCP.** Phase 12 agents share the FastAPI process — in-memory eliminates IPC + subprocess overhead, gives native exception propagation, simpler lifecycle. Supersedes D-30 (stdio) and D-31 (subprocess). Stdio + subprocess remain on shelf as v2.1 patterns if Phase 12 agents move out-of-process.
 
 ### OAuth & Token Storage
 
@@ -68,7 +69,7 @@
   - **Binary confidence:** matched → auto-create ComplianceNotice with `status=Received`, `source=gmail`. Unmatched → routed to Phase 10 Review queue (CLASS-04 path).
   - **Risk scoring:** Phase 10's rule-based scorer fires unchanged on auto-created notices.
   - **v2.1 swap path:** swap one file (`gmail_classifier.py`) — schema, audit, status workflow all unchanged. The `route_to=compliance_notice` rule schema stays; only the detector function changes.
-- **D-17:** Notice metadata extraction reuses Phase 10 spaCy NER — same code path, different input source. Applies to body + first attachment (OCR if image/PDF) after rule-detector fires.
+- **D-17 [REVISED 2026-05-07 — Phase 10 v2.0 deferred custom NER training; ner.py:49 raises NotImplementedError. v2.0 uses regex_patterns.py (GSTIN/PAN/CIN/section refs) + extract_with_llm() for narrative fields. v2.1 swap-in mirrors D-16's BERT pattern.]:** Notice metadata extraction reuses Phase 10 spaCy NER — same code path, different input source. Applies to body + first attachment (OCR if image/PDF) after rule-detector fires.
 - **D-18:** A "View original email" deep-link on the notice detail page opens a backend endpoint that fetches the email via MCP `gmail_read_message` (no caching of email body in DB — PII minimization).
 - **D-32 [NEW 2026-05-07]:** **Auto-created notice status = Received + 'Auto-imported from Gmail' badge**. Standard Phase 9 Received status — indistinguishable from manual upload at the API/audit/transition level. UI adds a small visual badge near the notice number on detail pages so compliance heads can distinguish auto from manual at a glance. No new statuses introduced (avoids Phase 9 enum migration).
 - **D-33 [NEW 2026-05-07]:** **Forwarded-notice handling = route to `dms_only`**. When email matches a notice rule by content but sender-regex fails (e.g., advocate forwarding a notice from a personal Gmail), ingest as Document with `source=gmail`. No auto-ComplianceNotice creation — avoids false-positive compliance records. Compliance head manually links via Plan 09-07 link-notice UI. v2.1 BERT will handle forwarded notices via content classification, not sender pattern.
@@ -244,4 +245,5 @@ The following are at Claude's discretion within the constraints above:
 
 *Phase: 15-gmail-mcp-integration*
 *Context seeded 2026-04-28; refined 2026-05-07 via discuss-phase 15 (4 gray areas, 12 new decisions: D-29..D-37 + revised D-16, D-19, D-22, D-25, D-28)*
+*Revised 2026-05-07 (revision iteration 1): D-30 + D-31 superseded by D-38 (in-memory transport per researcher reconciliation #1); D-17 revised note added (Phase 10 v2.0 deferred custom NER training).*
 *Next: `/gsd:plan-phase 15` (or `/gsd:research-phase 15` first if FastMCP / Gmail API spec details warrant a research pass)*
