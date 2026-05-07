@@ -155,7 +155,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 | 12. Response Drafting + Evidence Management | v2.0 | 1/1 v2.0 + 0/N v2.1 | v2.0 CODE-COMPLETE + smoke PASSED; v2.1 deferred (templates + LLM drafts + PDF merge + ITC recon + regulation library) | 2026-05-05 |
 | 13. Elasticsearch + Cross-Entity Search | v2.0 | 1/1 v2.0 + 0/N v2.1 | v2.0 CODE-COMPLETE + smoke PASSED via PG-FTS; v2.1 deferred (Elastic Cloud + outbox + reconciliation) | 2026-05-05 |
 | 14. Government Portal Integration | v2.0 | 0/TBD | CONTEXT seeded 2026-05-05 — **BLOCKED on GSP empanelment + IT API decisions** | - |
-| 15. Gmail MCP Integration | v2.0 | 7/7 | Complete   | 2026-05-07 |
+| 15. Gmail MCP Integration | v2.0 | 7/7 | Complete    | 2026-05-07 |
 | 12. Response Drafting + Evidence Management | v2.0 | 0/TBD | Not started | - |
 | 13. Elasticsearch + Cross-Entity Search + Reporting | v2.0 | 0/TBD | Not started | - |
 | 14. Government Portal Integration | v2.0 | 0/TBD | Not started | - |
