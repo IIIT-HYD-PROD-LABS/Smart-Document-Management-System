@@ -305,7 +305,6 @@ def main() -> int:
                 gmail_message_id="msg-dedup-001",
                 gmail_thread_id="thread-001",
                 sender_domain="example.com",
-                subject_sha256=hashlib.sha256(b"subject1").hexdigest(),
                 body_sha256=hashlib.sha256(b"body1").hexdigest(),
                 route_taken="dms_only",
             )
@@ -319,7 +318,6 @@ def main() -> int:
                 gmail_message_id="msg-dedup-001",  # SAME id → must reject
                 gmail_thread_id="thread-001",
                 sender_domain="example.com",
-                subject_sha256=hashlib.sha256(b"subject1b").hexdigest(),
                 body_sha256=hashlib.sha256(b"body1b").hexdigest(),
                 route_taken="dms_only",
             )
@@ -350,7 +348,6 @@ def main() -> int:
                 gmail_message_id="msg-rbi-001",
                 gmail_thread_id="thread-rbi-001",
                 sender_domain="rbi.org.in",
-                subject_sha256=hashlib.sha256(b"penalty-subject").hexdigest(),
                 body_sha256=hashlib.sha256(b"penalty-body").hexdigest(),
                 route_taken="compliance_notice",
             )
@@ -372,8 +369,8 @@ def main() -> int:
                         "GSTIN: 27AABCT1234F1ZX. "
                         "You are hereby served a penalty notice."
                     ),
-                    is_compliance=True,
-                    confidence=1.0,
+                    primary_attachment_doc_id=None,
+                    system_user_id=user_id,
                 )
             db.commit()
             notice = (
@@ -409,9 +406,8 @@ def main() -> int:
                 gmail_message_id="msg-lc-001",
                 gmail_thread_id="thread-lc-001",
                 sender_domain="cbic-gst.gov.in",
-                subject_sha256=hashlib.sha256(b"newsletter").hexdigest(),
                 body_sha256=hashlib.sha256(b"newsletter-body").hexdigest(),
-                route_taken="review_queue",
+                route_taken="dms_only",
             )
             db.add(ml_lc)
             db.commit()
@@ -430,8 +426,8 @@ def main() -> int:
                 sender="news@cbic-gst.gov.in",
                 subject="Quarterly Newsletter",
                 body="GST rate updates this quarter.",
-                is_compliance=False,
-                confidence=0.5,
+                primary_attachment_doc_id=None,
+                system_user_id=user_id,
             )
             db.commit()
             notice_count_after = (
@@ -457,7 +453,6 @@ def main() -> int:
                 gmail_message_id="msg-bill-001",
                 gmail_thread_id="thread-bill-001",
                 sender_domain="tatapower.com",
-                subject_sha256=hashlib.sha256(b"bill-subject").hexdigest(),
                 body_sha256=hashlib.sha256(b"bill-body").hexdigest(),
                 route_taken="bill",
             )
@@ -520,7 +515,6 @@ def main() -> int:
                 gmail_message_id="msg-bill-rec-001",
                 gmail_thread_id="thread-bill-rec-001",
                 sender_domain="tatapower.com",
-                subject_sha256=hashlib.sha256(b"rec-1").hexdigest(),
                 body_sha256=hashlib.sha256(b"rec-1-body").hexdigest(),
                 route_taken="bill",
             )
@@ -529,7 +523,6 @@ def main() -> int:
                 gmail_message_id="msg-bill-rec-002",
                 gmail_thread_id="thread-bill-rec-002",
                 sender_domain="tatapower.com",
-                subject_sha256=hashlib.sha256(b"rec-2").hexdigest(),
                 body_sha256=hashlib.sha256(b"rec-2-body").hexdigest(),
                 route_taken="bill",
             )
@@ -654,14 +647,27 @@ def main() -> int:
             details_blob = str(details).lower()
 
             # PII redaction (D-36): no body / sender / subject / raw / from / to keys.
-            forbidden = ("body", "sender", "subject", "raw", " from ", " to ")
-            for term in forbidden:
-                assert term.strip() not in details_blob or term.strip() in (
-                    "body_sha256",
-                ), (
+            # Body-key check: must allow body_sha256, forbid bare 'body'.
+            for term in ("sender", "subject", "raw"):
+                assert term not in details_blob, (
                     f"forbidden PII key {term!r} appears in audit details: "
                     f"{details_blob[:300]}"
                 )
+            # 'body' alone is forbidden; 'body_sha256' is an allowed anchor.
+            stripped_blob = details_blob.replace("body_sha256", "")
+            assert "body" not in stripped_blob, (
+                f"forbidden PII key 'body' appears in audit details: "
+                f"{details_blob[:300]}"
+            )
+            # 'from' / 'to' as standalone email-header words (not substrings of
+            # 'tool', 'from-domain', etc). Word-boundary regex match.
+            import re as _re
+            for term in ("from", "to"):
+                if _re.search(rf"\b{term}\b", details_blob):
+                    raise AssertionError(
+                        f"forbidden PII key {term!r} appears as standalone "
+                        f"word in audit details: {details_blob[:300]}"
+                    )
             # body_sha256 OR query_sha256 should appear (D-35 anchor).
             anchor_present = (
                 "sha256" in details_blob
