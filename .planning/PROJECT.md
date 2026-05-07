@@ -230,4 +230,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-28 — Phase 15 (Gmail MCP Integration & Email Document Ingestion) added per client request; PROJECT.md Active section, Bill Management subsection, and Key Decisions updated*
+*Last updated: 2026-05-08 — Phase 15 (Gmail MCP Integration & Email Document Ingestion) shipped: 7/7 plans, 12/12 smoke PASS, all 16 requirements (EMAIL-01..10 + BILL-01..06) marked Complete. v2.0 milestone code-complete (9/15 phases shipped: 1-8 v1.0 + 9, 10, 11, 12, 13, 15 v2.0; phase 14 BLOCKED on external creds). Three migrations landed (0025 phase15 schema + 0026 apscheduler + 0027 recurrence partial unique). Phase 11 dispatch_alert wired to bill/credential/fetch alerts via dispatch_non_notice_alert helper.*
