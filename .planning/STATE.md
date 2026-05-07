@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
 status: Ready to execute
-stopped_at: Completed 15-02-PLAN.md (DB foundations); ready for Plan 15-03 (services — oauth, credential vault, classifier, bill extractor, scanner)
-last_updated: "2026-05-07T17:43:37.988Z"
+stopped_at: Completed 15-03-PLAN.md (services); ready for Plan 15-04 (MCP tools — fastmcp 3.2.4 / FastAPI 0.104.1 starlette conflict needs resolution before MCP server can boot)
+last_updated: "2026-05-07T18:00:33.448Z"
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 18
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 15 (gmail-mcp-integration) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 
 ## Shipped Milestones
 
@@ -76,6 +76,11 @@ See .planning/milestones/v1.0-ROADMAP.md for v1.0 decisions.
 - [Phase 15-gmail-mcp-integration]: Plan 02: RLS subquery pattern for credential-scoped tables (filter_rules, message_log, fetch_log) — credential_id IN (SELECT id FROM gmail_credentials WHERE client_id = ...) instead of denormalized client_id column
 - [Phase 15-gmail-mcp-integration]: Plan 02: Bill hybrid model encoded with two independent FKs (source_document_id NULLABLE for text-only bills, source_email_id always set for provenance) — analytics queries can filter on IS NULL for the no-attachment cohort
 - [Phase 15-gmail-mcp-integration]: Plan 02: 4 Plan 01 RED stubs flipped to GREEN at schema level (priority column, composite UNIQUE on message_log, three-state CHECK on fetch_log, partial unique index ux_bills_recurrence_key); 37 service/router-level stubs remain skipped for Plans 03-05
+- [Phase 15-gmail-mcp-integration]: Plan 03: AUTHORITY_BY_DOMAIN added to classifier_rules.py — sender → ComplianceNotice.authority CHECK constraint (GST/IT/MCA/RBI/SEBI). Default GST when only broad gov.in pattern matches (deviation Rule 1).
+- [Phase 15-gmail-mcp-integration]: Plan 03: ComplianceNotice creation omits source_email_id kwarg — column doesn't exist on compliance_notices (Plan 02 only added documents.source_email_id). Provenance via notice.document_id → documents.source_email_id chain; audit log captures gmail_message_log_id.
+- [Phase 15-gmail-mcp-integration]: Plan 03: Phase 11 dispatch_alert signature mismatch handled with try/except (TypeError + ImportError) in 3 callsites — bill/credential alerts have no parent ComplianceNotice. Plan 05 router will wire credential/bill-shaped alert pathway. Cool-down state still updates locally.
+- [Phase 15-gmail-mcp-integration]: Plan 03: Review-queue enqueue at score=0.5 deferred to Plan 05 — review_queue_service.enqueue_low_confidence requires parent notice + per-field confidences; v2.0 logs the routing decision with PII-redacted refs (sender_domain + body_sha256).
+- [Phase 15-gmail-mcp-integration]: Plan 03: B3 split — bill_reminder_task.fire_reminder is canonical APScheduler entry; bill_service.fire_bill_reminder is a thin wrapper for legacy schedule registrations. schedule_bill_reminders registers 3 jobs (bill_t3/bill_t1/bill_overdue) matching VALID_ALERT_TYPES exactly.
 
 ### Pending Todos
 
@@ -91,10 +96,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-07T17:43:37.985Z
+Last session: 2026-05-07T18:00:33.445Z
 Previous session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
 
-Stopped at: Completed 15-02-PLAN.md (DB foundations); ready for Plan 15-03 (services — oauth, credential vault, classifier, bill extractor, scanner)
+Stopped at: Completed 15-03-PLAN.md (services); ready for Plan 15-04 (MCP tools — fastmcp 3.2.4 / FastAPI 0.104.1 starlette conflict needs resolution before MCP server can boot)
 
 v2.1 deferral commit: 10-RESEARCH-FINAL.md locks InLegalBERT as the v2.1 primary base model recommendation, training-data strategy (SEBI scrape + LLM-template synthetic + hand-labeled real held-out test set), and authority severity weights (CA/CFO sign-off pending — placeholders ship for v2.0).
 
