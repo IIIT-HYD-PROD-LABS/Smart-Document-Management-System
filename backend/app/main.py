@@ -168,6 +168,26 @@ app.include_router(compliance_search.router, prefix="/api/compliance")
 app.include_router(compliance_notice_types.router, prefix="/api/compliance")
 app.include_router(compliance_regulatory_calendar.router, prefix="/api/compliance")
 
+# Phase 15 — Gmail MCP integration routers (Plan 15-05 Wave 4).
+# All seven mount under /api/email. Every endpoint composes
+# Depends(require_compliance_permission(EMAIL_INTEGRATION_USE)) so the
+# RBAC + RLS posture matches Phase 9 compliance routers above.
+from app.email.routers import (  # noqa: E402  (intentional grouping)
+    activity as gmail_activity_router,
+    bills as gmail_bills_router,
+    credentials as gmail_credentials_router,
+    filter_rules as gmail_filter_rules_router,
+    oauth as gmail_oauth_router,
+    view_email as gmail_view_email_router,
+)
+
+app.include_router(gmail_oauth_router.router, prefix="/api/email", tags=["gmail"])
+app.include_router(gmail_credentials_router.router, prefix="/api/email", tags=["gmail"])
+app.include_router(gmail_filter_rules_router.router, prefix="/api/email", tags=["gmail"])
+app.include_router(gmail_activity_router.router, prefix="/api/email", tags=["gmail"])
+app.include_router(gmail_bills_router.router, prefix="/api/email", tags=["gmail"])
+app.include_router(gmail_view_email_router.router, prefix="/api/email", tags=["gmail"])
+
 
 _logger = structlog.stdlib.get_logger()
 
