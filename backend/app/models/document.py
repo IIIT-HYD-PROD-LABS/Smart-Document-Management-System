@@ -3,7 +3,7 @@
 import enum
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, Integer, String, Float, Text, DateTime, Enum,
+    BigInteger, Column, Integer, String, Float, Text, DateTime, Enum,
     ForeignKey, Index, JSON,
 )
 from sqlalchemy.dialects.postgresql import TSVECTOR
@@ -74,6 +74,17 @@ class Document(Base):
         index=True,
     )
 
+    # Phase 15: provenance link to Gmail message that delivered this
+    # attachment (D-14, D-25). Nullable — manual uploads and portal
+    # ingestion paths leave it NULL. Migration 0025 adds the column +
+    # ix_documents_source_email_id index.
+    source_email_id = Column(
+        BigInteger,
+        ForeignKey("gmail_message_log.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Full-text search vector (populated by trigger on INSERT/UPDATE; managed by migration 0003)
     # CRITICAL: No Index(...) here -- GIN index is created via op.execute() in migration to avoid
     # Alembic autogenerate false-diff bug (issue #1390)
@@ -106,6 +117,8 @@ class Document(Base):
     versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan", order_by="DocumentVersion.version_number.desc()")
     # Phase 9: back-reference for notice-linked documents (D-10).
     notice = relationship("ComplianceNotice", foreign_keys=[notice_id])
+    # Phase 15: back-reference for Gmail-ingested attachments (D-14).
+    source_email = relationship("GmailMessageLog", foreign_keys=[source_email_id])
 
     # Indexes for search performance
     __table_args__ = (
