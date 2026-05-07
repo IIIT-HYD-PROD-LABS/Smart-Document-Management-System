@@ -69,6 +69,19 @@ def upsert_bill(
     account_number_last4: Optional[str],
     extraction_prompt_rev: str,
 ) -> Bill:
+    parent = (
+        db.query(Bill)
+        .filter(
+            Bill.client_id == credential.client_id,
+            Bill.biller_name_normalized == biller_name_normalized,
+            Bill.account_number_last4 == account_number_last4,
+            Bill.parent_bill_id.is_(None),
+        )
+        .order_by(Bill.created_at.asc())
+        .first()
+        if account_number_last4
+        else None
+    )
     bill = Bill(
         client_id=credential.client_id,
         user_id=credential.user_id,
@@ -81,13 +94,12 @@ def upsert_bill(
         payment_status=Bill.STATUS_PENDING,
         source_email_id=source_email_log.id,
         extraction_prompt_rev=extraction_prompt_rev,
+        parent_bill_id=parent.id if parent is not None else None,
+        is_recurring=parent is not None,
     )
     db.add(bill)
     db.flush()
-    parent = detect_recurrence(db, bill)
     if parent is not None:
-        bill.parent_bill_id = parent.id
-        bill.is_recurring = True
         parent.is_recurring = True
     db.commit()
     db.refresh(bill)
