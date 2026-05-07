@@ -26,9 +26,9 @@ import { STATUS_CONFIG } from "@/components/compliance/StatusPill";
  */
 
 const TYPE_DOT_COLOR: Record<NoticeActivity["type"], string> = {
-    status_change: "#3b82f6",
-    note_added: "#71717a",
-    file_attached: "#3b82f6",
+    status_change: "var(--accent)",
+    note_added: "var(--text-muted)",
+    file_attached: "var(--accent)",
     assigned: "#8b5cf6",
 };
 
@@ -52,7 +52,7 @@ function actionLine(a: NoticeActivity): React.ReactNode {
         return (
             <>
                 moved status to{" "}
-                <span className="font-medium text-white">
+                <span className="font-medium text-[var(--text-primary)]">
                     {label ?? to ?? "—"}
                 </span>
             </>
@@ -67,7 +67,7 @@ function actionLine(a: NoticeActivity): React.ReactNode {
             return (
                 <>
                     auto-escalated{tier ? ` (${tier} risk)` : ""}{" "}
-                    <span className="text-[#ef4444]">to compliance head</span>
+                    <span className="text-[var(--danger)]">to compliance head</span>
                 </>
             );
         }
@@ -83,14 +83,14 @@ function actionLine(a: NoticeActivity): React.ReactNode {
         const fn = a.details?.["filename"] as string | undefined;
         return (
             <>
-                attached <span className="font-medium text-white">{fn ?? "file"}</span>
+                attached <span className="font-medium text-[var(--text-primary)]">{fn ?? "file"}</span>
             </>
         );
     }
     return (
         <>
             assigned to{" "}
-            <span className="font-medium text-white">
+            <span className="font-medium text-[var(--text-primary)]">
                 {(a.details?.["to"] as string) ?? "user"}
             </span>
         </>
@@ -136,9 +136,9 @@ export function ActivityTimeline({ noticeId }: Props) {
     return (
         <section
             aria-label="Activity timeline"
-            className="bg-[#111113] border border-[#27272a] rounded-md p-5"
+            className="surface-card p-5"
         >
-            <h3 className="text-[11px] uppercase tracking-wider text-[#a1a1aa] font-medium mb-3">
+            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-medium mb-3">
                 Activity
             </h3>
 
@@ -159,13 +159,13 @@ export function ActivityTimeline({ noticeId }: Props) {
                     onChange={(e) => setNote(e.target.value)}
                     placeholder="Add a note about this notice…"
                     rows={2}
-                    className="w-full bg-[#18181b] border border-[#27272a] rounded px-3 py-2 text-[13px] text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40 resize-none"
+                    className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-3 py-2 text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:border-[var(--border-emphasis)] focus:ring-1 focus:ring-[var(--accent-edge)] resize-none"
                 />
                 <div className="mt-2 flex justify-end">
                     <button
                         type="submit"
                         disabled={!note.trim() || addNote.isPending}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#3b82f6] text-white text-[12px] font-medium hover:bg-[#2563eb] disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[var(--accent)] text-white text-[12px] font-medium hover:bg-[var(--accent-strong)] disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]"
                     >
                         <FiSend className="w-3.5 h-3.5" />
                         {addNote.isPending ? "Saving…" : "Save note"}
@@ -178,22 +178,22 @@ export function ActivityTimeline({ noticeId }: Props) {
                     {[0, 1, 2].map((i) => (
                         <li
                             key={i}
-                            className="h-12 rounded bg-[#18181b] animate-pulse"
+                            className="h-12 rounded bg-[var(--bg-hover)] animate-pulse"
                         />
                     ))}
                 </ul>
             ) : items.length === 0 ? (
-                <div className="rounded bg-[#18181b]/40 border border-[#27272a] p-5 text-center">
-                    <h4 className="text-sm font-semibold text-white mb-1">
+                <div className="rounded bg-[var(--bg-muted)] border border-[var(--border-default)] p-5 text-center">
+                    <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
                         Activity will appear here
                     </h4>
-                    <p className="text-[13px] text-[#71717a]">
+                    <p className="text-[13px] text-[var(--text-muted)]">
                         Status changes, notes, and attachments will be logged
                         automatically as you work this notice.
                     </p>
                 </div>
             ) : (
-                <ol className="relative pl-6 border-l border-[#27272a] space-y-5">
+                <ol className="relative pl-6 border-l border-[var(--border-default)] space-y-5">
                     {items.map((a) => {
                         const dot = TYPE_DOT_COLOR[a.type];
                         const Icon = typeIcon(a.type);
@@ -212,20 +212,20 @@ export function ActivityTimeline({ noticeId }: Props) {
                                 />
                                 <div className="flex items-start gap-2">
                                     <Icon
-                                        className="w-3.5 h-3.5 text-[#71717a] mt-0.5 shrink-0"
+                                        className="w-3.5 h-3.5 text-[var(--text-muted)] mt-0.5 shrink-0"
                                         aria-hidden="true"
                                     />
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[13px] text-[#a1a1aa]">
+                                        <p className="text-[13px] text-[var(--text-secondary)]">
                                             {actionLine(a)}
                                         </p>
                                         {a.type === "note_added" && noteBody && (
-                                            <p className="mt-1 text-[13px] text-white whitespace-pre-wrap">
+                                            <p className="mt-1 text-[13px] text-[var(--text-primary)] whitespace-pre-wrap">
                                                 {noteBody}
                                             </p>
                                         )}
                                         <p
-                                            className="mt-0.5 text-[11px] text-[#52525b]"
+                                            className="mt-0.5 text-[11px] text-[var(--text-subtle)]"
                                             title={abs}
                                         >
                                             {rel}

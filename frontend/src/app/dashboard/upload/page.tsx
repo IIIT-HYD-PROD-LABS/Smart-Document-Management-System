@@ -116,61 +116,171 @@ export default function UploadPage() {
 
     const formatSize = (bytes: number) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${(bytes / 1024).toFixed(1)} KB`;
 
+    const dropzoneStyle: React.CSSProperties = isDragActive
+        ? {
+            borderColor: "var(--accent)",
+            background: "var(--accent-soft)",
+            borderStyle: "solid",
+        }
+        : {
+            borderColor: "var(--border-default)",
+            background: "color-mix(in srgb, var(--bg-elevated) 60%, transparent)",
+            borderStyle: "dashed",
+        };
+
     return (
         <div>
             <div className="mb-8">
-                <h1 className="text-lg font-semibold text-white">Upload</h1>
-                <p className="text-sm text-[#52525b] mt-1">Drop files to classify them with AI</p>
+                <h1 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>Upload</h1>
+                <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Drop files to classify them with AI</p>
             </div>
 
             <div
                 {...getRootProps()}
-                className={`bg-[#111113] border-2 border-dashed rounded-lg p-16 text-center cursor-pointer transition-colors ${isDragActive ? "border-[#10b981] bg-[#10b981]/[0.03]" : "border-[#27272a] hover:border-[#3f3f46]"}`}
+                className="rounded-xl p-16 text-center cursor-pointer transition-all duration-200 border-2 hover:shadow-sm group"
+                style={dropzoneStyle}
+                onMouseEnter={(e) => {
+                    if (!isDragActive) {
+                        e.currentTarget.style.borderColor = "var(--accent)";
+                        e.currentTarget.style.background = "var(--accent-soft)";
+                    }
+                }}
+                onMouseLeave={(e) => {
+                    if (!isDragActive) {
+                        e.currentTarget.style.borderColor = "var(--border-default)";
+                        e.currentTarget.style.background = "color-mix(in srgb, var(--bg-elevated) 60%, transparent)";
+                    }
+                }}
             >
                 <input {...getInputProps()} />
-                <FiUploadCloud className={`w-8 h-8 mx-auto mb-3 ${isDragActive ? "text-[#10b981]" : "text-[#52525b]"}`} />
-                <p className="text-sm text-[#a1a1aa] mb-1">{isDragActive ? "Drop here..." : "Drop files here or click to browse"}</p>
-                <p className="text-xs text-[#52525b]">PDF, PNG, JPG, TIFF, DOCX up to 16 MB</p>
+                <div
+                    className="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center transition-colors"
+                    style={{
+                        background: isDragActive ? "var(--accent-soft)" : "var(--bg-muted)",
+                    }}
+                >
+                    <FiUploadCloud
+                        className="w-7 h-7 transition-colors"
+                        style={{ color: isDragActive ? "var(--accent)" : "var(--text-secondary)" }}
+                    />
+                </div>
+                <p className="text-base font-medium mb-1" style={{ color: "var(--text-primary)" }}>
+                    {isDragActive ? "Release to upload" : "Drop files here or click to browse"}
+                </p>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    PDF, PNG, JPG, TIFF, DOCX &middot; up to 16 MB each
+                </p>
             </div>
 
             {uploads.length > 0 && (
                 <div className="mt-6">
                     <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm text-[#a1a1aa]">{uploads.length} file{uploads.length !== 1 ? "s" : ""}</span>
+                        <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                            {uploads.length} file{uploads.length !== 1 ? "s" : ""}
+                        </span>
                         <div className="flex gap-2">
-                            <button onClick={clearAll} className="text-xs text-[#52525b] hover:text-[#a1a1aa] transition-colors cursor-pointer">Clear</button>
-                            <button onClick={handleUploadAll} disabled={uploading || uploads.every((u) => u.status !== "queued")} className="px-3 py-1 text-xs font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] disabled:opacity-40 transition-colors cursor-pointer">
+                            <button
+                                onClick={clearAll}
+                                className="text-xs transition-colors cursor-pointer"
+                                style={{ color: "var(--text-muted)" }}
+                                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                            >
+                                Clear
+                            </button>
+                            <button
+                                onClick={handleUploadAll}
+                                disabled={uploading || uploads.every((u) => u.status !== "queued")}
+                                className="px-3 py-1.5 text-xs font-medium rounded-md disabled:opacity-40 transition-colors cursor-pointer"
+                                style={{ background: "var(--accent)", color: "#ffffff" }}
+                                onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = "var(--accent-strong)"; }}
+                                onMouseLeave={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = "var(--accent)"; }}
+                            >
                                 {uploading ? "Uploading..." : "Upload all"}
                             </button>
                         </div>
                     </div>
-                    <div className="bg-[#111113] border border-[#27272a] rounded-lg divide-y divide-[#1f1f23]">
+                    <div
+                        className="rounded-lg overflow-hidden border"
+                        style={{
+                            background: "var(--bg-elevated)",
+                            borderColor: "var(--border-default)",
+                            boxShadow: "var(--shadow-sm)",
+                        }}
+                    >
                         <AnimatePresence>
-                            {uploads.map((item) => (
-                                <motion.div key={`${item.file.name}-${item.file.size}-${item.file.lastModified}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 py-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded bg-[#18181b] flex items-center justify-center">
-                                            {item.status === "completed" ? <FiCheckCircle className="w-4 h-4 text-[#10b981]" /> :
-                                             ["uploading","uploaded","processing"].includes(item.status) ? <FiLoader className="w-4 h-4 text-[#a1a1aa] animate-spin" /> :
-                                             ["error","failed"].includes(item.status) ? <FiX className="w-4 h-4 text-[#ef4444]" /> :
-                                             <FiFile className="w-4 h-4 text-[#52525b]" />}
+                            {uploads.map((item, idx) => {
+                                const isComplete = item.status === "completed";
+                                const isProgressing = ["uploading", "uploaded", "processing"].includes(item.status);
+                                const isErrored = ["error", "failed"].includes(item.status);
+                                return (
+                                    <motion.div
+                                        key={`${item.file.name}-${item.file.size}-${item.file.lastModified}`}
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="px-4 py-3"
+                                        style={{
+                                            borderTop: idx === 0 ? "none" : `1px solid var(--border-subtle)`,
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div
+                                                className="w-8 h-8 rounded flex items-center justify-center shrink-0"
+                                                style={{ background: "var(--bg-muted)" }}
+                                            >
+                                                {isComplete ? (
+                                                    <FiCheckCircle className="w-4 h-4" style={{ color: "var(--success)" }} />
+                                                ) : isProgressing ? (
+                                                    <FiLoader className="w-4 h-4 animate-spin" style={{ color: "var(--text-secondary)" }} />
+                                                ) : isErrored ? (
+                                                    <FiX className="w-4 h-4" style={{ color: "var(--danger)" }} />
+                                                ) : (
+                                                    <FiFile className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm truncate" style={{ color: "var(--text-primary)" }}>{item.file.name}</p>
+                                                <p className="text-xs" style={{ color: "var(--text-muted)" }}>{formatSize(item.file.size)}</p>
+                                            </div>
+                                            {item.status === "queued" && (
+                                                <button
+                                                    onClick={() => removeItem(item.file)}
+                                                    className="cursor-pointer transition-colors touch-target flex items-center justify-center"
+                                                    style={{ color: "var(--text-muted)" }}
+                                                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; }}
+                                                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                                                >
+                                                    <FiX className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm text-white truncate">{item.file.name}</p>
-                                            <p className="text-xs text-[#52525b]">{formatSize(item.file.size)}</p>
-                                        </div>
-                                        {item.status === "queued" && <button onClick={() => removeItem(item.file)} className="text-[#52525b] hover:text-[#a1a1aa] cursor-pointer"><FiX className="w-3.5 h-3.5" /></button>}
-                                    </div>
-                                    {item.status === "uploading" && <div className="w-full bg-[#27272a] rounded-full h-1 mt-2"><div className="bg-[#10b981] h-1 rounded-full transition-all" style={{ width: `${item.uploadProgress}%` }} /></div>}
-                                    {item.status === "completed" && item.result && (
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-xs text-[#10b981]">{item.result.category}</span>
-                                            <ConfidenceBadge score={item.result.confidence_score ?? 0} />
-                                        </div>
-                                    )}
-                                    {["error","failed"].includes(item.status) && item.error && <p className="text-xs text-[#ef4444] mt-1">{item.error}</p>}
-                                </motion.div>
-                            ))}
+                                        {item.status === "uploading" && (
+                                            <div
+                                                className="w-full rounded-full h-1 mt-2 overflow-hidden"
+                                                style={{ background: "var(--bg-muted)" }}
+                                            >
+                                                <div
+                                                    className="h-1 rounded-full transition-all"
+                                                    style={{
+                                                        width: `${item.uploadProgress}%`,
+                                                        background: "var(--success)",
+                                                    }}
+                                                />
+                                            </div>
+                                        )}
+                                        {isComplete && item.result && (
+                                            <div className="flex items-center gap-2 mt-1.5">
+                                                <span className="text-xs font-medium" style={{ color: "var(--success)" }}>{item.result.category}</span>
+                                                <ConfidenceBadge score={item.result.confidence_score ?? 0} />
+                                            </div>
+                                        )}
+                                        {isErrored && item.error && (
+                                            <p className="text-xs mt-1" style={{ color: "var(--danger)" }}>{item.error}</p>
+                                        )}
+                                    </motion.div>
+                                );
+                            })}
                         </AnimatePresence>
                     </div>
                 </div>

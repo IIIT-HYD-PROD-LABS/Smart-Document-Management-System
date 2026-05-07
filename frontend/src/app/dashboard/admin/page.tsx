@@ -55,12 +55,12 @@ interface EarlyAccessStats {
 
 function StatCard({ label, value, icon: Icon }: { label: string; value: number | string; icon: React.ComponentType<{ className?: string }> }) {
     return (
-        <div className="bg-[#111113] border border-[#27272a] rounded-lg p-5">
+        <div className="surface-card p-5">
             <div className="flex items-center gap-3 mb-2">
-                <Icon className="w-4 h-4 text-[#52525b]" />
-                <p className="text-[11px] text-[#52525b] uppercase tracking-wider">{label}</p>
+                <Icon className="w-4 h-4 text-[var(--text-muted)]" />
+                <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">{label}</p>
             </div>
-            <p className="text-2xl font-semibold text-white">{value}</p>
+            <p className="text-2xl font-semibold text-[var(--text-primary)]">{value}</p>
         </div>
     );
 }
@@ -162,37 +162,37 @@ function UsersTab({ user }: { user: { id: number; role: string } }) {
 
             <div className="flex items-center gap-3 mb-4">
                 <div className="relative flex-1 max-w-sm">
-                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#52525b]" />
+                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
                     <input
                         type="text" value={search} onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search users..." aria-label="Search users"
-                        className="w-full pl-9 pr-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors"
+                        className="w-full pl-9 pr-3 py-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md text-sm text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)] transition-colors"
                     />
                 </div>
             </div>
 
-            <div className="bg-[#111113] border border-[#27272a] rounded-lg overflow-x-auto">
+            <div className="surface-card overflow-x-auto">
                 <table className="w-full min-w-[700px]">
                     <thead>
-                        <tr className="border-b border-[#27272a]">
-                            <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">User</th>
-                            <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">Role</th>
-                            <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">Status</th>
-                            <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">Provider</th>
-                            <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">Docs</th>
-                            <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">Joined</th>
+                        <tr className="border-b border-[var(--border-default)] bg-[var(--bg-muted)]">
+                            <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">User</th>
+                            <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Role</th>
+                            <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Status</th>
+                            <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Provider</th>
+                            <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Docs</th>
+                            <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Joined</th>
                         </tr>
                     </thead>
                     <tbody>
                         {users.map((u) => (
-                            <tr key={u.id} className="border-b border-[#1e1e21] last:border-0 hover:bg-[#18181b]/50">
+                            <tr key={u.id} className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-[var(--bg-hover)]">
                                 <td className="px-4 py-3">
-                                    <div><p className="text-sm text-white">{u.username}</p><p className="text-xs text-[#52525b]">{u.email}</p></div>
+                                    <div><p className="text-sm text-[var(--text-primary)]">{u.username}</p><p className="text-xs text-[var(--text-muted)]">{u.email}</p></div>
                                 </td>
                                 <td className="px-4 py-3">
                                     <select
                                         value={u.role} onChange={(e) => handleRoleChange(u, e.target.value)} disabled={u.id === user.id}
-                                        className="bg-[#09090b] border border-[#27272a] rounded px-2 py-1 text-xs text-white focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                        className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                     >
                                         <option value="admin">Admin</option>
                                         <option value="editor">Editor</option>
@@ -201,20 +201,20 @@ function UsersTab({ user }: { user: { id: number; role: string } }) {
                                 </td>
                                 <td className="px-4 py-3">
                                     <button onClick={() => handleStatusToggle(u)} disabled={u.id === user.id}
-                                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${u.is_active ? "bg-[#10b981]/10 text-[#10b981]" : "bg-[#ef4444]/10 text-[#ef4444]"}`}
+                                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${u.is_active ? "bg-[var(--success-soft)] text-[var(--success)]" : "bg-[var(--danger-soft)] text-[var(--danger)]"}`}
                                     >
                                         {u.is_active ? "Active" : "Inactive"}
                                     </button>
                                 </td>
-                                <td className="px-4 py-3"><span className="text-xs text-[#71717a]">{u.auth_provider}</span></td>
-                                <td className="px-4 py-3"><span className="text-sm text-white">{u.document_count}</span></td>
+                                <td className="px-4 py-3"><span className="text-xs text-[var(--text-muted)]">{u.auth_provider}</span></td>
+                                <td className="px-4 py-3"><span className="text-sm text-[var(--text-primary)]">{u.document_count}</span></td>
                                 <td className="px-4 py-3">
-                                    <span className="text-xs text-[#71717a]">{new Date(u.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
+                                    <span className="text-xs text-[var(--text-muted)]">{new Date(u.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
                                 </td>
                             </tr>
                         ))}
                         {users.length === 0 && (
-                            <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-[#52525b]">No users found</td></tr>
+                            <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">No users found</td></tr>
                         )}
                     </tbody>
                 </table>
@@ -222,15 +222,15 @@ function UsersTab({ user }: { user: { id: number; role: string } }) {
 
             {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4">
-                    <p className="text-xs text-[#52525b]">Showing {(page - 1) * perPage + 1}&ndash;{Math.min(page * perPage, total)} of {total}</p>
+                    <p className="text-xs text-[var(--text-muted)]">Showing {(page - 1) * perPage + 1}&ndash;{Math.min(page * perPage, total)} of {total}</p>
                     <div className="flex items-center gap-2">
                         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                            className="p-1.5 rounded border border-[#27272a] text-[#71717a] hover:text-white hover:border-[#3f3f46] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors">
+                            className="p-1.5 rounded border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-emphasis)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors">
                             <FiChevronLeft className="w-4 h-4" />
                         </button>
-                        <span className="text-xs text-[#71717a]">{page} / {totalPages}</span>
+                        <span className="text-xs text-[var(--text-secondary)]">{page} / {totalPages}</span>
                         <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                            className="p-1.5 rounded border border-[#27272a] text-[#71717a] hover:text-white hover:border-[#3f3f46] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors">
+                            className="p-1.5 rounded border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-emphasis)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors">
                             <FiChevronRight className="w-4 h-4" />
                         </button>
                     </div>
@@ -319,10 +319,10 @@ function EarlyAccessTab() {
 
     const totalPages = Math.ceil(total / perPage);
     const statusFilters = [
-        { value: "pending", label: "Pending", color: "text-[#f59e0b]" },
-        { value: "approved", label: "Approved", color: "text-[#10b981]" },
-        { value: "rejected", label: "Rejected", color: "text-[#ef4444]" },
-        { value: "", label: "All", color: "text-[#a1a1aa]" },
+        { value: "pending", label: "Pending" },
+        { value: "approved", label: "Approved" },
+        { value: "rejected", label: "Rejected" },
+        { value: "", label: "All" },
     ];
 
     return (
@@ -339,15 +339,15 @@ function EarlyAccessTab() {
 
             {/* Filters */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
-                <div className="flex items-center gap-1 bg-[#111113] border border-[#27272a] rounded-md p-0.5">
+                <div className="flex items-center gap-1 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md p-0.5">
                     {statusFilters.map((sf) => (
                         <button
                             key={sf.value}
                             onClick={() => { setStatusFilter(sf.value); setPage(1); }}
                             className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer ${
                                 statusFilter === sf.value
-                                    ? "bg-[#27272a] text-white"
-                                    : "text-[#71717a] hover:text-white"
+                                    ? "bg-[var(--bg-muted)] text-[var(--text-primary)]"
+                                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
                             }`}
                         >
                             {sf.label}
@@ -360,56 +360,56 @@ function EarlyAccessTab() {
                     ))}
                 </div>
                 <div className="relative flex-1 max-w-sm">
-                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#52525b]" />
+                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
                     <input
                         type="text" value={search} onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search by name, email, company..." aria-label="Search early access requests"
-                        className="w-full pl-9 pr-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors"
+                        className="w-full pl-9 pr-3 py-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md text-sm text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)] transition-colors"
                     />
                 </div>
             </div>
 
             {/* Table */}
-            <div className="bg-[#111113] border border-[#27272a] rounded-lg overflow-x-auto">
+            <div className="surface-card overflow-x-auto">
                 <table className="w-full min-w-[800px]">
                     <thead>
-                        <tr className="border-b border-[#27272a]">
-                            <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">Applicant</th>
-                            <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">Company</th>
-                            <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">Reason</th>
-                            <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">Status</th>
-                            <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">Submitted</th>
-                            <th className="text-left px-4 py-3 text-[11px] text-[#52525b] uppercase tracking-wider font-medium">Actions</th>
+                        <tr className="border-b border-[var(--border-default)] bg-[var(--bg-muted)]">
+                            <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Applicant</th>
+                            <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Company</th>
+                            <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Reason</th>
+                            <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Status</th>
+                            <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Submitted</th>
+                            <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {items.map((item) => (
-                            <tr key={item.id} className="border-b border-[#1e1e21] last:border-0 hover:bg-[#18181b]/50">
+                            <tr key={item.id} className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-[var(--bg-hover)]">
                                 <td className="px-4 py-3">
                                     <div>
-                                        <p className="text-sm text-white">{item.full_name}</p>
-                                        <p className="text-xs text-[#52525b]">{item.email}</p>
+                                        <p className="text-sm text-[var(--text-primary)]">{item.full_name}</p>
+                                        <p className="text-xs text-[var(--text-muted)]">{item.email}</p>
                                     </div>
                                 </td>
                                 <td className="px-4 py-3">
-                                    <span className="text-xs text-[#71717a]">{item.company || "\u2014"}</span>
+                                    <span className="text-xs text-[var(--text-secondary)]">{item.company || "\u2014"}</span>
                                 </td>
                                 <td className="px-4 py-3 max-w-[200px]">
-                                    <p className="text-xs text-[#71717a] truncate" title={item.reason || ""}>
+                                    <p className="text-xs text-[var(--text-secondary)] truncate" title={item.reason || ""}>
                                         {item.reason || "\u2014"}
                                     </p>
                                 </td>
                                 <td className="px-4 py-3">
                                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                        item.status === "pending" ? "bg-[#f59e0b]/10 text-[#f59e0b]" :
-                                        item.status === "approved" ? "bg-[#10b981]/10 text-[#10b981]" :
-                                        "bg-[#ef4444]/10 text-[#ef4444]"
+                                        item.status === "pending" ? "bg-[var(--warning-soft)] text-[var(--warning)]" :
+                                        item.status === "approved" ? "bg-[var(--success-soft)] text-[var(--success)]" :
+                                        "bg-[var(--danger-soft)] text-[var(--danger)]"
                                     }`}>
                                         {item.status}
                                     </span>
                                 </td>
                                 <td className="px-4 py-3">
-                                    <span className="text-xs text-[#71717a]">
+                                    <span className="text-xs text-[var(--text-muted)]">
                                         {new Date(item.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                                     </span>
                                 </td>
@@ -423,25 +423,25 @@ function EarlyAccessTab() {
                                                         value={adminNote}
                                                         onChange={(e) => setAdminNote(e.target.value)}
                                                         placeholder="Note (optional)"
-                                                        className="px-2 py-1 bg-[#09090b] border border-[#27272a] rounded text-xs text-white placeholder:text-[#52525b] w-32 focus:outline-none focus:border-[#3f3f46]"
+                                                        className="px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded text-xs text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] w-32 focus:outline-none focus:border-[var(--accent)]"
                                                     />
                                                     <button
                                                         onClick={() => handleReview(item.id, "approved")}
-                                                        className="p-1.5 rounded bg-[#10b981]/10 text-[#10b981] hover:bg-[#10b981]/20 transition-colors cursor-pointer"
+                                                        className="p-1.5 rounded bg-[var(--success-soft)] text-[var(--success)] hover:opacity-80 transition-opacity cursor-pointer"
                                                         title="Approve"
                                                     >
                                                         <FiCheck className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button
                                                         onClick={() => handleReview(item.id, "rejected")}
-                                                        className="p-1.5 rounded bg-[#ef4444]/10 text-[#ef4444] hover:bg-[#ef4444]/20 transition-colors cursor-pointer"
+                                                        className="p-1.5 rounded bg-[var(--danger-soft)] text-[var(--danger)] hover:opacity-80 transition-opacity cursor-pointer"
                                                         title="Reject"
                                                     >
                                                         <FiX className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button
                                                         onClick={() => { setReviewingId(null); setAdminNote(""); }}
-                                                        className="text-xs text-[#52525b] hover:text-white transition-colors cursor-pointer"
+                                                        className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                                                     >
                                                         Cancel
                                                     </button>
@@ -449,14 +449,14 @@ function EarlyAccessTab() {
                                             ) : (
                                                 <button
                                                     onClick={() => setReviewingId(item.id)}
-                                                    className="px-2.5 py-1 rounded border border-[#27272a] text-xs text-[#a1a1aa] hover:text-white hover:border-[#3f3f46] transition-colors cursor-pointer"
+                                                    className="px-2.5 py-1 rounded border border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
                                                 >
                                                     Review
                                                 </button>
                                             )}
                                         </div>
                                     ) : (
-                                        <span className="text-xs text-[#3f3f46]">
+                                        <span className="text-xs text-[var(--text-disabled)]">
                                             {item.admin_note || "\u2014"}
                                         </span>
                                     )}
@@ -465,7 +465,7 @@ function EarlyAccessTab() {
                         ))}
                         {items.length === 0 && (
                             <tr>
-                                <td colSpan={6} className="px-4 py-8 text-center text-sm text-[#52525b]">
+                                <td colSpan={6} className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">
                                     No requests found
                                 </td>
                             </tr>
@@ -476,15 +476,15 @@ function EarlyAccessTab() {
 
             {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4">
-                    <p className="text-xs text-[#52525b]">Showing {(page - 1) * perPage + 1}&ndash;{Math.min(page * perPage, total)} of {total}</p>
+                    <p className="text-xs text-[var(--text-muted)]">Showing {(page - 1) * perPage + 1}&ndash;{Math.min(page * perPage, total)} of {total}</p>
                     <div className="flex items-center gap-2">
                         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                            className="p-1.5 rounded border border-[#27272a] text-[#71717a] hover:text-white hover:border-[#3f3f46] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors">
+                            className="p-1.5 rounded border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-emphasis)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors">
                             <FiChevronLeft className="w-4 h-4" />
                         </button>
-                        <span className="text-xs text-[#71717a]">{page} / {totalPages}</span>
+                        <span className="text-xs text-[var(--text-secondary)]">{page} / {totalPages}</span>
                         <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                            className="p-1.5 rounded border border-[#27272a] text-[#71717a] hover:text-white hover:border-[#3f3f46] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors">
+                            className="p-1.5 rounded border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-emphasis)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors">
                             <FiChevronRight className="w-4 h-4" />
                         </button>
                     </div>
@@ -518,18 +518,18 @@ export default function AdminPage() {
 
     return (
         <div>
-            <h1 className="text-lg font-semibold text-white mb-6">Admin Dashboard</h1>
+            <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-6">Admin Dashboard</h1>
 
             {/* Tab switcher */}
-            <div className="flex items-center gap-1 mb-6 bg-[#111113] border border-[#27272a] rounded-md p-0.5 w-fit">
+            <div className="flex items-center gap-1 mb-6 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md p-0.5 w-fit">
                 {tabs.map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded transition-colors cursor-pointer ${
                             activeTab === tab.id
-                                ? "bg-[#27272a] text-white"
-                                : "text-[#71717a] hover:text-white"
+                                ? "bg-[var(--bg-muted)] text-[var(--text-primary)]"
+                                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
                         }`}
                     >
                         <tab.icon className="w-4 h-4" />

@@ -61,26 +61,26 @@ export function NoticeChainTree({ noticeId }: Props) {
     return (
         <section
             aria-label="Linked notices"
-            className="bg-[#111113] border border-[#27272a] rounded-md p-5"
+            className="surface-card p-5"
         >
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[11px] uppercase tracking-wider text-[#a1a1aa] font-medium">
+                <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-medium">
                     Linked notices
                 </h3>
                 <FiLink2
-                    className="w-3.5 h-3.5 text-[#52525b]"
+                    className="w-3.5 h-3.5 text-[var(--text-subtle)]"
                     aria-hidden="true"
                 />
             </div>
 
             {chainQ.isLoading ? (
-                <div className="h-12 rounded bg-[#18181b] animate-pulse" />
+                <div className="h-12 rounded bg-[var(--bg-hover)] animate-pulse" />
             ) : items.length <= 1 ? (
-                <div className="rounded bg-[#18181b]/40 border border-[#27272a] p-4 text-center">
-                    <h4 className="text-sm font-semibold text-white mb-1">
+                <div className="rounded bg-[var(--bg-muted)] border border-[var(--border-default)] p-4 text-center">
+                    <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
                         No linked notices
                     </h4>
-                    <p className="text-[12px] text-[#71717a]">
+                    <p className="text-[12px] text-[var(--text-muted)]">
                         Link this notice to a parent (e.g., the original Show
                         Cause) using the link icon above.
                     </p>
@@ -98,24 +98,24 @@ export function NoticeChainTree({ noticeId }: Props) {
                             >
                                 <Link
                                     href={`/dashboard/compliance/notices/${node.id}`}
-                                    className={`flex items-center gap-2 px-2 py-1.5 rounded text-[13px] transition-colors hover:bg-[#18181b]/50 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 ${
+                                    className={`flex items-center gap-2 px-2 py-1.5 rounded text-[13px] transition-colors hover:bg-[var(--bg-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)] ${
                                         isCurrent
-                                            ? "border-l-[3px] border-[#3b82f6] bg-[#3b82f6]/5"
+                                            ? "border-l-[3px] border-[var(--accent)] bg-[var(--accent-soft)]"
                                             : "border-l-[3px] border-transparent"
                                     }`}
                                 >
                                     <span
                                         className={`font-mono ${
                                             isCurrent
-                                                ? "text-white"
-                                                : "text-[#a1a1aa]"
+                                                ? "text-[var(--text-primary)]"
+                                                : "text-[var(--text-secondary)]"
                                         }`}
                                     >
                                         {node.notice_number}
                                     </span>
                                     <AuthorityBadge authority={node.authority} />
                                     <StatusPill status={node.status} />
-                                    <span className="ml-auto text-[11px] text-[#52525b] tabular-nums">
+                                    <span className="ml-auto text-[11px] text-[var(--text-subtle)] tabular-nums">
                                         {fmtDate(node.received_date)}
                                     </span>
                                 </Link>

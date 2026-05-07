@@ -93,11 +93,14 @@ export function StepTeam() {
         setStep(4);
     };
 
+    const draftInputClass =
+        "w-full px-3 py-2 rounded-md bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm placeholder:text-[var(--text-disabled)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]";
+
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-lg font-semibold text-white mb-2">Team</h1>
-                <p className="text-[#71717a] text-sm">
+                <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Team</h1>
+                <p className="text-[var(--text-muted)] text-sm">
                     Assign users to compliance roles for this client. Auditor
                     roles can be time-bound. You can add team members later
                     from the Team page.
@@ -106,20 +109,20 @@ export function StepTeam() {
 
             {!currentUserOnTeam && currentUser && (
                 <div
-                    className="flex items-start gap-3 p-3 rounded-md bg-[#3b82f6]/10 border border-[#3b82f6]/30"
+                    className="flex items-start gap-3 p-3 rounded-md bg-[var(--accent-soft)] border border-[var(--accent-edge)]"
                     role="note"
                 >
                     <FiInfo
-                        className="w-4 h-4 text-[#3b82f6] mt-0.5 shrink-0"
+                        className="w-4 h-4 text-[var(--accent)] mt-0.5 shrink-0"
                         aria-hidden="true"
                     />
-                    <div className="text-[13px] text-[#a1a1aa]">
-                        <span className="text-white">{currentUser.email}</span>{" "}
+                    <div className="text-[13px] text-[var(--text-secondary)]">
+                        <span className="text-[var(--text-primary)]">{currentUser.email}</span>{" "}
                         will be added automatically as{" "}
                         <span
                             className="px-1.5 py-0.5 rounded text-[11px] font-medium"
                             style={{
-                                backgroundColor: `${COMPLIANCE_ROLE_COLORS.compliance_head}1a`,
+                                backgroundColor: `color-mix(in srgb, ${COMPLIANCE_ROLE_COLORS.compliance_head} 12%, transparent)`,
                                 color: COMPLIANCE_ROLE_COLORS.compliance_head,
                             }}
                         >
@@ -132,7 +135,7 @@ export function StepTeam() {
             )}
 
             {team.length === 0 && !draft && (
-                <p className="text-[#52525b] text-sm py-2">
+                <p className="text-[var(--text-muted)] text-sm py-2">
                     No additional team members yet.
                 </p>
             )}
@@ -141,12 +144,12 @@ export function StepTeam() {
                 {team.map((m, idx) => (
                     <div
                         key={`${m.user_id}-${idx}`}
-                        className="flex items-center gap-3 p-3 rounded-md bg-[#18181b] border border-[#27272a]"
+                        className="flex items-center gap-3 p-3 rounded-md bg-[var(--bg-elevated)] border border-[var(--border-default)]"
                     >
                         <span
                             className="px-2 py-1 rounded text-[11px] font-medium"
                             style={{
-                                backgroundColor: `${COMPLIANCE_ROLE_COLORS[m.compliance_role]}1a`,
+                                backgroundColor: `color-mix(in srgb, ${COMPLIANCE_ROLE_COLORS[m.compliance_role]} 12%, transparent)`,
                                 color: COMPLIANCE_ROLE_COLORS[
                                     m.compliance_role
                                 ],
@@ -154,11 +157,11 @@ export function StepTeam() {
                         >
                             {COMPLIANCE_ROLE_LABELS[m.compliance_role]}
                         </span>
-                        <span className="text-sm text-white">
+                        <span className="text-sm text-[var(--text-primary)]">
                             User #{m.user_id}
                         </span>
                         {m.access_end && (
-                            <span className="text-xs text-[#71717a] ml-auto">
+                            <span className="text-xs text-[var(--text-muted)] ml-auto">
                                 Until{" "}
                                 {new Date(m.access_end).toLocaleDateString(
                                     "en-IN",
@@ -173,7 +176,7 @@ export function StepTeam() {
                         <button
                             type="button"
                             onClick={() => removeMember(idx)}
-                            className={`p-2 text-[#71717a] hover:text-[#ef4444] transition-colors ${
+                            className={`p-2 text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors ${
                                 m.access_end ? "" : "ml-auto"
                             }`}
                             aria-label={`Remove user ${m.user_id}`}
@@ -188,7 +191,7 @@ export function StepTeam() {
                 <button
                     type="button"
                     onClick={beginAdd}
-                    className="text-[13px] text-[#3b82f6] hover:underline flex items-center gap-1 transition-colors"
+                    className="text-[13px] text-[var(--accent)] hover:underline flex items-center gap-1 transition-colors"
                 >
                     <FiPlus className="w-3.5 h-3.5" />
                     Add team member
@@ -196,10 +199,10 @@ export function StepTeam() {
             )}
 
             {draft && (
-                <div className="p-4 rounded-md bg-[#18181b] border border-[#27272a] space-y-3">
+                <div className="p-4 rounded-md bg-[var(--bg-muted)] border border-[var(--border-default)] space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1">
+                            <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
                                 User ID *
                             </label>
                             <input
@@ -214,15 +217,11 @@ export function StepTeam() {
                                             parseInt(e.target.value, 10) || 0,
                                     })
                                 }
-                                className="
-                                    w-full px-3 py-2 rounded-md tabular-nums
-                                    bg-[#111113] border border-[#27272a] text-white text-sm
-                                    focus:outline-none focus:border-[#3b82f6]/40
-                                "
+                                className={`${draftInputClass} tabular-nums`}
                             />
                         </div>
                         <div>
-                            <label className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1">
+                            <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
                                 Role *
                             </label>
                             <select
@@ -234,11 +233,7 @@ export function StepTeam() {
                                             .value as ComplianceRole,
                                     })
                                 }
-                                className="
-                                    w-full px-3 py-2 rounded-md
-                                    bg-[#111113] border border-[#27272a] text-white text-sm
-                                    focus:outline-none focus:border-[#3b82f6]/40
-                                "
+                                className={draftInputClass}
                             >
                                 {(
                                     Object.entries(COMPLIANCE_ROLE_LABELS) as [
@@ -256,7 +251,7 @@ export function StepTeam() {
                     {draft.compliance_role === "auditor" && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1">
+                                <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
                                     Access start
                                 </label>
                                 <input
@@ -265,11 +260,11 @@ export function StepTeam() {
                                     onChange={(e) =>
                                         setAccessStart(e.target.value)
                                     }
-                                    className="w-full px-3 py-2 rounded-md bg-[#111113] border border-[#27272a] text-white text-sm focus:outline-none focus:border-[#3b82f6]/40"
+                                    className={draftInputClass}
                                 />
                             </div>
                             <div>
-                                <label className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1">
+                                <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
                                     Access end
                                 </label>
                                 <input
@@ -278,26 +273,26 @@ export function StepTeam() {
                                     onChange={(e) =>
                                         setAccessEnd(e.target.value)
                                     }
-                                    className="w-full px-3 py-2 rounded-md bg-[#111113] border border-[#27272a] text-white text-sm focus:outline-none focus:border-[#3b82f6]/40"
+                                    className={draftInputClass}
                                 />
                             </div>
                         </div>
                     )}
                     {error && (
-                        <p className="text-xs text-[#ef4444]">{error}</p>
+                        <p className="text-xs text-[var(--danger)]">{error}</p>
                     )}
                     <div className="flex justify-end gap-2">
                         <button
                             type="button"
                             onClick={cancelAdd}
-                            className="text-[#a1a1aa] text-sm hover:text-white transition-colors"
+                            className="text-[var(--text-secondary)] text-sm hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] px-3 py-1.5 rounded transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             type="button"
                             onClick={addMember}
-                            className="px-3 py-1.5 rounded-md bg-[#3b82f6] text-white text-sm hover:bg-[#3b82f6]/90 transition-colors"
+                            className="px-3 py-1.5 rounded-md bg-[var(--accent)] text-white text-sm hover:bg-[var(--accent-strong)] transition-colors"
                         >
                             Add
                         </button>
@@ -309,14 +304,14 @@ export function StepTeam() {
                 <button
                     type="button"
                     onClick={() => setStep(2)}
-                    className="px-4 py-2 rounded-md text-[#a1a1aa] text-sm hover:text-white transition-colors"
+                    className="px-4 py-2 rounded-md text-[var(--text-secondary)] text-sm hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
                 >
                     Back
                 </button>
                 <button
                     type="button"
                     onClick={onContinue}
-                    className="px-4 py-2 rounded-md bg-[#3b82f6] text-white text-sm font-medium hover:bg-[#3b82f6]/90 transition-colors focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
+                    className="px-4 py-2 rounded-md bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-strong)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]"
                 >
                     Continue
                 </button>

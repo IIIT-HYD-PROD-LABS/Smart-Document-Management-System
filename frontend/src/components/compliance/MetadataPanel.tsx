@@ -38,11 +38,11 @@ function Row({
 }) {
     return (
         <div>
-            <dt className="text-[11px] uppercase tracking-wider text-[#71717a] mb-1">
+            <dt className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
                 {label}
             </dt>
             <dd
-                className={`text-[13px] text-white ${mono ? "tabular-nums" : ""}`}
+                className={`text-[13px] text-[var(--text-primary)] ${mono ? "tabular-nums" : ""}`}
             >
                 {value}
             </dd>
@@ -58,9 +58,9 @@ export function MetadataPanel({ notice }: Props) {
     return (
         <section
             aria-label="Notice metadata"
-            className="bg-[#111113] border border-[#27272a] rounded-md p-5"
+            className="surface-card p-5"
         >
-            <h3 className="text-[11px] uppercase tracking-wider text-[#a1a1aa] font-medium mb-4">
+            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-medium mb-4">
                 Metadata
             </h3>
 
@@ -90,15 +90,15 @@ export function MetadataPanel({ notice }: Props) {
             </dl>
 
             {notice.legal_sections && notice.legal_sections.length > 0 && (
-                <div className="mt-5 pt-4 border-t border-[#27272a]">
-                    <p className="text-[11px] uppercase tracking-wider text-[#71717a] mb-2">
+                <div className="mt-5 pt-4 border-t border-[var(--border-default)]">
+                    <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-2">
                         Legal sections
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                         {notice.legal_sections.map((sec) => (
                             <span
                                 key={sec}
-                                className="inline-flex items-center px-2 py-1 text-[11px] rounded bg-[#18181b] border border-[#27272a] text-[#a1a1aa] font-mono"
+                                className="inline-flex items-center px-2 py-1 text-[11px] rounded bg-[var(--bg-muted)] border border-[var(--border-default)] text-[var(--text-secondary)] font-mono"
                             >
                                 {sec}
                             </span>

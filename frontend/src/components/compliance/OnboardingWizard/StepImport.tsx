@@ -59,41 +59,40 @@ export function StepImport() {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-lg font-semibold text-white mb-2">
+                <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
                     Import (optional)
                 </h1>
-                <p className="text-[#71717a] text-sm">
+                <p className="text-[var(--text-muted)] text-sm">
                     CSV import for existing notices is coming in a future
                     release. For now, you can skip and finish onboarding —
                     you&apos;ll upload notices one by one.
                 </p>
             </div>
 
-            <div className="rounded-md border border-dashed border-[#27272a] p-12 text-center">
-                <FiUpload className="w-8 h-8 mx-auto text-[#52525b] mb-3" />
-                <p className="text-[#a1a1aa] text-sm mb-1">
+            <div className="rounded-md border border-dashed border-[var(--border-default)] bg-[var(--bg-muted)] p-12 text-center">
+                <FiUpload className="w-8 h-8 mx-auto text-[var(--text-muted)] mb-3" />
+                <p className="text-[var(--text-secondary)] text-sm mb-1">
                     CSV import will land in a future release
                 </p>
-                <p className="text-[#71717a] text-xs mb-4">
+                <p className="text-[var(--text-muted)] text-xs mb-4">
                     For now, upload notices individually after onboarding.
                 </p>
                 <button
                     type="button"
                     disabled
-                    className="px-3 py-1.5 rounded-md bg-[#18181b] text-[#52525b] text-sm cursor-not-allowed border border-[#27272a]"
+                    className="px-3 py-1.5 rounded-md bg-[var(--bg-elevated)] text-[var(--text-disabled)] text-sm cursor-not-allowed border border-[var(--border-default)]"
                     aria-disabled="true"
                 >
                     Upload CSV (coming soon)
                 </button>
             </div>
 
-            {/* Review summary */}
-            <div className="rounded-md bg-[#3b82f6]/10 border border-[#3b82f6]/20 p-4 text-sm text-[#a1a1aa]">
-                <p className="text-[11px] uppercase tracking-wider text-[#3b82f6] mb-1">
+            <div className="rounded-md bg-[var(--accent-soft)] border border-[var(--accent-edge)] p-4 text-sm text-[var(--text-secondary)]">
+                <p className="text-[11px] uppercase tracking-wider text-[var(--accent)] mb-1">
                     Review
                 </p>
                 <p>
-                    <span className="text-white">
+                    <span className="text-[var(--text-primary)]">
                         {wizard.details?.name ?? "(no name)"}
                     </span>
                     {" — "}
@@ -110,7 +109,7 @@ export function StepImport() {
                     type="button"
                     onClick={() => wizard.setStep(3)}
                     disabled={submitting}
-                    className="px-4 py-2 rounded-md text-[#a1a1aa] text-sm hover:text-white transition-colors disabled:opacity-50"
+                    className="px-4 py-2 rounded-md text-[var(--text-secondary)] text-sm hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-50"
                 >
                     Back
                 </button>
@@ -119,9 +118,9 @@ export function StepImport() {
                     onClick={onSubmit}
                     disabled={submitting}
                     className="
-                        px-4 py-2 rounded-md bg-[#3b82f6] text-white text-sm font-medium
-                        hover:bg-[#3b82f6]/90 transition-colors
-                        focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                        px-4 py-2 rounded-md bg-[var(--accent)] text-white text-sm font-medium
+                        hover:bg-[var(--accent-strong)] transition-colors
+                        focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
                         disabled:opacity-60 disabled:cursor-not-allowed
                     "
                 >

@@ -35,11 +35,11 @@ export default function OnboardingPage() {
                     <div
                         className="
                             flex items-center justify-between gap-3 p-3 rounded-md
-                            bg-[#3b82f6]/10 border border-[#3b82f6]/20 text-sm
+                            bg-[var(--accent-soft)] border border-[var(--accent-edge)] text-sm
                         "
                         role="status"
                     >
-                        <span className="text-[#3b82f6]">
+                        <span className="text-[var(--accent)]">
                             Resume your previous onboarding session?
                         </span>
                         <div className="flex gap-2 flex-shrink-0">
@@ -49,14 +49,14 @@ export default function OnboardingPage() {
                                     reset();
                                     setShowResume(false);
                                 }}
-                                className="px-3 py-1 rounded text-[#a1a1aa] hover:text-white text-xs transition-colors"
+                                className="px-3 py-1 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] text-xs transition-colors"
                             >
                                 Discard
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setShowResume(false)}
-                                className="px-3 py-1 rounded bg-[#3b82f6] text-white text-xs hover:bg-[#3b82f6]/90 transition-colors"
+                                className="px-3 py-1 rounded bg-[var(--accent)] text-white text-xs hover:bg-[var(--accent-strong)] transition-colors"
                             >
                                 Resume
                             </button>

@@ -82,7 +82,7 @@ export default function MarkPaidModal({
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.45)] backdrop-blur-sm"
             onClick={onClose}
             role="dialog"
             aria-modal="true"
@@ -92,16 +92,16 @@ export default function MarkPaidModal({
                 onSubmit={handleSubmit}
                 onClick={(e) => e.stopPropagation()}
                 className="
-                    w-[440px] max-w-[92vw] rounded-md
-                    bg-[var(--bg-surface)] border border-[var(--border-emphasis)]
-                    shadow-2xl shadow-black/40
+                    w-[440px] max-w-[92vw] rounded-[10px]
+                    bg-[var(--bg-elevated)] border border-[var(--border-emphasis)]
+                    shadow-[var(--shadow-lg)]
                 "
             >
                 <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border-default)]">
                     <div>
                         <h3
                             id="mark-paid-title"
-                            className="text-[14px] font-semibold tracking-tight text-white"
+                            className="text-[14px] font-semibold tracking-tight text-[var(--text-primary)]"
                         >
                             Mark as paid
                         </h3>
@@ -113,8 +113,8 @@ export default function MarkPaidModal({
                         type="button"
                         onClick={onClose}
                         className="
-                            p-1 rounded text-[var(--text-muted)] hover:text-white
-                            hover:bg-[var(--bg-elevated)] transition-colors
+                            p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)]
+                            hover:bg-[var(--bg-hover)] transition-colors
                         "
                         aria-label="Close"
                     >
@@ -136,7 +136,7 @@ export default function MarkPaidModal({
                             className="
                                 w-full px-3 py-2 rounded-md
                                 bg-[var(--bg-page)]
-                                border border-[var(--border-emphasis)]
+                                border border-[var(--border-default)]
                                 text-[13px] text-[var(--text-primary)] font-mono
                                 focus:outline-none focus:border-[var(--accent)]
                             "
@@ -157,7 +157,7 @@ export default function MarkPaidModal({
                             className="
                                 w-full px-3 py-2 rounded-md
                                 bg-[var(--bg-page)]
-                                border border-[var(--border-emphasis)]
+                                border border-[var(--border-default)]
                                 text-[13px] text-[var(--text-primary)]
                                 placeholder:text-[var(--text-disabled)]
                                 focus:outline-none focus:border-[var(--accent)]
@@ -179,7 +179,7 @@ export default function MarkPaidModal({
                             className="
                                 w-full px-3 py-2 rounded-md
                                 bg-[var(--bg-page)]
-                                border border-[var(--border-emphasis)]
+                                border border-[var(--border-default)]
                                 text-[13px] text-[var(--text-primary)]
                                 focus:outline-none focus:border-[var(--accent)]
                             "
@@ -200,8 +200,8 @@ export default function MarkPaidModal({
                         disabled={busy}
                         className="
                             inline-flex items-center px-3 py-1.5 rounded-md text-[12.5px]
-                            bg-[var(--bg-elevated)] border border-[var(--border-emphasis)]
-                            text-[var(--text-secondary)] hover:text-white
+                            bg-[var(--bg-surface)] border border-[var(--border-emphasis)]
+                            text-[var(--text-secondary)] hover:text-[var(--text-primary)]
                             hover:bg-[var(--bg-hover)] disabled:opacity-50
                             transition-colors
                         "
@@ -214,11 +214,11 @@ export default function MarkPaidModal({
                         className="
                             inline-flex items-center px-3 py-1.5 rounded-md text-[12.5px]
                             bg-[var(--accent)] text-white font-medium
-                            hover:opacity-90 disabled:opacity-50
-                            transition-opacity
+                            hover:bg-[var(--accent-strong)] disabled:opacity-50
+                            transition-colors
                         "
                     >
-                        {busy ? "Saving…" : "Mark paid"}
+                        {busy ? "Saving…" : "Confirm payment"}
                     </button>
                 </div>
             </form>

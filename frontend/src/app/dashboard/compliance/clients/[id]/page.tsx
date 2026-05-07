@@ -41,10 +41,10 @@ export default function ClientDetailPage({
     if (Number.isNaN(clientId)) {
         return (
             <div className="px-6 py-12 max-w-4xl mx-auto text-center">
-                <h1 className="text-lg font-semibold text-white mb-2">
+                <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
                     Invalid client ID
                 </h1>
-                <p className="text-[#71717a] text-sm">
+                <p className="text-[var(--text-muted)] text-sm">
                     The URL is missing a valid client ID.
                 </p>
             </div>
@@ -54,12 +54,12 @@ export default function ClientDetailPage({
     if (isLoading) {
         return (
             <div className="px-6 py-8 max-w-5xl mx-auto space-y-6">
-                <div className="h-7 w-48 bg-[#18181b] animate-pulse rounded" />
+                <div className="h-7 w-48 bg-[var(--bg-hover)] animate-pulse rounded" />
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     {[0, 1, 2, 3].map((i) => (
                         <div
                             key={i}
-                            className="h-24 bg-[#18181b] animate-pulse rounded-md"
+                            className="h-24 bg-[var(--bg-hover)] animate-pulse rounded-md"
                         />
                     ))}
                 </div>
@@ -73,10 +73,10 @@ export default function ClientDetailPage({
         if (status === 403) {
             return (
                 <div className="px-6 py-12 max-w-4xl mx-auto text-center">
-                    <h1 className="text-lg font-semibold text-white mb-2">
+                    <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
                         You don&apos;t have access to this client
                     </h1>
-                    <p className="text-[#71717a] text-sm">
+                    <p className="text-[var(--text-muted)] text-sm">
                         Your membership for this client may have changed.
                         Switch clients above, or request access from the
                         workspace owner.
@@ -86,10 +86,10 @@ export default function ClientDetailPage({
         }
         return (
             <div className="px-6 py-12 max-w-4xl mx-auto text-center">
-                <h1 className="text-lg font-semibold text-white mb-2">
+                <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
                     Couldn&apos;t load this client
                 </h1>
-                <p className="text-[#71717a] text-sm">
+                <p className="text-[var(--text-muted)] text-sm">
                     Try refreshing the page.
                 </p>
             </div>
@@ -102,10 +102,10 @@ export default function ClientDetailPage({
         <div className="px-6 py-8 max-w-5xl mx-auto space-y-6">
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <h1 className="text-lg font-semibold text-white">
+                    <h1 className="text-lg font-semibold text-[var(--text-primary)]">
                         {client.name}
                     </h1>
-                    <p className="text-[#71717a] text-sm">
+                    <p className="text-[var(--text-muted)] text-sm">
                         {client.client_type
                             .replace("_", " ")
                             .toUpperCase()}
@@ -117,8 +117,8 @@ export default function ClientDetailPage({
                         href={`/dashboard/compliance/clients/${clientId}/team`}
                         className="
                             inline-flex items-center gap-2 px-3 py-1.5 rounded-md
-                            bg-[#18181b] border border-[#27272a] text-white text-sm
-                            hover:border-[#3f3f46] transition-colors
+                            bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm
+                            hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-hover)] transition-colors
                         "
                     >
                         <FiUsers className="w-3.5 h-3.5" />
@@ -132,28 +132,28 @@ export default function ClientDetailPage({
                 <StatCard
                     label="Overdue"
                     value={dashboard?.overdue ?? 0}
-                    accent="#ef4444"
+                    accent="var(--danger)"
                 />
                 <StatCard
                     label="Authorities"
                     value={
                         Object.keys(dashboard?.by_authority ?? {}).length
                     }
-                    accent="#3b82f6"
+                    accent="var(--accent)"
                 />
                 <StatCard
                     label="Unscored"
                     value={unscored}
-                    accent="#71717a"
+                    accent="var(--text-muted)"
                 />
             </div>
 
-            <div className="bg-[#111113] border border-[#27272a] rounded-md p-6">
-                <h2 className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1aa] mb-4">
+            <div className="surface-card p-6">
+                <h2 className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)] mb-4">
                     Registrations
                 </h2>
                 {client.registrations.length === 0 ? (
-                    <p className="text-sm text-[#71717a]">
+                    <p className="text-sm text-[var(--text-muted)]">
                         No registrations.
                     </p>
                 ) : (
@@ -163,19 +163,19 @@ export default function ClientDetailPage({
                                 key={r.id}
                                 className="flex items-center gap-3 text-sm"
                             >
-                                <span className="text-[11px] uppercase text-[#71717a] w-12 font-medium tracking-wider">
+                                <span className="text-[11px] uppercase text-[var(--text-muted)] w-12 font-medium tracking-wider">
                                     {r.type}
                                 </span>
-                                <span className="text-white tabular-nums font-medium">
+                                <span className="text-[var(--text-primary)] tabular-nums font-medium">
                                     {r.value}
                                 </span>
                                 {r.state && (
-                                    <span className="text-[11px] text-[#52525b]">
+                                    <span className="text-[11px] text-[var(--text-subtle)]">
                                         State {r.state}
                                     </span>
                                 )}
                                 {!r.is_active && (
-                                    <span className="text-[11px] text-[#ef4444] uppercase">
+                                    <span className="text-[11px] text-[var(--danger)] uppercase">
                                         Inactive
                                     </span>
                                 )}
@@ -190,9 +190,9 @@ export default function ClientDetailPage({
                     href={`/dashboard/compliance?client_id=${clientId}`}
                     className="
                         inline-flex items-center gap-2 px-4 py-2 rounded-md
-                        bg-[#3b82f6] text-white text-sm font-medium
-                        hover:bg-[#3b82f6]/90 transition-colors
-                        focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                        bg-[var(--accent)] text-white text-sm font-medium
+                        hover:bg-[var(--accent-strong)] transition-colors
+                        focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
                     "
                 >
                     <FiFileText className="w-4 h-4" />
@@ -213,13 +213,13 @@ function StatCard({
     accent?: string;
 }) {
     return (
-        <div className="bg-[#111113] border border-[#27272a] rounded-md p-5">
-            <div className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1aa] mb-2">
+        <div className="surface-card p-5">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)] mb-2">
                 {label}
             </div>
             <div
                 className="text-2xl font-semibold tabular-nums leading-tight"
-                style={{ color: accent ?? "#ffffff" }}
+                style={{ color: accent ?? "var(--text-primary)" }}
             >
                 {value}
             </div>

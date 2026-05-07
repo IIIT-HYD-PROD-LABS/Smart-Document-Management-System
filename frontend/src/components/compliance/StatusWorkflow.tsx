@@ -79,7 +79,11 @@ function PillNode({
         return (
             <span
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded font-medium"
-                style={{ backgroundColor: `${c.color}1a`, color: c.color }}
+                style={{
+                    backgroundColor: `color-mix(in srgb, ${c.color} 12%, transparent)`,
+                    color: c.color,
+                    border: `1px solid color-mix(in srgb, ${c.color} 30%, transparent)`,
+                }}
                 aria-current="step"
             >
                 <Icon className="w-3.5 h-3.5" />
@@ -89,14 +93,14 @@ function PillNode({
     }
     if (state === "past") {
         return (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded font-medium border border-[#10b981]/40 text-[#10b981]">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded font-medium border bg-[var(--success-soft)] text-[var(--success)] border-[color:color-mix(in_srgb,var(--success)_30%,transparent)]">
                 <FiCheck className="w-3.5 h-3.5" />
                 {c.label}
             </span>
         );
     }
     return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded font-medium border border-[#27272a] text-[#52525b]">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded font-medium border border-[var(--border-default)] text-[var(--text-muted)] bg-[var(--bg-elevated)]">
             <Icon className="w-3.5 h-3.5" />
             {c.label}
         </span>
@@ -106,7 +110,7 @@ function PillNode({
 function Connector({ walked }: { walked: boolean }) {
     return (
         <span
-            className={`h-px w-4 sm:w-6 ${walked ? "bg-[#10b981]" : "bg-[#27272a]"}`}
+            className={`h-px w-4 sm:w-6 ${walked ? "bg-[var(--success)]" : "bg-[var(--border-default)]"}`}
             aria-hidden="true"
         />
     );
@@ -166,9 +170,9 @@ export function StatusWorkflow({ notice }: Props) {
     return (
         <section
             aria-label="Status workflow"
-            className="bg-[#111113] border border-[#27272a] rounded-md p-5"
+            className="surface-card p-5"
         >
-            <h3 className="text-[11px] uppercase tracking-wider text-[#a1a1aa] font-medium mb-4">
+            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-medium mb-4">
                 Status workflow
             </h3>
 
@@ -195,7 +199,7 @@ export function StatusWorkflow({ notice }: Props) {
                         </span>
                     );
                 })}
-                <span className="ml-2 text-[11px] text-[#52525b]" aria-hidden="true">
+                <span className="ml-2 text-[11px] text-[var(--text-subtle)]" aria-hidden="true">
                     or
                 </span>
                 <span className="ml-2">
@@ -211,22 +215,22 @@ export function StatusWorkflow({ notice }: Props) {
             </div>
 
             {isTerminal ? (
-                <p className="text-[12px] text-[#71717a]">
+                <p className="text-[12px] text-[var(--text-muted)]">
                     Terminal state. No further transitions.
                 </p>
             ) : confirmDismiss ? (
                 <div
-                    className="border border-[#ef4444]/40 bg-[#ef4444]/5 rounded p-4"
+                    className="border border-[color:color-mix(in_srgb,var(--danger)_30%,transparent)] bg-[var(--danger-soft)] rounded p-4"
                     role="alertdialog"
                     aria-labelledby="dismiss-heading"
                 >
                     <h4
                         id="dismiss-heading"
-                        className="text-sm font-semibold text-white mb-1"
+                        className="text-sm font-semibold text-[var(--text-primary)] mb-1"
                     >
                         Dismiss notice {notice.notice_number}?
                     </h4>
-                    <p className="text-[13px] text-[#a1a1aa] mb-3">
+                    <p className="text-[13px] text-[var(--text-secondary)] mb-3">
                         Dismissing marks the notice as closed without resolution.
                         You can re-open it within 30 days from the audit log.
                     </p>
@@ -235,7 +239,7 @@ export function StatusWorkflow({ notice }: Props) {
                             type="button"
                             onClick={() => transition.mutate("dismissed")}
                             disabled={transition.isPending}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded bg-[#ef4444] text-white font-medium hover:bg-[#dc2626] disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[#ef4444]/40"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded bg-[var(--danger)] text-white font-medium hover:opacity-90 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--danger)_40%,transparent)]"
                         >
                             <FiAlertTriangle className="w-3.5 h-3.5" />
                             {transition.isPending ? "Dismissing…" : "Dismiss notice"}
@@ -244,7 +248,7 @@ export function StatusWorkflow({ notice }: Props) {
                             type="button"
                             onClick={() => setConfirmDismiss(false)}
                             disabled={transition.isPending}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded text-[#a1a1aa] hover:text-white hover:bg-[#18181b] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]"
                         >
                             <FiX className="w-3.5 h-3.5" />
                             Keep open
@@ -258,7 +262,7 @@ export function StatusWorkflow({ notice }: Props) {
                             type="button"
                             onClick={() => transition.mutate(advanceTarget)}
                             disabled={transition.isPending}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded bg-[#3b82f6] text-white font-medium hover:bg-[#2563eb] disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded bg-[var(--accent)] text-white font-medium hover:bg-[var(--accent-strong)] disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]"
                         >
                             {transition.isPending ? "Updating…" : advanceLabel}
                         </button>
@@ -268,7 +272,7 @@ export function StatusWorkflow({ notice }: Props) {
                             type="button"
                             onClick={() => setConfirmDismiss(true)}
                             disabled={transition.isPending}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded text-[#a1a1aa] border border-[#27272a] hover:text-[#ef4444] hover:border-[#ef4444]/60 focus:outline-none focus:ring-2 focus:ring-[#ef4444]/40"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded text-[var(--text-secondary)] border border-[var(--border-default)] bg-[var(--bg-elevated)] hover:text-[var(--danger)] hover:border-[color:color-mix(in_srgb,var(--danger)_50%,transparent)] focus:outline-none focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--danger)_40%,transparent)]"
                         >
                             Dismiss
                         </button>

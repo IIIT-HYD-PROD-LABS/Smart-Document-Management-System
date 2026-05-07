@@ -30,7 +30,7 @@ export default function ReviewQueuePage() {
         <div className="px-6 py-8 max-w-6xl mx-auto">
             <Link
                 href="/dashboard/compliance"
-                className="inline-flex items-center gap-1.5 text-[12px] text-[#a1a1aa] hover:text-white mb-4 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 rounded px-1"
+                className="inline-flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] mb-4 focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)] rounded px-1"
             >
                 <FiArrowLeft className="w-3.5 h-3.5" />
                 Back to dashboard
@@ -38,16 +38,16 @@ export default function ReviewQueuePage() {
 
             <header className="mb-6 flex items-center justify-between gap-3 flex-wrap">
                 <div>
-                    <h1 className="text-2xl font-semibold text-white tracking-tight">
+                    <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight">
                         Review queue
                     </h1>
-                    <p className="text-[13px] text-[#a1a1aa] mt-1">
+                    <p className="text-[13px] text-[var(--text-muted)] mt-1">
                         Notices whose automatic classification fell below
                         the 75% confidence threshold and need a human label.
                     </p>
                 </div>
                 {queueQ.data && (
-                    <span className="text-[12px] text-[#a1a1aa] tabular-nums">
+                    <span className="text-[12px] text-[var(--text-muted)] tabular-nums">
                         {queueQ.data.total} pending
                     </span>
                 )}
@@ -55,18 +55,18 @@ export default function ReviewQueuePage() {
 
             {queueQ.isLoading && (
                 <div
-                    className="rounded border border-[#1f1f23] bg-[#0c0c0f] p-6"
+                    className="surface-card p-6"
                     role="status"
                     aria-live="polite"
                 >
-                    <div className="h-4 w-40 bg-[#18181b] rounded animate-pulse mb-3" />
-                    <div className="h-4 w-72 bg-[#18181b] rounded animate-pulse mb-3" />
-                    <div className="h-4 w-56 bg-[#18181b] rounded animate-pulse" />
+                    <div className="h-4 w-40 bg-[var(--bg-hover)] rounded animate-pulse mb-3" />
+                    <div className="h-4 w-72 bg-[var(--bg-hover)] rounded animate-pulse mb-3" />
+                    <div className="h-4 w-56 bg-[var(--bg-hover)] rounded animate-pulse" />
                 </div>
             )}
 
             {queueQ.error && !queueQ.isLoading && (
-                <div className="rounded border border-[#7f1d1d] bg-[#1f0b0b] px-4 py-3 text-[13px] text-[#fca5a5]">
+                <div className="rounded border border-[color:color-mix(in_srgb,var(--danger)_30%,transparent)] bg-[var(--danger-soft)] px-4 py-3 text-[13px] text-[var(--danger)]">
                     Failed to load review queue. Refresh the page or try again.
                 </div>
             )}
@@ -84,25 +84,20 @@ export default function ReviewQueuePage() {
 
 function EmptyState() {
     return (
-        <div
-            className="
-                rounded border border-[#1f1f23] bg-[#0c0c0f]
-                px-6 py-10 text-center
-            "
-        >
+        <div className="surface-card px-6 py-10 text-center">
             <FiUserCheck
-                className="w-8 h-8 text-[#3b82f6] mx-auto mb-3"
+                className="w-8 h-8 text-[var(--accent)] mx-auto mb-3"
                 aria-hidden
             />
-            <h2 className="text-[15px] font-semibold text-white">
+            <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">
                 Queue is empty
             </h2>
-            <p className="text-[13px] text-[#a1a1aa] mt-2 max-w-md mx-auto leading-relaxed">
+            <p className="text-[13px] text-[var(--text-muted)] mt-2 max-w-md mx-auto leading-relaxed">
                 No notices currently need review.
             </p>
-            <div className="mt-6 inline-flex items-start gap-2 rounded border border-[#1f1f23] bg-[#09090b] px-3 py-2 text-left max-w-lg">
-                <FiInfo className="w-3.5 h-3.5 text-[#71717a] mt-0.5 shrink-0" />
-                <p className="text-[11px] text-[#71717a] leading-relaxed">
+            <div className="mt-6 inline-flex items-start gap-2 rounded border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-2 text-left max-w-lg">
+                <FiInfo className="w-3.5 h-3.5 text-[var(--text-muted)] mt-0.5 shrink-0" />
+                <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
                     The review queue surfaces low-confidence ML predictions
                     when the BERT classifier ships in v2.1. v2.0 ships the
                     rule-based risk scorer and the queue infrastructure;
@@ -122,9 +117,9 @@ function ReviewTable({
     onChanged: () => void;
 }) {
     return (
-        <div className="rounded border border-[#1f1f23] bg-[#0c0c0f] overflow-hidden">
+        <div className="surface-card overflow-hidden">
             <table className="w-full text-left">
-                <thead className="bg-[#0a0a0c] border-b border-[#1f1f23]">
+                <thead className="bg-[var(--bg-muted)] border-b border-[var(--border-default)]">
                     <tr>
                         <Th>Notice</Th>
                         <Th>Predicted authority</Th>
@@ -157,7 +152,7 @@ function Th({
 }) {
     return (
         <th
-            className={`px-4 py-2.5 text-[11px] uppercase tracking-wider text-[#71717a] font-medium ${
+            className={`px-4 py-2.5 text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-medium ${
                 align === "right" ? "text-right" : ""
             }`}
         >
@@ -183,38 +178,38 @@ function ReviewRow({
     }[row.reason];
 
     return (
-        <tr className="border-b border-[#1f1f23] hover:bg-[#0a0a0c]">
+        <tr className="border-b border-[var(--border-default)] last:border-0 hover:bg-[var(--bg-hover)]">
             <td className="px-4 py-3 align-middle">
                 <Link
                     href={`/dashboard/compliance/notices/${row.notice_id}`}
-                    className="text-[13px] text-white font-mono hover:underline"
+                    className="text-[13px] text-[var(--text-primary)] font-mono hover:underline"
                 >
                     #{row.notice_id}
                 </Link>
             </td>
             <td className="px-4 py-3 align-middle">
-                <span className="text-[13px] text-[#d4d4d8]">
+                <span className="text-[13px] text-[var(--text-secondary)]">
                     {row.predicted_authority ?? "—"}
                 </span>
-                <span className="text-[11px] text-[#71717a] ml-2 tabular-nums">
+                <span className="text-[11px] text-[var(--text-muted)] ml-2 tabular-nums">
                     {conf(row.predicted_authority_confidence)}
                 </span>
             </td>
             <td className="px-4 py-3 align-middle">
-                <span className="text-[13px] text-[#d4d4d8]">
+                <span className="text-[13px] text-[var(--text-secondary)]">
                     {row.predicted_type_id ?? "—"}
                 </span>
-                <span className="text-[11px] text-[#71717a] ml-2 tabular-nums">
+                <span className="text-[11px] text-[var(--text-muted)] ml-2 tabular-nums">
                     {conf(row.predicted_type_confidence)}
                 </span>
             </td>
             <td className="px-4 py-3 align-middle">
-                <span className="text-[11px] text-[#f59e0b] uppercase tracking-wider">
+                <span className="text-[11px] text-[var(--warning)] uppercase tracking-wider">
                     {reasonLabel}
                 </span>
             </td>
             <td className="px-4 py-3 align-middle">
-                <span className="text-[12px] text-[#71717a] tabular-nums">
+                <span className="text-[12px] text-[var(--text-muted)] tabular-nums">
                     {new Date(row.created_at).toLocaleDateString()}
                 </span>
             </td>
@@ -232,9 +227,6 @@ function AssignButton({
     row: ReviewQueueItem;
     onChanged: () => void;
 }) {
-    // v2.0: assign action is a placeholder — full dialog with authority/type
-    // dropdowns lands when the BERT pipeline produces predictions in v2.1.
-    // We expose the API call so the wiring is verifiable.
     const handle = async () => {
         try {
             await complianceApi.assignReviewLabel(row.id, {
@@ -253,12 +245,12 @@ function AssignButton({
             onClick={handle}
             className="
                 inline-flex items-center gap-1.5 px-2.5 py-1
-                rounded border border-[#3b82f6]/40
-                text-[11px] text-[#3b82f6] font-medium
-                hover:bg-[#3b82f6]/10
+                rounded border border-[var(--accent-edge)]
+                text-[11px] text-[var(--accent)] font-medium
+                hover:bg-[var(--accent-soft)]
                 focus-visible:outline-none focus-visible:ring-2
-                focus-visible:ring-[#3b82f6] focus-visible:ring-offset-2
-                focus-visible:ring-offset-[#09090b]
+                focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
+                focus-visible:ring-offset-[var(--bg-page)]
             "
         >
             Assign

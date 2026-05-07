@@ -52,7 +52,7 @@ export default function SourceFilterChip({
                             transition-colors duration-150
                             ${
                                 active
-                                    ? "bg-[var(--bg-hover)] text-white"
+                                    ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-[var(--shadow-sm)]"
                                     : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                             }
                         `}

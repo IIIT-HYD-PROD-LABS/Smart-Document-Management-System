@@ -120,7 +120,7 @@ export default function FilterRulesEditor({ credentialId }: Props) {
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <h2 className="text-[15px] font-semibold tracking-tight text-white">
+                <h2 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">
                     Filter rules
                 </h2>
                 <button
@@ -167,7 +167,7 @@ export default function FilterRulesEditor({ credentialId }: Props) {
                             {rules.map((r) => (
                                 <tr
                                     key={r.id}
-                                    className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)]/40"
+                                    className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)]"
                                     data-saving={savingId === r.id ? "true" : undefined}
                                 >
                                     <td className="py-2 pr-3 align-middle">
@@ -288,7 +288,7 @@ export default function FilterRulesEditor({ credentialId }: Props) {
                                             className="
                                                 p-1.5 rounded text-[var(--text-muted)]
                                                 hover:text-[var(--danger)]
-                                                hover:bg-[#ef44441a]
+                                                hover:bg-[var(--danger-soft)]
                                                 transition-colors duration-150
                                             "
                                             aria-label="Delete rule"

@@ -51,7 +51,6 @@ export default function PreviewPage() {
             .finally(() => setLoading(false));
     }, [docId]);
 
-    // Load PDF module dynamically (client-side only)
     useEffect(() => {
         if (doc?.file_type === "pdf") {
             import("react-pdf").then((mod) => {
@@ -64,7 +63,6 @@ export default function PreviewPage() {
         }
     }, [doc?.file_type]);
 
-    // Fetch blob for preview
     useEffect(() => {
         if (!doc) return;
         const isPdf = doc.file_type === "pdf";
@@ -95,7 +93,6 @@ export default function PreviewPage() {
         };
     }, [doc, docId]);
 
-    // Attach non-passive wheel listener to the image container so preventDefault works
     useEffect(() => {
         const el = imgRef.current;
         if (!el) return;
@@ -125,7 +122,6 @@ export default function PreviewPage() {
 
     const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
-    // Auth-aware download: fetches the file with token and triggers a browser download
     const handleDownload = useCallback(async () => {
         const url = documentsApi.getPreviewUrl(docId);
         try {
@@ -155,9 +151,15 @@ export default function PreviewPage() {
 
     if (!doc) {
         return (
-            <div className="text-center py-20 text-[#71717a]">
+            <div className="text-center py-20" style={{ color: "var(--text-secondary)" }}>
                 Document not found.
-                <button onClick={() => router.back()} className="ml-2 text-[#a1a1aa] underline">Go back</button>
+                <button
+                    onClick={() => router.back()}
+                    className="ml-2 underline cursor-pointer"
+                    style={{ color: "var(--accent)" }}
+                >
+                    Go back
+                </button>
             </div>
         );
     }
@@ -169,52 +171,98 @@ export default function PreviewPage() {
     return (
         <div className="flex flex-col h-[calc(100vh-3.5rem-3rem)] md:h-[calc(100vh-4rem)]">
             {/* Top bar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-[#27272a] bg-[#111113]">
+            <div
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b"
+                style={{
+                    borderColor: "var(--border-default)",
+                    background: "var(--bg-elevated)",
+                }}
+            >
                 <div className="flex items-center gap-3 min-w-0">
-                    <button onClick={() => router.back()} className="text-[#a1a1aa] hover:text-white transition-colors shrink-0">
+                    <button
+                        onClick={() => router.back()}
+                        className="transition-colors shrink-0 cursor-pointer touch-target flex items-center justify-center"
+                        style={{ color: "var(--text-secondary)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; }}
+                    >
                         <FiArrowLeft className="w-5 h-5" />
                     </button>
-                    <span className="text-sm text-white font-medium truncate max-w-[200px] sm:max-w-[300px]">{doc.original_filename}</span>
-                    <span className="text-xs text-[#52525b] uppercase hidden sm:inline">{doc.file_type}</span>
+                    <span className="text-sm font-medium truncate max-w-[200px] sm:max-w-[300px]" style={{ color: "var(--text-primary)" }}>
+                        {doc.original_filename}
+                    </span>
+                    <span className="text-xs uppercase hidden sm:inline" style={{ color: "var(--text-muted)" }}>{doc.file_type}</span>
                 </div>
                 <div className="flex items-center gap-2">
                     {isPdf && numPages > 0 && (
                         <div className="flex items-center gap-1 mr-1 sm:mr-3">
-                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage <= 1}
-                                className="p-1.5 rounded hover:bg-[#27272a] disabled:opacity-30 text-[#a1a1aa]">
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage <= 1}
+                                className="p-1.5 rounded disabled:opacity-30 transition-colors touch-target flex items-center justify-center"
+                                style={{ color: "var(--text-secondary)" }}
+                                onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                            >
                                 <FiChevronLeft className="w-4 h-4" />
                             </button>
-                            <span className="text-xs text-[#a1a1aa] min-w-[60px] text-center">{currentPage} / {numPages}</span>
-                            <button onClick={() => setCurrentPage(p => Math.min(numPages, p + 1))} disabled={currentPage >= numPages}
-                                className="p-1.5 rounded hover:bg-[#27272a] disabled:opacity-30 text-[#a1a1aa]">
+                            <span className="text-xs min-w-[60px] text-center tabular-nums" style={{ color: "var(--text-secondary)" }}>
+                                {currentPage} / {numPages}
+                            </span>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(numPages, p + 1))}
+                                disabled={currentPage >= numPages}
+                                className="p-1.5 rounded disabled:opacity-30 transition-colors touch-target flex items-center justify-center"
+                                style={{ color: "var(--text-secondary)" }}
+                                onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                            >
                                 <FiChevronRight className="w-4 h-4" />
                             </button>
                         </div>
                     )}
                     {(isPdf || isImage) && (
                         <div className="flex items-center gap-1 mr-1 sm:mr-3">
-                            <button onClick={() => isPdf ? setZoom(z => Math.max(0.5, z - 0.25)) : setImgZoom(z => Math.max(0.25, z - 0.25))}
-                                className="p-1.5 rounded hover:bg-[#27272a] text-[#a1a1aa]">
+                            <button
+                                onClick={() => isPdf ? setZoom(z => Math.max(0.5, z - 0.25)) : setImgZoom(z => Math.max(0.25, z - 0.25))}
+                                className="p-1.5 rounded transition-colors touch-target flex items-center justify-center"
+                                style={{ color: "var(--text-secondary)" }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                            >
                                 <FiZoomOut className="w-4 h-4" />
                             </button>
-                            <span className="text-xs text-[#a1a1aa] min-w-[40px] text-center">
+                            <span className="text-xs min-w-[40px] text-center tabular-nums" style={{ color: "var(--text-secondary)" }}>
                                 {Math.round((isPdf ? zoom : imgZoom) * 100)}%
                             </span>
-                            <button onClick={() => isPdf ? setZoom(z => Math.min(3, z + 0.25)) : setImgZoom(z => Math.min(5, z + 0.25))}
-                                className="p-1.5 rounded hover:bg-[#27272a] text-[#a1a1aa]">
+                            <button
+                                onClick={() => isPdf ? setZoom(z => Math.min(3, z + 0.25)) : setImgZoom(z => Math.min(5, z + 0.25))}
+                                className="p-1.5 rounded transition-colors touch-target flex items-center justify-center"
+                                style={{ color: "var(--text-secondary)" }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                            >
                                 <FiZoomIn className="w-4 h-4" />
                             </button>
                         </div>
                     )}
-                    <button onClick={handleDownload}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#27272a] hover:bg-[#3f3f46] text-white rounded transition-colors">
+                    <button
+                        onClick={handleDownload}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded transition-colors cursor-pointer font-medium"
+                        style={{ background: "var(--accent)", color: "#ffffff" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-strong)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
+                    >
                         <FiDownload className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Download</span>
                     </button>
                 </div>
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-auto bg-[#09090b] flex items-start justify-center p-4">
+            <div
+                className="flex-1 overflow-auto flex items-start justify-center p-4"
+                style={{ background: "var(--bg-page)" }}
+            >
                 {isPdf && pdfModule && blobUrl && (
                     <div style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}>
                         <pdfModule.Document
@@ -245,13 +293,18 @@ export default function PreviewPage() {
                         onMouseUp={handleMouseUp}
                         onMouseLeave={handleMouseUp}
                     >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                             src={blobUrl}
                             alt={doc.original_filename}
+                            width={1200}
+                            height={1600}
                             className="max-w-none select-none"
                             style={{
                                 transform: `translate(${imgPosition.x}px, ${imgPosition.y}px) scale(${imgZoom})`,
                                 transformOrigin: "center center",
+                                width: "auto",
+                                height: "auto",
                             }}
                             draggable={false}
                         />
@@ -260,18 +313,40 @@ export default function PreviewPage() {
 
                 {isDocx && (
                     <div className="max-w-3xl w-full">
-                        <div className="mb-3 px-4 py-2 bg-[#111113] border border-[#27272a] rounded text-xs text-[#71717a]">
+                        <div
+                            className="mb-3 px-4 py-2 rounded text-xs border"
+                            style={{
+                                background: "var(--bg-elevated)",
+                                borderColor: "var(--border-default)",
+                                color: "var(--text-secondary)",
+                            }}
+                        >
                             Showing extracted text. Download the file for full formatting.
                         </div>
-                        <pre className="whitespace-pre-wrap text-sm text-[#a1a1aa] bg-[#111113] border border-[#27272a] rounded-lg p-6 leading-relaxed">{doc.extracted_text || "No text extracted yet."}</pre>
+                        <pre
+                            className="whitespace-pre-wrap text-sm rounded-lg p-6 leading-relaxed border"
+                            style={{
+                                background: "var(--bg-elevated)",
+                                borderColor: "var(--border-default)",
+                                color: "var(--text-secondary)",
+                                boxShadow: "var(--shadow-sm)",
+                            }}
+                        >
+                            {doc.extracted_text || "No text extracted yet."}
+                        </pre>
                     </div>
                 )}
 
                 {!isPdf && !isImage && !isDocx && (
-                    <div className="text-center py-20 text-[#71717a]">
+                    <div className="text-center py-20" style={{ color: "var(--text-secondary)" }}>
                         Preview not available for this file type. <br />
-                        <button onClick={handleDownload}
-                            className="text-[#a1a1aa] underline mt-2 inline-block">Download instead</button>
+                        <button
+                            onClick={handleDownload}
+                            className="underline mt-2 inline-block cursor-pointer"
+                            style={{ color: "var(--accent)" }}
+                        >
+                            Download instead
+                        </button>
                     </div>
                 )}
 

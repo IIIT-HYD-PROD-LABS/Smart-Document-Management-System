@@ -77,7 +77,7 @@ export function RoleDescriptionDrawer({
 
     return (
         <div
-            className="fixed inset-0 z-40 bg-black/40"
+            className="fixed inset-0 z-40 bg-black/30"
             role="dialog"
             aria-modal="true"
             aria-labelledby="role-drawer-title"
@@ -85,13 +85,13 @@ export function RoleDescriptionDrawer({
         >
             <div
                 onClick={(e) => e.stopPropagation()}
-                className="absolute right-0 top-0 h-full w-full max-w-sm bg-[#111113] border-l border-[#27272a] p-6 overflow-y-auto"
+                className="absolute right-0 top-0 h-full w-full max-w-sm bg-[var(--bg-surface)] border-l border-[var(--border-default)] p-6 overflow-y-auto shadow-[var(--shadow-lg)]"
             >
                 <div className="flex items-center gap-3 mb-4">
                     <span
                         className="px-2 py-1 rounded text-[11px] font-medium"
                         style={{
-                            backgroundColor: `${COMPLIANCE_ROLE_COLORS[role]}1a`,
+                            backgroundColor: `color-mix(in srgb, ${COMPLIANCE_ROLE_COLORS[role]} 12%, transparent)`,
                             color: COMPLIANCE_ROLE_COLORS[role],
                         }}
                     >
@@ -100,18 +100,18 @@ export function RoleDescriptionDrawer({
                 </div>
                 <h2
                     id="role-drawer-title"
-                    className="text-base font-semibold text-white mb-2"
+                    className="text-base font-semibold text-[var(--text-primary)] mb-2"
                 >
                     {COMPLIANCE_ROLE_LABELS[role]} permissions
                 </h2>
-                <p className="text-[#71717a] text-xs mb-4">
+                <p className="text-[var(--text-muted)] text-xs mb-4">
                     The explicit permissions granted to a user with this role
                     on this client. Roles are flat — none inherits from another.
                 </p>
-                <p className="text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-3">
+                <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-3">
                     Permissions
                 </p>
-                <ul className="space-y-2 text-sm text-white">
+                <ul className="space-y-2 text-sm text-[var(--text-primary)]">
                     {ROLE_PERMISSIONS_DESCRIPTION[role].map((perm) => (
                         <li key={perm} className="flex items-start gap-2">
                             <span
@@ -128,7 +128,7 @@ export function RoleDescriptionDrawer({
                 <button
                     type="button"
                     onClick={onClose}
-                    className="mt-6 px-3 py-1.5 rounded text-[#a1a1aa] text-sm hover:text-white hover:bg-[#18181b] transition-colors"
+                    className="mt-6 px-3 py-1.5 rounded text-[var(--text-secondary)] text-sm hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
                 >
                     Close
                 </button>

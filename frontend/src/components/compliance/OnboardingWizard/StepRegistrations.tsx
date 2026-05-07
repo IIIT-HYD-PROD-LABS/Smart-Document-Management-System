@@ -115,13 +115,16 @@ export function StepRegistrations() {
         setStep(3);
     };
 
+    const inputClass =
+        "w-full px-3 py-2 rounded-md uppercase bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm tabular-nums placeholder:text-[var(--text-disabled)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]";
+
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div>
-                <h1 className="text-lg font-semibold text-white mb-2">
+                <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
                     Registrations
                 </h1>
-                <p className="text-[#71717a] text-sm">
+                <p className="text-[var(--text-muted)] text-sm">
                     Add GSTINs, PAN, CIN, and DIN. Multi-state operations? Add
                     one GSTIN per state.
                 </p>
@@ -129,9 +132,6 @@ export function StepRegistrations() {
 
             <div className="space-y-3">
                 {fields.map((field, idx) => {
-                    // Compute placeholder based on the current row's type so it
-                    // updates as the user changes the dropdown. Per RESEARCH:
-                    // getValues() is the documented React 19 + RHF v7 pattern.
                     const currentType = getValues(
                         `registrations.${idx}.type`
                     );
@@ -150,8 +150,8 @@ export function StepRegistrations() {
                                 aria-label="Registration type"
                                 className="
                                     px-3 py-2 rounded-md
-                                    bg-[#18181b] border border-[#27272a] text-white text-sm w-28
-                                    focus:outline-none focus:border-[#3b82f6]/40
+                                    bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm w-28
+                                    focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]
                                 "
                             >
                                 <option value="GSTIN">GSTIN</option>
@@ -169,17 +169,12 @@ export function StepRegistrations() {
                                         formState.errors.registrations?.[idx]
                                             ?.value
                                     )}
-                                    className="
-                                        w-full px-3 py-2 rounded-md uppercase
-                                        bg-[#18181b] border border-[#27272a] text-white text-sm tabular-nums
-                                        focus:outline-none focus:border-[#3b82f6]/40
-                                        focus:ring-2 focus:ring-[#3b82f6]/20
-                                    "
+                                    className={inputClass}
                                     placeholder={placeholder}
                                 />
                                 {formState.errors.registrations?.[idx]
                                     ?.value && (
-                                    <p className="mt-1 text-xs text-[#ef4444]">
+                                    <p className="mt-1 text-xs text-[var(--danger)]">
                                         {
                                             formState.errors.registrations[
                                                 idx
@@ -192,7 +187,7 @@ export function StepRegistrations() {
                                 <button
                                     type="button"
                                     onClick={() => remove(idx)}
-                                    className="p-2.5 text-[#71717a] hover:text-[#ef4444] transition-colors"
+                                    className="p-2.5 text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors"
                                     aria-label="Remove registration"
                                 >
                                     <FiTrash2 className="w-4 h-4" />
@@ -208,16 +203,15 @@ export function StepRegistrations() {
                 onClick={() =>
                     append({ type: "GSTIN", value: "", state: "" })
                 }
-                className="text-[13px] text-[#3b82f6] hover:underline flex items-center gap-1 transition-colors"
+                className="text-[13px] text-[var(--accent)] hover:underline flex items-center gap-1 transition-colors"
             >
                 <FiPlus className="w-3.5 h-3.5" />
                 Add registration
             </button>
 
-            {/* Top-level array error (e.g., "at least one registration") */}
             {formState.errors.registrations &&
                 !Array.isArray(formState.errors.registrations) && (
-                    <p className="text-xs text-[#ef4444]">
+                    <p className="text-xs text-[var(--danger)]">
                         {formState.errors.registrations.message}
                     </p>
                 )}
@@ -226,16 +220,16 @@ export function StepRegistrations() {
                 <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="px-4 py-2 rounded-md text-[#a1a1aa] text-sm hover:text-white transition-colors"
+                    className="px-4 py-2 rounded-md text-[var(--text-secondary)] text-sm hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
                 >
                     Back
                 </button>
                 <button
                     type="submit"
                     className="
-                        px-4 py-2 rounded-md bg-[#3b82f6] text-white text-sm font-medium
-                        hover:bg-[#3b82f6]/90 transition-colors
-                        focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                        px-4 py-2 rounded-md bg-[var(--accent)] text-white text-sm font-medium
+                        hover:bg-[var(--accent-strong)] transition-colors
+                        focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
                     "
                 >
                     Continue

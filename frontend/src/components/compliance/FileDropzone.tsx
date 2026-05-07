@@ -61,13 +61,13 @@ export function FileDropzone({ noticeId, disabled = false }: Props) {
     });
 
     const stateClass = isDragActive
-        ? "border-[#3b82f6] bg-[#3b82f6]/10"
-        : "border-[#27272a] hover:border-[#3f3f46] hover:bg-[#18181b]/40";
+        ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+        : "border-[var(--border-default)] bg-[var(--bg-elevated)] hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-hover)]";
 
     return (
         <div
             {...getRootProps()}
-            className={`rounded-md border-2 border-dashed p-6 text-center cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6]/40 ${stateClass} ${
+            className={`rounded-md border-2 border-dashed p-6 text-center cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] ${stateClass} ${
                 disabled || uploading
                     ? "opacity-60 cursor-not-allowed"
                     : ""
@@ -77,17 +77,17 @@ export function FileDropzone({ noticeId, disabled = false }: Props) {
         >
             <input {...getInputProps()} />
             <FiUploadCloud
-                className="w-6 h-6 text-[#71717a] mx-auto mb-2"
+                className="w-6 h-6 text-[var(--text-muted)] mx-auto mb-2"
                 aria-hidden="true"
             />
-            <p className="text-[13px] text-white">
+            <p className="text-[13px] text-[var(--text-primary)]">
                 {uploading
                     ? "Uploading…"
                     : isDragActive
                       ? "Drop the file to upload"
                       : "Drag a PDF, JPG, or PNG here"}
             </p>
-            <p className="text-[11px] text-[#71717a] mt-1">
+            <p className="text-[11px] text-[var(--text-muted)] mt-1">
                 or click to browse · single file, max 50 MB
             </p>
         </div>

@@ -18,18 +18,18 @@ const STATUS_BADGE: Record<
 > = {
     SUCCESS_WITH_RESULTS: {
         label: "SUCCESS",
-        bg: "#10b9811a",
-        text: "#10b981",
+        bg: "var(--success-soft)",
+        text: "var(--success)",
     },
     SUCCESS_EMPTY: {
         label: "EMPTY",
-        bg: "#f59e0b1a",
-        text: "#f59e0b",
+        bg: "var(--warning-soft)",
+        text: "var(--warning)",
     },
     FETCH_FAILED: {
         label: "FAILED",
-        bg: "#ef44441a",
-        text: "#ef4444",
+        bg: "var(--danger-soft)",
+        text: "var(--danger)",
     },
 };
 
@@ -102,16 +102,16 @@ export default function FetchActivity({ credentialId }: Props) {
                 <div
                     className="
                         flex items-start gap-3 p-3 rounded-md
-                        bg-[#ef44441a] border border-[#ef444466]
-                        text-[12.5px] text-[#fca5a5]
+                        bg-[var(--danger-soft)] border border-[var(--danger)]/30
+                        text-[12.5px] text-[var(--danger)]
                     "
                     role="alert"
                 >
                     <div>
-                        <div className="font-medium text-[#fecaca]">
+                        <div className="font-medium text-[var(--danger)]">
                             Two consecutive scans failed
                         </div>
-                        <div className="mt-0.5">
+                        <div className="mt-0.5 text-[var(--text-secondary)]">
                             Verify the Gmail connection on /dashboard/email/connect.
                             If the credential was revoked, click Reconnect.
                         </div>

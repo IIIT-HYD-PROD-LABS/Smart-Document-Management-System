@@ -26,12 +26,12 @@ export default function ClientsListPage() {
     if (isLoading) {
         return (
             <div className="px-6 py-8 max-w-5xl mx-auto">
-                <div className="h-7 w-32 bg-[#18181b] animate-pulse rounded mb-6" />
+                <div className="h-7 w-32 bg-[var(--bg-hover)] animate-pulse rounded mb-6" />
                 <div className="space-y-2">
                     {[0, 1, 2].map((i) => (
                         <div
                             key={i}
-                            className="h-16 bg-[#18181b] animate-pulse rounded"
+                            className="h-16 bg-[var(--bg-hover)] animate-pulse rounded"
                         />
                     ))}
                 </div>
@@ -42,10 +42,10 @@ export default function ClientsListPage() {
     if (error) {
         return (
             <div className="px-6 py-12 max-w-4xl mx-auto text-center">
-                <h1 className="text-lg font-semibold text-white mb-2">
+                <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
                     Couldn&apos;t load your clients
                 </h1>
-                <p className="text-[#71717a] text-sm">
+                <p className="text-[var(--text-muted)] text-sm">
                     Try refreshing the page. If the problem persists, contact
                     your workspace owner.
                 </p>
@@ -56,11 +56,11 @@ export default function ClientsListPage() {
     if (!memberships || memberships.length === 0) {
         return (
             <div className="px-6 py-12 max-w-4xl mx-auto text-center">
-                <FiBriefcase className="w-12 h-12 mx-auto text-[#52525b] mb-4" />
-                <h1 className="text-lg font-semibold text-white mb-2">
+                <FiBriefcase className="w-12 h-12 mx-auto text-[var(--text-disabled)] mb-4" />
+                <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
                     No clients yet
                 </h1>
-                <p className="text-[#71717a] text-sm mb-6 max-w-md mx-auto">
+                <p className="text-[var(--text-muted)] text-sm mb-6 max-w-md mx-auto">
                     Add your first client to start managing their compliance
                     notices. You can add multiple GSTINs and PANs per client.
                 </p>
@@ -68,9 +68,9 @@ export default function ClientsListPage() {
                     href="/dashboard/compliance/clients/new"
                     className="
                         inline-flex items-center gap-2 px-4 py-2 rounded-md
-                        bg-[#3b82f6] text-white text-sm font-medium
-                        hover:bg-[#3b82f6]/90 transition-colors
-                        focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                        bg-[var(--accent)] text-white text-sm font-medium
+                        hover:bg-[var(--accent-strong)] transition-colors
+                        focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
                     "
                 >
                     <FiPlus className="w-4 h-4" />
@@ -83,14 +83,14 @@ export default function ClientsListPage() {
     return (
         <div className="px-6 py-8 max-w-5xl mx-auto">
             <div className="flex items-center justify-between mb-6">
-                <h1 className="text-lg font-semibold text-white">Clients</h1>
+                <h1 className="text-lg font-semibold text-[var(--text-primary)]">Clients</h1>
                 <Link
                     href="/dashboard/compliance/clients/new"
                     className="
                         inline-flex items-center gap-2 px-3 py-1.5 rounded-md
-                        bg-[#3b82f6] text-white text-sm font-medium
-                        hover:bg-[#3b82f6]/90 transition-colors
-                        focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                        bg-[var(--accent)] text-white text-sm font-medium
+                        hover:bg-[var(--accent-strong)] transition-colors
+                        focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
                     "
                 >
                     <FiPlus className="w-3.5 h-3.5" />
@@ -104,16 +104,17 @@ export default function ClientsListPage() {
                         href={`/dashboard/compliance/clients/${m.client_id}`}
                         className="
                             block p-4 rounded-md
-                            bg-[#111113] border border-[#27272a]
-                            hover:border-[#3f3f46] hover:bg-[#18181b]/30 transition-colors
-                            focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                            bg-[var(--bg-elevated)] border border-[var(--border-default)]
+                            hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-hover)] transition-colors
+                            focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
+                            shadow-[var(--shadow-sm)]
                         "
                     >
                         <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-medium text-white">
+                            <span className="text-sm font-medium text-[var(--text-primary)]">
                                 Client #{m.client_id}
                             </span>
-                            <span className="text-[11px] text-[#71717a] uppercase tracking-wider">
+                            <span className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">
                                 {COMPLIANCE_ROLE_LABELS[m.compliance_role]}
                             </span>
                         </div>

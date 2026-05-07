@@ -96,7 +96,7 @@ export default function BillDetailPage() {
                     href="/dashboard/email/bills"
                     className="
                         inline-flex items-center gap-1.5 text-[12.5px]
-                        text-[var(--text-muted)] hover:text-white
+                        text-[var(--text-muted)] hover:text-[var(--text-primary)]
                     "
                 >
                     <FiArrowLeft className="w-3.5 h-3.5" />
@@ -127,7 +127,7 @@ export default function BillDetailPage() {
                     href="/dashboard/email/bills"
                     className="
                         inline-flex items-center gap-1.5 text-[12.5px]
-                        text-[var(--text-muted)] hover:text-white
+                        text-[var(--text-muted)] hover:text-[var(--text-primary)]
                     "
                 >
                     <FiArrowLeft className="w-3.5 h-3.5" />
@@ -140,7 +140,7 @@ export default function BillDetailPage() {
                     <span className="microtype text-[var(--text-subtle)] block">
                         {bill.biller_category.replace("_", " ")}
                     </span>
-                    <h1 className="text-[20px] font-semibold tracking-tight text-white mt-0.5">
+                    <h1 className="text-[20px] font-semibold tracking-tight text-[var(--text-primary)] mt-0.5">
                         {bill.biller_name}
                     </h1>
                 </div>
@@ -148,10 +148,10 @@ export default function BillDetailPage() {
                     className="px-2.5 py-1 rounded text-[11px] font-medium uppercase tracking-wider"
                     style={
                         overdue
-                            ? { backgroundColor: "#ef44441a", color: "#ef4444" }
+                            ? { backgroundColor: "var(--danger-soft)", color: "var(--danger)" }
                             : bill.payment_status === "paid"
-                              ? { backgroundColor: "#10b9811a", color: "#10b981" }
-                              : { backgroundColor: "#3b82f61a", color: "#60a5fa" }
+                              ? { backgroundColor: "var(--success-soft)", color: "var(--success)" }
+                              : { backgroundColor: "var(--info-soft)", color: "var(--info)" }
                     }
                 >
                     {overdue ? "Overdue" : bill.payment_status}
@@ -231,7 +231,7 @@ export default function BillDetailPage() {
                         className="
                             inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12.5px]
                             bg-[var(--accent)] text-white font-medium
-                            hover:opacity-90 transition-opacity
+                            hover:bg-[var(--accent-strong)] transition-colors
                         "
                     >
                         Mark as paid
@@ -245,7 +245,7 @@ export default function BillDetailPage() {
                         className="
                             inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12.5px]
                             bg-[var(--bg-elevated)] border border-[var(--border-emphasis)]
-                            text-[var(--text-secondary)] hover:text-white
+                            text-[var(--text-secondary)] hover:text-[var(--text-primary)]
                             hover:bg-[var(--bg-hover)]
                             disabled:opacity-50
                             transition-colors
@@ -261,7 +261,7 @@ export default function BillDetailPage() {
                         className="
                             inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12.5px]
                             bg-[var(--bg-elevated)] border border-[var(--border-emphasis)]
-                            text-[var(--text-secondary)] hover:text-white
+                            text-[var(--text-secondary)] hover:text-[var(--text-primary)]
                             hover:bg-[var(--bg-hover)]
                             transition-colors
                         "
@@ -300,7 +300,7 @@ export default function BillDetailPage() {
                                 </span>
                             </span>
                         </div>
-                        <div className="mt-1 text-[13px] font-medium text-white">
+                        <div className="mt-1 text-[13px] font-medium text-[var(--text-primary)]">
                             {sourceEmail.subject}
                         </div>
                     </header>
@@ -342,7 +342,7 @@ function Stat({
             <div className="microtype text-[var(--text-muted)] mb-1">
                 {label}
             </div>
-            <div className="text-[16px] text-white">{children}</div>
+            <div className="text-[16px] text-[var(--text-primary)]">{children}</div>
         </div>
     );
 }

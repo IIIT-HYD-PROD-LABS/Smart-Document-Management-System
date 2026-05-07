@@ -32,26 +32,26 @@ const VISUAL_STATUS: Record<
 > = {
     pending: {
         label: "Pending",
-        bg: "#3b82f61a",
-        text: "#60a5fa",
+        bg: "var(--info-soft)",
+        text: "var(--info)",
         icon: FiClock,
     },
     due_soon: {
         label: "Due soon",
-        bg: "#f59e0b1a",
-        text: "#f59e0b",
+        bg: "var(--warning-soft)",
+        text: "var(--warning)",
         icon: FiClock,
     },
     overdue: {
         label: "Overdue",
-        bg: "#ef44441a",
-        text: "#ef4444",
+        bg: "var(--danger-soft)",
+        text: "var(--danger)",
         icon: FiAlertTriangle,
     },
     paid: {
         label: "Paid",
-        bg: "#10b9811a",
-        text: "#10b981",
+        bg: "var(--success-soft)",
+        text: "var(--success)",
         icon: FiCheckCircle,
     },
 };
@@ -110,7 +110,7 @@ export default function BillCard({ bill }: BillCardProps) {
                         <div className="microtype text-[var(--text-subtle)]">
                             {bill.biller_category.replace("_", " ")}
                         </div>
-                        <div className="text-[13px] font-medium text-white truncate">
+                        <div className="text-[13px] font-medium text-[var(--text-primary)] truncate">
                             {bill.biller_name}
                         </div>
                     </div>
@@ -130,7 +130,7 @@ export default function BillCard({ bill }: BillCardProps) {
                 </span>
             </div>
 
-            <div className="mt-3 font-mono tabular-nums text-[20px] font-semibold text-white">
+            <div className="mt-3 font-mono tabular-nums text-[20px] font-semibold text-[var(--text-primary)]">
                 {bill.currency}{" "}
                 {Number(bill.amount_due).toLocaleString("en-IN", {
                     minimumFractionDigits: 2,

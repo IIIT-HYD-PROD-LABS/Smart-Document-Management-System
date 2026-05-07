@@ -15,9 +15,10 @@ const STAGES: { stage: ApprovalStage; label: string }[] = [
 /**
  * Visualises the 4-stage Drafter → Reviewer → Legal → CFO chain.
  *
- * Each stage chip shows: filled-green (last decision was approve),
- * red (last decision was reject), amber + pulse (currently awaiting),
- * or hollow (not yet reached).
+ * Each stage chip shows: filled-success (last decision was approve),
+ * danger (last decision was reject), warning + pulse (currently awaiting),
+ * or hollow (not yet reached). Tokenized for the enterprise light theme
+ * with explicit dark-theme overrides preserved through CSS vars.
  */
 interface Props {
     detail: NoticeResponseDetail;
@@ -36,14 +37,15 @@ export function ApprovalStageStrip({ detail }: Props) {
     }
 
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
             <DrafterChip
                 done={detail.status !== "draft"}
             />
-            <Connector />
+            <Connector walked={detail.status !== "draft"} />
             {STAGES.map(({ stage, label }, idx) => {
                 const decision = latestByStage[stage];
                 const isCurrent = pendingStage === stage;
+                const walkedNext = decision === "approved";
                 return (
                     <span key={stage} className="flex items-center gap-2">
                         <StageChip
@@ -51,25 +53,32 @@ export function ApprovalStageStrip({ detail }: Props) {
                             decision={decision}
                             isCurrent={isCurrent}
                         />
-                        {idx < STAGES.length - 1 && <Connector />}
+                        {idx < STAGES.length - 1 && <Connector walked={walkedNext} />}
                     </span>
                 );
             })}
-            <Connector />
+            <Connector walked={detail.status === "approved"} />
             <FinalChip status={detail.status} />
         </div>
     );
 }
 
 function DrafterChip({ done }: { done: boolean }) {
-    const color = done ? "#10b981" : "#71717a";
-    const Icon = done ? FiCheck : FiCircle;
+    if (done) {
+        return (
+            <span
+                className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border bg-[var(--success-soft)] text-[var(--success)] border-[color:color-mix(in_srgb,var(--success)_30%,transparent)]"
+            >
+                <FiCheck className="w-3 h-3" />
+                Drafter
+            </span>
+        );
+    }
     return (
         <span
-            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium"
-            style={{ backgroundColor: `${color}1a`, color }}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border bg-[var(--bg-muted)] text-[var(--text-muted)] border-[var(--border-default)]"
         >
-            <Icon className="w-3 h-3" />
+            <FiCircle className="w-3 h-3" />
             Drafter
         </span>
     );
@@ -84,60 +93,92 @@ function StageChip({
     decision: "approved" | "rejected" | undefined;
     isCurrent: boolean;
 }) {
-    let color = "#71717a";
-    let Icon: React.ComponentType<{ className?: string }> = FiCircle;
-    let pulse = "";
-    if (decision === "approved") {
-        color = "#10b981";
-        Icon = FiCheck;
-    } else if (decision === "rejected") {
-        color = "#ef4444";
-        Icon = FiX;
-    }
     if (isCurrent) {
-        color = "#f59e0b";
-        Icon = FiClock;
-        pulse = "motion-safe:animate-pulse";
+        return (
+            <span
+                className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border motion-safe:animate-pulse bg-[var(--warning-soft)] text-[var(--warning)] border-[color:color-mix(in_srgb,var(--warning)_30%,transparent)] ring-2 ring-[color:color-mix(in_srgb,var(--accent)_30%,transparent)] ring-offset-1 ring-offset-[var(--bg-elevated)]"
+            >
+                <FiClock className="w-3 h-3" />
+                {label}
+            </span>
+        );
+    }
+    if (decision === "approved") {
+        return (
+            <span
+                className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border bg-[var(--success-soft)] text-[var(--success)] border-[color:color-mix(in_srgb,var(--success)_30%,transparent)]"
+            >
+                <FiCheck className="w-3 h-3" />
+                {label}
+            </span>
+        );
+    }
+    if (decision === "rejected") {
+        return (
+            <span
+                className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border bg-[var(--danger-soft)] text-[var(--danger)] border-[color:color-mix(in_srgb,var(--danger)_30%,transparent)]"
+            >
+                <FiX className="w-3 h-3" />
+                {label}
+            </span>
+        );
     }
     return (
         <span
-            className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium ${pulse}`}
-            style={{ backgroundColor: `${color}1a`, color }}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border bg-[var(--bg-muted)] text-[var(--text-muted)] border-[var(--border-default)]"
         >
-            <Icon className="w-3 h-3" />
+            <FiCircle className="w-3 h-3" />
             {label}
         </span>
     );
 }
 
 function FinalChip({ status }: { status: string }) {
-    let color = "#71717a";
-    let Icon: React.ComponentType<{ className?: string }> = FiCircle;
-    let label = "Pending";
     if (status === "approved") {
-        color = "#10b981";
-        Icon = FiCheck;
-        label = "Approved";
-    } else if (status === "rejected") {
-        color = "#ef4444";
-        Icon = FiX;
-        label = "Rejected";
-    } else if (status === "withdrawn") {
-        color = "#71717a";
-        Icon = FiX;
-        label = "Withdrawn";
+        return (
+            <span
+                className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border bg-[var(--success-soft)] text-[var(--success)] border-[color:color-mix(in_srgb,var(--success)_30%,transparent)]"
+            >
+                <FiCheck className="w-3 h-3" />
+                Approved
+            </span>
+        );
+    }
+    if (status === "rejected") {
+        return (
+            <span
+                className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border bg-[var(--danger-soft)] text-[var(--danger)] border-[color:color-mix(in_srgb,var(--danger)_30%,transparent)]"
+            >
+                <FiX className="w-3 h-3" />
+                Rejected
+            </span>
+        );
+    }
+    if (status === "withdrawn") {
+        return (
+            <span
+                className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border bg-[var(--bg-muted)] text-[var(--text-muted)] border-[var(--border-default)]"
+            >
+                <FiX className="w-3 h-3" />
+                Withdrawn
+            </span>
+        );
     }
     return (
         <span
-            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium"
-            style={{ backgroundColor: `${color}1a`, color }}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border bg-[var(--bg-muted)] text-[var(--text-muted)] border-[var(--border-default)]"
         >
-            <Icon className="w-3 h-3" />
-            {label}
+            <FiCircle className="w-3 h-3" />
+            Pending
         </span>
     );
 }
 
-function Connector() {
-    return <span className="w-3 h-px bg-[#1f1f23]" aria-hidden />;
+function Connector({ walked }: { walked: boolean }) {
+    return (
+        <span
+            className={`w-3 h-px ${walked ? "bg-[var(--success)]" : "bg-[var(--border-default)]"}`}
+            aria-hidden
+        />
+    );
 }

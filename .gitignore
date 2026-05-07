@@ -66,3 +66,4 @@ frontend/out/
 
 # Status report binary artifacts (regenerated from STATUS_REPORT.md)
 Smart_Document_Management_System_Status_Report*.docx
+.env.bak

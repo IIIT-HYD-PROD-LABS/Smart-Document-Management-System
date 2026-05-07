@@ -15,14 +15,9 @@ const STEPS = [
  * Wizard chrome per UI-SPEC Section 6.
  *
  * Progress indicator: 4 circles connected by line, labeled Details / Registrations / Team / Import.
- * - Pending: hollow border-[#27272a] circle, gray text
- * - Current: filled bg-[#3b82f6] circle, accent text label
- * - Complete: filled bg-[#10b981] circle with white check, gray label
- * - Connector line: bg-[#27272a] unwalked, bg-[#3b82f6] walked-up-to-current,
- *   bg-[#10b981] fully completed
- *
- * Click-back: completed step circles are clickable; pending steps are not
- * (the form's own validation gates Continue, the indicator just respects it).
+ * Tokens: pending → bordered with --border-default, current → --accent fill,
+ * complete → --success fill, connectors switch through the same trio. Click-back
+ * is enabled on completed steps only (form-level validation still gates Continue).
  */
 export function WizardLayout({ children }: { children: ReactNode }) {
     const { step, completedSteps, setStep } = useOnboardingWizard();
@@ -43,10 +38,10 @@ export function WizardLayout({ children }: { children: ReactNode }) {
                     const nextIsConnected =
                         idx < STEPS.length - 1
                             ? completedSteps.includes(s.id)
-                                ? "bg-[#10b981]"
+                                ? "bg-[var(--success)]"
                                 : isCurrent
-                                ? "bg-[#3b82f6]"
-                                : "bg-[#27272a]"
+                                ? "bg-[var(--accent)]"
+                                : "bg-[var(--border-default)]"
                             : "";
 
                     return (
@@ -66,10 +61,10 @@ export function WizardLayout({ children }: { children: ReactNode }) {
                                     transition-colors flex-shrink-0
                                     ${
                                         isComplete
-                                            ? "bg-[#10b981] text-white"
+                                            ? "bg-[var(--success)] text-white"
                                             : isCurrent
-                                            ? "bg-[#3b82f6] text-white"
-                                            : "border border-[#27272a] text-[#52525b]"
+                                            ? "bg-[var(--accent)] text-white"
+                                            : "border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-muted)]"
                                     }
                                     ${canClick ? "cursor-pointer hover:opacity-80" : "cursor-default"}
                                 `}
@@ -103,10 +98,10 @@ export function WizardLayout({ children }: { children: ReactNode }) {
                             ${idx === STEPS.length - 1 ? "text-right" : ""}
                             ${
                                 s.id === step
-                                    ? "text-[#3b82f6]"
+                                    ? "text-[var(--accent)]"
                                     : completedSteps.includes(s.id)
-                                    ? "text-[#71717a]"
-                                    : "text-[#52525b]"
+                                    ? "text-[var(--text-muted)]"
+                                    : "text-[var(--text-disabled)]"
                             }
                         `}
                     >
@@ -116,7 +111,7 @@ export function WizardLayout({ children }: { children: ReactNode }) {
             </div>
 
             {/* Step pane */}
-            <div className="bg-[#111113] border border-[#27272a] rounded-md p-8">
+            <div className="surface-card p-8">
                 {children}
             </div>
         </div>

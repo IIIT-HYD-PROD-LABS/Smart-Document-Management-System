@@ -36,8 +36,8 @@ export function RiskTierDot({ tier, showLabel = false }: RiskTierDotProps) {
                 className="inline-flex items-center gap-1.5"
                 aria-label="Risk tier: unscored"
             >
-                <span className="w-2 h-2 rounded-full border border-[#71717a]" />
-                <span className="text-[#71717a] text-xs">—</span>
+                <span className="w-2 h-2 rounded-full border border-[var(--text-disabled)]" />
+                <span className="text-[var(--text-muted)] text-xs">—</span>
             </span>
         );
     }

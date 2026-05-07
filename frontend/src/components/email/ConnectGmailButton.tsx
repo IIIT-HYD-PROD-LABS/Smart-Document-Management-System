@@ -65,23 +65,55 @@ export default function ConnectGmailButton({ credential, onChange }: Props) {
 
     if (!credential) {
         return (
-            <button
-                type="button"
-                onClick={handleConnect}
-                disabled={busy}
+            <div
                 className="
-                    inline-flex items-center gap-2 px-4 py-2 rounded-md
-                    bg-[var(--accent)] text-white text-[13px] font-medium
-                    hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed
-                    transition-opacity duration-150
-                    focus-visible:outline-none focus-visible:ring-2
-                    focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
-                    focus-visible:ring-offset-[var(--bg-page)]
+                    rounded-lg p-6 md:p-8
+                    bg-[var(--bg-elevated)] border border-[var(--border-default)]
+                    flex flex-col md:flex-row md:items-center gap-5
                 "
+                data-state="not-connected"
             >
-                <FiMail className="w-4 h-4" aria-hidden />
-                {busy ? "Redirecting…" : "Connect Gmail"}
-            </button>
+                <div className="flex items-start gap-4 flex-1 min-w-0">
+                    <span
+                        className="
+                            shrink-0 w-12 h-12 rounded-md
+                            bg-[var(--accent-soft)] border border-[var(--accent-edge)]
+                            flex items-center justify-center
+                        "
+                        aria-hidden
+                    >
+                        <FiMail className="w-5 h-5 text-[var(--accent)]" />
+                    </span>
+                    <div className="min-w-0">
+                        <h3 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">
+                            Connect your Gmail
+                        </h3>
+                        <p className="text-[12.5px] text-[var(--text-muted)] mt-1 leading-relaxed">
+                            We&apos;ll scan for compliance notices and personal
+                            bills from approved senders. Email bodies are read
+                            on-demand and never stored at rest.
+                        </p>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={handleConnect}
+                    disabled={busy}
+                    className="
+                        shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-md
+                        bg-[var(--accent)] text-white text-[13px] font-medium
+                        hover:bg-[var(--accent-strong)]
+                        disabled:opacity-50 disabled:cursor-not-allowed
+                        transition-colors duration-150
+                        focus-visible:outline-none focus-visible:ring-2
+                        focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
+                        focus-visible:ring-offset-[var(--bg-elevated)]
+                    "
+                >
+                    <FiMail className="w-4 h-4" aria-hidden />
+                    {busy ? "Redirecting…" : "Connect Gmail"}
+                </button>
+            </div>
         );
     }
 
@@ -91,18 +123,18 @@ export default function ConnectGmailButton({ credential, onChange }: Props) {
                 <div
                     className="
                         flex items-start gap-3 p-3 rounded-md
-                        bg-[#ef44441a] border border-[#ef444466]
-                        text-[13px] text-[#fca5a5]
+                        bg-[var(--danger-soft)] border border-[var(--danger)]/30
+                        text-[13px] text-[var(--danger)]
                     "
                     role="alert"
                     data-status="revoked"
                 >
                     <FiAlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                     <div>
-                        <div className="font-medium text-[#fecaca]">
+                        <div className="font-medium text-[var(--danger)]">
                             Reconnect required
                         </div>
-                        <div className="mt-0.5 text-[12px] text-[#fca5a5]">
+                        <div className="mt-0.5 text-[12px] text-[var(--text-secondary)]">
                             Gmail revoked the saved credential. Scanner is paused
                             until you reconnect.
                         </div>
@@ -114,7 +146,7 @@ export default function ConnectGmailButton({ credential, onChange }: Props) {
                     disabled={busy}
                     className="
                         inline-flex items-center gap-2 px-4 py-2 rounded-md
-                        bg-[var(--warning)] text-[#0c0c0f] text-[13px] font-medium
+                        bg-[var(--warning)] text-white text-[13px] font-medium
                         hover:opacity-90 disabled:opacity-50
                         transition-opacity duration-150
                     "
@@ -130,7 +162,7 @@ export default function ConnectGmailButton({ credential, onChange }: Props) {
             <span
                 className="
                     inline-flex items-center gap-1.5 px-2.5 py-1 rounded
-                    bg-[#10b9811a] text-[#10b981] text-[12px] font-medium
+                    bg-[var(--success-soft)] text-[var(--success)] text-[12px] font-medium
                 "
             >
                 <FiCheckCircle className="w-3.5 h-3.5" aria-hidden />
@@ -146,7 +178,7 @@ export default function ConnectGmailButton({ credential, onChange }: Props) {
                 className="
                     inline-flex items-center px-3 py-1.5 rounded-md text-[12.5px]
                     bg-[var(--bg-elevated)] border border-[var(--border-emphasis)]
-                    text-[var(--text-secondary)] hover:text-white
+                    text-[var(--text-secondary)] hover:text-[var(--text-primary)]
                     hover:bg-[var(--bg-hover)] disabled:opacity-50
                     transition-colors duration-150
                 "
@@ -159,8 +191,8 @@ export default function ConnectGmailButton({ credential, onChange }: Props) {
                 disabled={busy}
                 className="
                     inline-flex items-center px-3 py-1.5 rounded-md text-[12.5px]
-                    border border-[#ef444466] text-[#ef4444]
-                    hover:bg-[#ef44441a] disabled:opacity-50
+                    border border-[var(--danger)]/30 text-[var(--danger)]
+                    hover:bg-[var(--danger-soft)] disabled:opacity-50
                     transition-colors duration-150
                 "
             >

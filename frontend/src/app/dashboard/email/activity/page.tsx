@@ -59,7 +59,7 @@ export default function ActivityPage() {
 
     return (
         <div className="space-y-4">
-            <h2 className="text-[15px] font-semibold tracking-tight text-white">
+            <h2 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">
                 Recent scans
             </h2>
             <FetchActivity credentialId={credId} />

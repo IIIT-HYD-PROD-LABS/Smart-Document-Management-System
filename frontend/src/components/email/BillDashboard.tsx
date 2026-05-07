@@ -29,12 +29,33 @@ const BUCKET_META: Record<
         label: string;
         icon: React.ComponentType<{ className?: string }>;
         accent: string;
+        accentSoft: string;
     }
 > = {
-    upcoming: { label: "Upcoming", icon: FiInbox, accent: "#3b82f6" },
-    due_soon: { label: "Due Soon", icon: FiClock, accent: "#f59e0b" },
-    overdue: { label: "Overdue", icon: FiAlertTriangle, accent: "#ef4444" },
-    paid: { label: "Paid", icon: FiCheckCircle, accent: "#10b981" },
+    upcoming: {
+        label: "Upcoming",
+        icon: FiInbox,
+        accent: "var(--info)",
+        accentSoft: "var(--info-soft)",
+    },
+    due_soon: {
+        label: "Due Soon",
+        icon: FiClock,
+        accent: "var(--warning)",
+        accentSoft: "var(--warning-soft)",
+    },
+    overdue: {
+        label: "Overdue",
+        icon: FiAlertTriangle,
+        accent: "var(--danger)",
+        accentSoft: "var(--danger-soft)",
+    },
+    paid: {
+        label: "Paid",
+        icon: FiCheckCircle,
+        accent: "var(--success)",
+        accentSoft: "var(--success-soft)",
+    },
 };
 
 const PAYMENT_METHODS = [
@@ -138,14 +159,16 @@ export default function BillDashboard() {
                             type="button"
                             onClick={() => setBucket(active ? null : b)}
                             className={`
-                                text-left p-4 rounded-md border
-                                transition-colors duration-150
+                                stat-strip text-left p-4 rounded-[10px] border
+                                bg-[var(--bg-elevated)]
+                                transition-all duration-150
                                 ${
                                     active
-                                        ? "bg-[var(--bg-elevated)] border-[var(--accent)]"
-                                        : "bg-[var(--bg-elevated)] border-[var(--border-default)] hover:border-[var(--border-emphasis)]"
+                                        ? "border-[var(--accent)] shadow-[var(--shadow-md)]"
+                                        : "border-[var(--border-default)] hover:border-[var(--border-emphasis)] hover:shadow-[var(--shadow-sm)]"
                                 }
                             `}
+                            style={{ color: meta.accent }}
                             aria-pressed={active}
                             data-bucket={b}
                         >
@@ -157,14 +180,24 @@ export default function BillDashboard() {
                                     {meta.label}
                                 </span>
                                 <span
-                                    style={{ color: meta.accent }}
+                                    className="
+                                        w-7 h-7 rounded-md
+                                        flex items-center justify-center
+                                    "
+                                    style={{
+                                        backgroundColor: meta.accentSoft,
+                                        color: meta.accent,
+                                    }}
                                     aria-hidden
                                 >
                                     <Icon className="w-3.5 h-3.5" />
                                 </span>
                             </div>
-                            <div className="mt-2 font-mono tabular-nums text-[28px] font-semibold text-white">
+                            <div className="mt-3 font-mono tabular-nums text-[28px] font-semibold text-[var(--text-primary)] leading-none">
                                 {counts[b]}
+                            </div>
+                            <div className="mt-1.5 text-[11.5px] text-[var(--text-muted)]">
+                                {b === "paid" ? "this month" : "bills"}
                             </div>
                         </button>
                     );
@@ -188,7 +221,7 @@ export default function BillDashboard() {
                             onClick={() => setSelected(new Set())}
                             className="
                                 px-3 py-1.5 rounded text-[12px]
-                                text-[var(--text-muted)] hover:text-white
+                                text-[var(--text-muted)] hover:text-[var(--text-primary)]
                                 hover:bg-[var(--bg-hover)]
                             "
                         >
@@ -199,7 +232,7 @@ export default function BillDashboard() {
                             onClick={() => setBulkOpen(true)}
                             className="
                                 px-3 py-1.5 rounded text-[12px] font-medium
-                                bg-[var(--accent)] text-white hover:opacity-90
+                                bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]
                             "
                         >
                             Bulk mark paid
@@ -308,7 +341,7 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.45)] backdrop-blur-sm"
             onClick={onClose}
             role="dialog"
             aria-modal="true"
@@ -317,13 +350,13 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
                 onSubmit={handleSubmit}
                 onClick={(e) => e.stopPropagation()}
                 className="
-                    w-[480px] max-w-[92vw] rounded-md
-                    bg-[var(--bg-surface)] border border-[var(--border-emphasis)]
-                    shadow-2xl shadow-black/40
+                    w-[480px] max-w-[92vw] rounded-[10px]
+                    bg-[var(--bg-elevated)] border border-[var(--border-emphasis)]
+                    shadow-[var(--shadow-lg)]
                 "
             >
                 <div className="px-5 py-3 border-b border-[var(--border-default)]">
-                    <h3 className="text-[14px] font-semibold tracking-tight text-white">
+                    <h3 className="text-[14px] font-semibold tracking-tight text-[var(--text-primary)]">
                         Bulk mark paid
                     </h3>
                     <p className="text-[11.5px] text-[var(--text-muted)] mt-0.5">
@@ -345,7 +378,7 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
                             className="
                                 w-full px-3 py-2 rounded-md
                                 bg-[var(--bg-page)]
-                                border border-[var(--border-emphasis)]
+                                border border-[var(--border-default)]
                                 text-[13px] text-[var(--text-primary)] font-mono
                                 focus:outline-none focus:border-[var(--accent)]
                             "
@@ -365,7 +398,7 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
                             className="
                                 w-full px-3 py-2 rounded-md
                                 bg-[var(--bg-page)]
-                                border border-[var(--border-emphasis)]
+                                border border-[var(--border-default)]
                                 text-[13px] text-[var(--text-primary)]
                                 placeholder:text-[var(--text-disabled)]
                                 focus:outline-none focus:border-[var(--accent)]
@@ -386,7 +419,7 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
                             className="
                                 w-full px-3 py-2 rounded-md
                                 bg-[var(--bg-page)]
-                                border border-[var(--border-emphasis)]
+                                border border-[var(--border-default)]
                                 text-[13px] text-[var(--text-primary)]
                                 focus:outline-none focus:border-[var(--accent)]
                             "
@@ -406,8 +439,8 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
                         disabled={busy}
                         className="
                             px-3 py-1.5 rounded-md text-[12.5px]
-                            bg-[var(--bg-elevated)] border border-[var(--border-emphasis)]
-                            text-[var(--text-secondary)] hover:text-white
+                            bg-[var(--bg-surface)] border border-[var(--border-emphasis)]
+                            text-[var(--text-secondary)] hover:text-[var(--text-primary)]
                             hover:bg-[var(--bg-hover)] disabled:opacity-50
                         "
                     >
@@ -418,7 +451,7 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
                         disabled={busy}
                         className="
                             px-3 py-1.5 rounded-md text-[12.5px] font-medium
-                            bg-[var(--accent)] text-white hover:opacity-90
+                            bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]
                             disabled:opacity-50
                         "
                     >

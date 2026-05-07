@@ -129,15 +129,15 @@ export default function ResponseEditorPage() {
     if (!valid) {
         return (
             <div className="px-6 py-8 max-w-5xl mx-auto">
-                <p className="text-[13px] text-[#ef4444]">Invalid notice id.</p>
+                <p className="text-[13px] text-[var(--danger)]">Invalid notice id.</p>
             </div>
         );
     }
     if (responseQ.isLoading) {
         return (
             <div className="px-6 py-8 max-w-5xl mx-auto">
-                <div className="h-6 w-48 bg-[#18181b] rounded animate-pulse mb-6" />
-                <div className="h-64 bg-[#18181b] rounded animate-pulse" />
+                <div className="h-6 w-48 bg-[var(--bg-hover)] rounded animate-pulse mb-6" />
+                <div className="h-64 bg-[var(--bg-hover)] rounded animate-pulse" />
             </div>
         );
     }
@@ -146,7 +146,7 @@ export default function ResponseEditorPage() {
         <div className="px-6 py-8 max-w-7xl mx-auto">
             <Link
                 href={`/dashboard/compliance/notices/${noticeId}`}
-                className="inline-flex items-center gap-1.5 text-[12px] text-[#a1a1aa] hover:text-white mb-4"
+                className="inline-flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] mb-4"
             >
                 <FiArrowLeft className="w-3.5 h-3.5" />
                 Back to notice
@@ -154,10 +154,10 @@ export default function ResponseEditorPage() {
 
             <header className="mb-6 flex items-start justify-between flex-wrap gap-4">
                 <div>
-                    <h1 className="text-2xl font-semibold text-white tracking-tight mb-1">
+                    <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight mb-1">
                         Response
                     </h1>
-                    <p className="text-[13px] text-[#a1a1aa]">
+                    <p className="text-[13px] text-[var(--text-muted)]">
                         Drafter → Reviewer → Legal → CFO. Notice cannot be marked submitted
                         until the response is approved.
                     </p>
@@ -224,7 +224,7 @@ export default function ResponseEditorPage() {
                         </>
                     )}
                     {!detail && (
-                        <div className="rounded border border-[#1f1f23] bg-[#0c0c0f] px-4 py-3 text-[12px] text-[#71717a]">
+                        <div className="surface-card px-4 py-3 text-[12px] text-[var(--text-muted)]">
                             Save your first draft to begin tracking versions and
                             approvals.
                         </div>
@@ -250,15 +250,17 @@ function DraftEditor({
     responseDate: string;
     onChange: (s: string, b: string, r: string, d: string) => void;
 }) {
+    const inputClass =
+        "w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-3 h-9 text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)] disabled:opacity-60";
     return (
-        <div className="rounded border border-[#1f1f23] bg-[#0c0c0f] p-4 space-y-3">
+        <div className="surface-card p-4 space-y-3">
             <Field label="Subject">
                 <input
                     type="text"
                     value={subject}
                     onChange={(e) => onChange(e.target.value, body, recipient, responseDate)}
                     disabled={!editable}
-                    className="w-full bg-[#09090b] border border-[#1f1f23] rounded px-3 h-9 text-[13px] text-white focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 disabled:opacity-60"
+                    className={inputClass}
                     placeholder="Re: Notice DRC-01/2026/A1 — Reply to demand notice"
                 />
             </Field>
@@ -269,7 +271,7 @@ function DraftEditor({
                         value={recipient}
                         onChange={(e) => onChange(subject, body, e.target.value, responseDate)}
                         disabled={!editable}
-                        className="w-full bg-[#09090b] border border-[#1f1f23] rounded px-3 h-9 text-[13px] text-white focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 disabled:opacity-60"
+                        className={inputClass}
                         placeholder="Asst. Commissioner, GST Range 5"
                     />
                 </Field>
@@ -279,7 +281,7 @@ function DraftEditor({
                         value={responseDate}
                         onChange={(e) => onChange(subject, body, recipient, e.target.value)}
                         disabled={!editable}
-                        className="w-full bg-[#09090b] border border-[#1f1f23] rounded px-3 h-9 text-[13px] text-white focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 disabled:opacity-60"
+                        className={inputClass}
                     />
                 </Field>
             </div>
@@ -289,12 +291,12 @@ function DraftEditor({
                     onChange={(e) => onChange(subject, e.target.value, recipient, responseDate)}
                     disabled={!editable}
                     rows={18}
-                    className="w-full bg-[#09090b] border border-[#1f1f23] rounded px-3 py-2 text-[13px] text-white font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 disabled:opacity-60"
+                    className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-3 py-2 text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] font-mono leading-relaxed focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)] disabled:opacity-60"
                     placeholder="# Response\n\nWith reference to the above-cited notice..."
                 />
             </Field>
             {!editable && (
-                <p className="text-[11px] text-[#71717a] flex items-center gap-1">
+                <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1">
                     <FiAlertCircle className="w-3 h-3" />
                     Editor is read-only — response is past the draft stage. Withdraw or wait for
                     a rejection to edit again.
@@ -307,7 +309,7 @@ function DraftEditor({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <label className="block">
-            <span className="text-[11px] uppercase tracking-wider text-[#71717a] block mb-1.5">
+            <span className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] block mb-1.5">
                 {label}
             </span>
             {children}
@@ -334,12 +336,12 @@ function ActionBar(props: {
     rejecting: boolean;
 }) {
     return (
-        <div className="rounded border border-[#1f1f23] bg-[#0c0c0f] p-4 flex flex-wrap items-center gap-3">
+        <div className="surface-card p-4 flex flex-wrap items-center gap-3">
             {props.canEdit && (
                 <ActionButton
                     onClick={props.onSave}
                     disabled={props.saving}
-                    color="#3b82f6"
+                    color="var(--accent)"
                     icon={FiSave}
                     label={props.saving ? "Saving…" : "Save version"}
                 />
@@ -348,7 +350,7 @@ function ActionBar(props: {
                 <ActionButton
                     onClick={props.onSubmit}
                     disabled={props.submitting}
-                    color="#10b981"
+                    color="var(--success)"
                     icon={FiSend}
                     label={props.submitting ? "Submitting…" : "Submit for review"}
                 />
@@ -356,7 +358,7 @@ function ActionBar(props: {
             {props.canWithdraw && (
                 <ActionButton
                     onClick={props.onWithdraw}
-                    color="#71717a"
+                    color="var(--text-muted)"
                     icon={FiRotateCcw}
                     label="Withdraw"
                 />
@@ -366,7 +368,7 @@ function ActionBar(props: {
                     <ActionButton
                         onClick={props.onApprove}
                         disabled={props.approving}
-                        color="#10b981"
+                        color="var(--success)"
                         icon={FiCheck}
                         label={props.approving ? "Approving…" : "Approve current stage"}
                     />
@@ -375,12 +377,12 @@ function ActionBar(props: {
                         value={props.rejectReason}
                         onChange={(e) => props.onRejectReasonChange(e.target.value)}
                         placeholder="Reject reason (required)"
-                        className="flex-1 min-w-[160px] bg-[#09090b] border border-[#1f1f23] rounded px-3 h-8 text-[12px] text-white focus:outline-none focus:ring-2 focus:ring-[#ef4444]/40"
+                        className="flex-1 min-w-[160px] bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-3 h-8 text-[12px] text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--danger)_40%,transparent)]"
                     />
                     <ActionButton
                         onClick={props.onReject}
                         disabled={props.rejecting || !props.rejectReason.trim()}
-                        color="#ef4444"
+                        color="var(--danger)"
                         icon={FiX}
                         label={props.rejecting ? "Rejecting…" : "Reject"}
                     />
@@ -408,11 +410,11 @@ function ActionButton({
             type="button"
             onClick={onClick}
             disabled={disabled}
-            className="inline-flex items-center gap-1.5 px-3 h-8 rounded border text-[12px] font-medium disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
+            className="inline-flex items-center gap-1.5 px-3 h-8 rounded border text-[12px] font-medium disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]"
             style={{
-                backgroundColor: `${color}1a`,
+                backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
                 color,
-                borderColor: `${color}40`,
+                borderColor: `color-mix(in srgb, ${color} 30%, transparent)`,
             }}
         >
             <Icon className="w-3.5 h-3.5" />
@@ -431,8 +433,8 @@ function VersionTimeline({
     onRollback: (vid: number) => void;
 }) {
     return (
-        <div className="rounded border border-[#1f1f23] bg-[#0c0c0f] p-4">
-            <h3 className="text-[12px] uppercase tracking-wider text-[#71717a] mb-3">
+        <div className="surface-card p-4">
+            <h3 className="text-[12px] uppercase tracking-wider text-[var(--text-muted)] mb-3">
                 Versions ({detail.versions.length})
             </h3>
             <ul className="space-y-2">
@@ -442,25 +444,25 @@ function VersionTimeline({
                         <li
                             key={v.id}
                             className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded ${
-                                isCurrent ? "bg-[#3b82f61a]" : ""
+                                isCurrent ? "bg-[var(--accent-soft)]" : ""
                             }`}
                         >
-                            <span className="text-[12px] text-[#d4d4d8]">
+                            <span className="text-[12px] text-[var(--text-secondary)]">
                                 v{v.version_no}
                                 {v.rolled_back_from_version_id && (
-                                    <span className="text-[10px] text-[#71717a] ml-1">
+                                    <span className="text-[10px] text-[var(--text-muted)] ml-1">
                                         (← v{v.rolled_back_from_version_id})
                                     </span>
                                 )}
                             </span>
-                            <span className="text-[10px] text-[#71717a] tabular-nums flex-1 text-right">
+                            <span className="text-[10px] text-[var(--text-muted)] tabular-nums flex-1 text-right">
                                 {new Date(v.created_at).toLocaleString()}
                             </span>
                             {!isCurrent && canRollback && (
                                 <button
                                     type="button"
                                     onClick={() => onRollback(v.id)}
-                                    className="text-[10px] text-[#3b82f6] hover:underline"
+                                    className="text-[10px] text-[var(--accent)] hover:underline"
                                 >
                                     rollback
                                 </button>
@@ -476,43 +478,43 @@ function VersionTimeline({
 function ApprovalLog({ detail }: { detail: NoticeResponseDetail }) {
     if (detail.approvals.length === 0) {
         return (
-            <div className="rounded border border-[#1f1f23] bg-[#0c0c0f] px-4 py-3">
-                <h3 className="text-[12px] uppercase tracking-wider text-[#71717a] mb-2">
+            <div className="surface-card px-4 py-3">
+                <h3 className="text-[12px] uppercase tracking-wider text-[var(--text-muted)] mb-2">
                     Approval log
                 </h3>
-                <p className="text-[11px] text-[#71717a]">
+                <p className="text-[11px] text-[var(--text-muted)]">
                     No approvals yet. Submit the draft to trigger the workflow.
                 </p>
             </div>
         );
     }
     return (
-        <div className="rounded border border-[#1f1f23] bg-[#0c0c0f] p-4">
-            <h3 className="text-[12px] uppercase tracking-wider text-[#71717a] mb-3">
+        <div className="surface-card p-4">
+            <h3 className="text-[12px] uppercase tracking-wider text-[var(--text-muted)] mb-3">
                 Approval log ({detail.approvals.length})
             </h3>
             <ul className="space-y-2">
                 {detail.approvals.map((a) => {
-                    const color = a.decision === "approved" ? "#10b981" : "#ef4444";
+                    const color = a.decision === "approved" ? "var(--success)" : "var(--danger)";
                     return (
                         <li key={a.id} className="text-[12px] flex flex-col gap-0.5">
                             <div className="flex items-center gap-2">
                                 <span
                                     className="px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider font-semibold"
                                     style={{
-                                        backgroundColor: `${color}1a`,
+                                        backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
                                         color,
                                     }}
                                 >
                                     {a.stage}
                                 </span>
                                 <span style={{ color }}>{a.decision}</span>
-                                <span className="text-[10px] text-[#71717a] ml-auto tabular-nums">
+                                <span className="text-[10px] text-[var(--text-muted)] ml-auto tabular-nums">
                                     {new Date(a.created_at).toLocaleString()}
                                 </span>
                             </div>
                             {a.reason && (
-                                <p className="text-[11px] text-[#a1a1aa] italic ml-1">
+                                <p className="text-[11px] text-[var(--text-secondary)] italic ml-1">
                                     “{a.reason}”
                                 </p>
                             )}
@@ -536,7 +538,7 @@ function ErrorBanner({
     return (
         <div
             role="alert"
-            className="rounded border border-[#7f1d1d] bg-[#1f0b0b] px-3 py-2 text-[12px] text-[#fca5a5]"
+            className="rounded border border-[color:color-mix(in_srgb,var(--danger)_30%,transparent)] bg-[var(--danger-soft)] px-3 py-2 text-[12px] text-[var(--danger)]"
         >
             {msg}
         </div>

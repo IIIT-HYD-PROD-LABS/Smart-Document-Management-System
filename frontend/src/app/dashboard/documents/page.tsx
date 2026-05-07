@@ -99,37 +99,52 @@ export default function DocumentsPage() {
         <div>
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-lg font-semibold text-white">Documents</h1>
-                    <p className="text-sm text-[#52525b] mt-1">{docs.length} document{docs.length !== 1 ? "s" : ""} in your library</p>
+                    <h1 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>Documents</h1>
+                    <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+                        {docs.length} document{docs.length !== 1 ? "s" : ""} in your library
+                    </p>
                 </div>
             </div>
 
             {/* Bulk action bar */}
             {isSelectMode && (
-                <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-[#18181b] border border-[#3f3f46] rounded-lg">
+                <div
+                    className="flex items-center gap-3 mb-4 px-4 py-3 rounded-lg border"
+                    style={{
+                        background: "var(--accent-soft)",
+                        borderColor: "var(--accent-edge)",
+                    }}
+                >
                     <button
                         onClick={toggleSelectAll}
-                        className="flex items-center gap-2 text-xs text-[#a1a1aa] hover:text-white transition-colors cursor-pointer"
+                        className="flex items-center gap-2 text-xs transition-colors cursor-pointer"
+                        style={{ color: "var(--text-secondary)" }}
                     >
                         {selected.size === filtered.length
-                            ? <FiCheckSquare className="w-4 h-4 text-[#3b82f6]" />
+                            ? <FiCheckSquare className="w-4 h-4" style={{ color: "var(--accent)" }} />
                             : <FiSquare className="w-4 h-4" />}
                         {selected.size === filtered.length ? "Deselect all" : "Select all"}
                     </button>
-                    <span className="text-xs text-[#52525b]">|</span>
-                    <span className="text-xs text-white">{selected.size} selected</span>
+                    <span className="text-xs" style={{ color: "var(--text-disabled)" }}>|</span>
+                    <span className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>{selected.size} selected</span>
                     <div className="flex-1" />
                     <button
                         onClick={handleBatchDelete}
                         disabled={deleting}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#ef4444]/10 text-[#ef4444] rounded-md hover:bg-[#ef4444]/20 disabled:opacity-50 transition-colors cursor-pointer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md disabled:opacity-50 transition-colors cursor-pointer border"
+                        style={{
+                            background: "var(--danger-soft)",
+                            color: "var(--danger)",
+                            borderColor: "color-mix(in srgb, var(--danger) 25%, transparent)",
+                        }}
                     >
                         <FiTrash2 className="w-3.5 h-3.5" />
                         {deleting ? "Deleting..." : `Delete ${selected.size}`}
                     </button>
                     <button
                         onClick={() => setSelected(new Set())}
-                        className="text-[#52525b] hover:text-white transition-colors cursor-pointer"
+                        className="transition-colors cursor-pointer touch-target flex items-center justify-center"
+                        style={{ color: "var(--text-muted)" }}
                     >
                         <FiX className="w-4 h-4" />
                     </button>
@@ -137,80 +152,119 @@ export default function DocumentsPage() {
             )}
 
             <div className="flex flex-wrap items-center gap-1.5 mb-6">
-                <FiFilter className="w-3.5 h-3.5 text-[#52525b] mr-1 shrink-0" />
-                {categories.map((cat) => (
-                    <button
-                        key={cat}
-                        onClick={() => setFilter(cat)}
-                        className={`px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer ${
-                            filter === cat
-                                ? "bg-[#18181b] text-white border border-[#3f3f46]"
-                                : "text-[#71717a] hover:text-[#a1a1aa] border border-transparent"
-                        }`}
-                    >
-                        {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                    </button>
-                ))}
+                <FiFilter className="w-3.5 h-3.5 mr-1 shrink-0" style={{ color: "var(--text-muted)" }} />
+                {categories.map((cat) => {
+                    const isActive = filter === cat;
+                    return (
+                        <button
+                            key={cat}
+                            onClick={() => setFilter(cat)}
+                            className="px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer border"
+                            style={{
+                                background: isActive ? "var(--bg-elevated)" : "transparent",
+                                color: isActive ? "var(--text-primary)" : "var(--text-muted)",
+                                borderColor: isActive ? "var(--border-emphasis)" : "transparent",
+                                fontWeight: isActive ? 500 : 400,
+                            }}
+                        >
+                            {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                        </button>
+                    );
+                })}
             </div>
 
             {filtered.length > 0 ? (
-                <div className="bg-[#111113] border border-[#27272a] rounded-lg divide-y divide-[#1f1f23]">
-                    {filtered.map((doc) => (
-                        <div
-                            key={doc.id}
-                            onClick={() => isSelectMode ? toggleSelect(doc.id, { stopPropagation: () => {} } as React.MouseEvent) : router.push(`/dashboard/documents/${doc.id}`)}
-                            className={`flex items-center gap-4 px-5 py-4 hover:bg-[#18181b] transition-colors group cursor-pointer ${
-                                selected.has(doc.id) ? "bg-[#3b82f6]/5" : ""
-                            }`}
-                        >
-                            {/* Checkbox */}
+                <div
+                    className="rounded-lg overflow-hidden border"
+                    style={{
+                        background: "var(--bg-elevated)",
+                        borderColor: "var(--border-default)",
+                        boxShadow: "var(--shadow-sm)",
+                    }}
+                >
+                    {filtered.map((doc, idx) => {
+                        const isSelected = selected.has(doc.id);
+                        return (
                             <div
-                                onClick={(e) => toggleSelect(doc.id, e)}
-                                className="shrink-0"
+                                key={doc.id}
+                                onClick={() => isSelectMode ? toggleSelect(doc.id, { stopPropagation: () => {} } as React.MouseEvent) : router.push(`/dashboard/documents/${doc.id}`)}
+                                className="flex items-center gap-4 px-5 py-4 transition-colors group cursor-pointer"
+                                style={{
+                                    background: isSelected ? "var(--accent-soft)" : "transparent",
+                                    borderTop: idx === 0 ? "none" : "1px solid var(--border-subtle)",
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)";
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!isSelected) e.currentTarget.style.background = "transparent";
+                                }}
                             >
-                                {selected.has(doc.id)
-                                    ? <FiCheckSquare className="w-4 h-4 text-[#3b82f6]" />
-                                    : <FiSquare className={`w-4 h-4 ${isSelectMode ? "text-[#52525b]" : "text-[#27272a] group-hover:text-[#52525b]"} transition-colors`} />}
-                            </div>
-
-                            <FiFileText className="w-4 h-4 text-[#52525b] shrink-0" />
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                    {(doc.source === "gmail" || doc.source === "gmail_body") && (
-                                        <FiMail
-                                            className="w-3.5 h-3.5 text-[#3b82f6] shrink-0"
-                                            title={doc.source === "gmail_body" ? "Ingested from Gmail body" : "Ingested from Gmail attachment"}
-                                        />
-                                    )}
-                                    <p className="text-sm text-white truncate">{doc.original_filename}</p>
-                                </div>
-                                <p className="text-xs text-[#52525b] mt-0.5">
-                                    {doc.file_size != null ? `${(doc.file_size / 1024).toFixed(1)} KB` : "Unknown size"} · {new Date(doc.created_at).toLocaleDateString()}
-                                </p>
-                            </div>
-                            <div className="flex items-center gap-3 shrink-0">
-                                <span className="hidden sm:inline-flex">
-                                    {doc.category && (
-                                        <CategoryBadge category={doc.category} />
-                                    )}
-                                </span>
-                                <span className="hidden md:inline-flex">
-                                    <ConfidenceBadge score={doc.confidence_score ?? 0} />
-                                </span>
-                                <StatusBadge status={doc.status} />
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
-                                    className="opacity-0 group-hover:opacity-100 text-[#52525b] hover:text-[#ef4444] transition-all cursor-pointer"
+                                <div
+                                    onClick={(e) => toggleSelect(doc.id, e)}
+                                    className="shrink-0 touch-target flex items-center justify-center"
                                 >
-                                    <FiTrash2 className="w-3.5 h-3.5" />
-                                </button>
+                                    {isSelected
+                                        ? <FiCheckSquare className="w-4 h-4" style={{ color: "var(--accent)" }} />
+                                        : <FiSquare
+                                            className="w-4 h-4 transition-colors"
+                                            style={{
+                                                color: isSelectMode ? "var(--text-muted)" : "var(--border-emphasis)",
+                                            }}
+                                        />}
+                                </div>
+
+                                <FiFileText className="w-4 h-4 shrink-0" style={{ color: "var(--text-muted)" }} />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                        {(doc.source === "gmail" || doc.source === "gmail_body") && (
+                                            <FiMail
+                                                className="w-3.5 h-3.5 shrink-0"
+                                                style={{ color: "var(--accent)" }}
+                                                title={doc.source === "gmail_body" ? "Ingested from Gmail body" : "Ingested from Gmail attachment"}
+                                            />
+                                        )}
+                                        <p className="text-sm truncate" style={{ color: "var(--text-primary)" }}>{doc.original_filename}</p>
+                                    </div>
+                                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                                        {doc.file_size != null ? `${(doc.file_size / 1024).toFixed(1)} KB` : "Unknown size"} &middot; {new Date(doc.created_at).toLocaleDateString()}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0">
+                                    <span className="hidden sm:inline-flex">
+                                        {doc.category && (
+                                            <CategoryBadge category={doc.category} />
+                                        )}
+                                    </span>
+                                    <span className="hidden md:inline-flex">
+                                        <ConfidenceBadge score={doc.confidence_score ?? 0} />
+                                    </span>
+                                    <StatusBadge status={doc.status} />
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
+                                        className="opacity-0 group-hover:opacity-100 transition-all cursor-pointer touch-target flex items-center justify-center"
+                                        style={{ color: "var(--text-muted)" }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                                    >
+                                        <FiTrash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             ) : (
-                <div className="bg-[#111113] border border-[#27272a] rounded-lg py-16 text-center">
-                    <p className="text-sm text-[#52525b]">{filter === "all" ? "No documents yet" : `No ${filter} documents`}</p>
+                <div
+                    className="rounded-lg py-16 text-center border"
+                    style={{
+                        background: "var(--bg-elevated)",
+                        borderColor: "var(--border-default)",
+                    }}
+                >
+                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                        {filter === "all" ? "No documents yet" : `No ${filter} documents`}
+                    </p>
                 </div>
             )}
         </div>

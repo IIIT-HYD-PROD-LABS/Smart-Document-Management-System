@@ -79,9 +79,9 @@ export function BulkActionBar({ selectedIds, onClear, onUpdated }: Props) {
                     icon: "⚠",
                     duration: 6000,
                     style: {
-                        background: "#f59e0b1a",
-                        color: "#f59e0b",
-                        border: "1px solid #f59e0b",
+                        background: "var(--warning-soft)",
+                        color: "var(--warning)",
+                        border: "1px solid var(--warning)",
                     },
                 });
             }
@@ -100,7 +100,7 @@ export function BulkActionBar({ selectedIds, onClear, onUpdated }: Props) {
             className="
                 fixed bottom-6 left-1/2 -translate-x-1/2 z-40
                 flex items-center gap-2 px-3 py-2
-                bg-[#111113] border border-[#27272a] rounded-md shadow-2xl shadow-black/40
+                bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md shadow-[var(--shadow-lg)]
                 animate-in slide-in-from-bottom duration-200
             "
             role="toolbar"
@@ -109,7 +109,7 @@ export function BulkActionBar({ selectedIds, onClear, onUpdated }: Props) {
             <span
                 className="
                     inline-flex items-center px-2.5 py-1 rounded
-                    bg-[#3b82f6]/20 text-[#3b82f6] text-[12px] font-medium
+                    bg-[var(--accent-soft)] text-[var(--accent)] text-[12px] font-medium
                 "
                 aria-live="polite"
             >
@@ -123,9 +123,9 @@ export function BulkActionBar({ selectedIds, onClear, onUpdated }: Props) {
                     disabled={submitting}
                     className="
                         inline-flex items-center gap-1 px-3 py-1.5 rounded
-                        bg-[#3b82f6] text-white text-[12px] font-medium
-                        hover:bg-[#2563eb] disabled:opacity-60 disabled:cursor-not-allowed
-                        focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                        bg-[var(--accent)] text-white text-[12px] font-medium
+                        hover:bg-[var(--accent-strong)] disabled:opacity-60 disabled:cursor-not-allowed
+                        focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
                     "
                     aria-haspopup="menu"
                     aria-expanded={statusMenuOpen}
@@ -138,7 +138,7 @@ export function BulkActionBar({ selectedIds, onClear, onUpdated }: Props) {
                         role="menu"
                         className="
                             absolute bottom-full left-0 mb-2 w-56
-                            bg-[#111113] border border-[#27272a] rounded-md shadow-xl
+                            bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md shadow-[var(--shadow-lg)]
                             py-1
                         "
                     >
@@ -149,8 +149,8 @@ export function BulkActionBar({ selectedIds, onClear, onUpdated }: Props) {
                                 role="menuitem"
                                 onClick={() => handleBulkStatus(s)}
                                 className="
-                                    w-full text-left px-3 py-1.5 text-[13px] text-white
-                                    hover:bg-[#18181b] flex items-center gap-2
+                                    w-full text-left px-3 py-1.5 text-[13px] text-[var(--text-primary)]
+                                    hover:bg-[var(--bg-hover)] flex items-center gap-2
                                 "
                             >
                                 <span
@@ -169,7 +169,7 @@ export function BulkActionBar({ selectedIds, onClear, onUpdated }: Props) {
                 disabled
                 className="
                     inline-flex items-center gap-1 px-3 py-1.5 rounded
-                    text-[12px] text-[#52525b] bg-[#18181b] border border-[#27272a]
+                    text-[12px] text-[var(--text-disabled)] bg-[var(--bg-muted)] border border-[var(--border-default)]
                     cursor-not-allowed
                 "
                 title="Coming after Phase 9"
@@ -183,7 +183,7 @@ export function BulkActionBar({ selectedIds, onClear, onUpdated }: Props) {
                 disabled
                 className="
                     inline-flex items-center gap-1 px-3 py-1.5 rounded
-                    text-[12px] text-[#52525b] bg-[#18181b] border border-[#27272a]
+                    text-[12px] text-[var(--text-disabled)] bg-[var(--bg-muted)] border border-[var(--border-default)]
                     cursor-not-allowed
                 "
                 title="Coming after Phase 9"
@@ -196,7 +196,7 @@ export function BulkActionBar({ selectedIds, onClear, onUpdated }: Props) {
                 type="button"
                 disabled
                 className="
-                    p-1.5 rounded text-[#52525b] bg-[#18181b] border border-[#27272a]
+                    p-1.5 rounded text-[var(--text-disabled)] bg-[var(--bg-muted)] border border-[var(--border-default)]
                     cursor-not-allowed
                 "
                 title="More — coming after Phase 9"
@@ -210,8 +210,8 @@ export function BulkActionBar({ selectedIds, onClear, onUpdated }: Props) {
                 onClick={onClear}
                 className="
                     ml-1 inline-flex items-center gap-1 px-2 py-1.5 rounded
-                    text-[12px] text-[#71717a] hover:text-white hover:bg-[#18181b]
-                    focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                    text-[12px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]
+                    focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
                 "
                 aria-label="Clear selection"
             >

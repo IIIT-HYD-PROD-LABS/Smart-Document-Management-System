@@ -82,7 +82,7 @@ export default function TeamPage({
     if (Number.isNaN(clientId)) {
         return (
             <div className="px-6 py-12 max-w-4xl mx-auto text-center">
-                <h1 className="text-lg font-semibold text-white mb-2">
+                <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
                     Invalid client ID
                 </h1>
             </div>
@@ -92,11 +92,11 @@ export default function TeamPage({
     if (isLoading) {
         return (
             <div className="px-6 py-8 max-w-5xl mx-auto">
-                <div className="h-7 w-64 bg-[#18181b] animate-pulse rounded mb-6" />
+                <div className="h-7 w-64 bg-[var(--bg-hover)] animate-pulse rounded mb-6" />
                 {[0, 1, 2].map((i) => (
                     <div
                         key={i}
-                        className="h-16 bg-[#18181b] animate-pulse rounded mb-2"
+                        className="h-16 bg-[var(--bg-hover)] animate-pulse rounded mb-2"
                     />
                 ))}
             </div>
@@ -109,10 +109,10 @@ export default function TeamPage({
         if (status === 403) {
             return (
                 <div className="px-6 py-12 max-w-4xl mx-auto text-center">
-                    <h1 className="text-lg font-semibold text-white mb-2">
+                    <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
                         You don&apos;t have access to this client
                     </h1>
-                    <p className="text-[#71717a] text-sm">
+                    <p className="text-[var(--text-muted)] text-sm">
                         Your membership for this client may have changed.
                     </p>
                 </div>
@@ -120,7 +120,7 @@ export default function TeamPage({
         }
         return (
             <div className="px-6 py-12 max-w-4xl mx-auto text-center">
-                <h1 className="text-lg font-semibold text-white mb-2">
+                <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
                     Couldn&apos;t load this team
                 </h1>
             </div>
@@ -130,7 +130,7 @@ export default function TeamPage({
     return (
         <div className="px-6 py-8 max-w-5xl mx-auto">
             <div className="flex items-center justify-between mb-6">
-                <h1 className="text-lg font-semibold text-white">
+                <h1 className="text-lg font-semibold text-[var(--text-primary)]">
                     Team — {client.name}
                 </h1>
                 <button
@@ -138,9 +138,9 @@ export default function TeamPage({
                     onClick={() => setShowAdd(true)}
                     className="
                         inline-flex items-center gap-2 px-3 py-1.5 rounded-md
-                        bg-[#3b82f6] text-white text-sm font-medium
-                        hover:bg-[#3b82f6]/90 transition-colors
-                        focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                        bg-[var(--accent)] text-white text-sm font-medium
+                        hover:bg-[var(--accent-strong)] transition-colors
+                        focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
                     "
                 >
                     <FiPlus className="w-3.5 h-3.5" />
@@ -149,7 +149,7 @@ export default function TeamPage({
             </div>
 
             {client.memberships.length === 0 ? (
-                <div className="text-center py-12 text-[#71717a] text-sm">
+                <div className="text-center py-12 text-[var(--text-muted)] text-sm">
                     No team members yet.
                 </div>
             ) : (
@@ -164,33 +164,34 @@ export default function TeamPage({
                                 key={m.id}
                                 className={`
                                     flex items-center gap-3 p-4 rounded-md
-                                    bg-[#111113] border border-[#27272a]
+                                    bg-[var(--bg-elevated)] border border-[var(--border-default)]
+                                    shadow-[var(--shadow-sm)]
                                     ${expired ? "opacity-50" : ""}
                                 `}
                             >
                                 <button
                                     type="button"
                                     onClick={() => setDrawerRole(role)}
-                                    className="px-2 py-1 rounded text-[11px] font-medium hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
+                                    className="px-2 py-1 rounded text-[11px] font-medium hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]"
                                     style={{
-                                        backgroundColor: `${COMPLIANCE_ROLE_COLORS[role]}1a`,
+                                        backgroundColor: `color-mix(in srgb, ${COMPLIANCE_ROLE_COLORS[role]} 12%, transparent)`,
                                         color: COMPLIANCE_ROLE_COLORS[role],
                                     }}
                                     aria-label={`View ${COMPLIANCE_ROLE_LABELS[role]} permissions`}
                                 >
                                     {COMPLIANCE_ROLE_LABELS[role]}
                                 </button>
-                                <span className="text-sm text-white flex-1">
+                                <span className="text-sm text-[var(--text-primary)] flex-1">
                                     User #{m.user_id}
                                 </span>
                                 {role === "auditor" && m.access_end && (
                                     <span
                                         className={`text-xs flex items-center gap-1 ${
                                             expired
-                                                ? "text-[#ef4444]"
+                                                ? "text-[var(--danger)]"
                                                 : expiringSoon
-                                                ? "text-[#f59e0b]"
-                                                : "text-[#71717a]"
+                                                ? "text-[var(--warning)]"
+                                                : "text-[var(--text-muted)]"
                                         }`}
                                     >
                                         <FiClock className="w-3 h-3" />
@@ -214,7 +215,7 @@ export default function TeamPage({
                                     onClick={() =>
                                         removeMember(m.id, m.user_id)
                                     }
-                                    className="p-1.5 text-[#71717a] hover:text-[#ef4444] transition-colors focus:outline-none focus:ring-2 focus:ring-[#ef4444]/40 rounded"
+                                    className="p-1.5 text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors focus:outline-none focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--danger)_40%,transparent)] rounded"
                                     aria-label={`Remove user ${m.user_id}`}
                                 >
                                     <FiTrash2 className="w-3.5 h-3.5" />

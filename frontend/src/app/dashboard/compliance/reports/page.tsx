@@ -41,7 +41,7 @@ function todayStamp(): string {
 }
 
 const downloadButtonClass =
-    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium bg-[#18181b] border border-[#27272a] text-[#a1a1aa] hover:text-white hover:border-[#3f3f46] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6]/40";
+    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)]";
 
 /**
  * Reports — UI-SPEC §reports + CLIENT-07.
@@ -112,25 +112,25 @@ export default function ReportsPage() {
         <div className="px-6 py-8 max-w-5xl mx-auto">
             <header className="mb-6 flex items-start gap-3">
                 <FiBarChart2
-                    className="w-5 h-5 text-[#3b82f6] mt-0.5 shrink-0"
+                    className="w-5 h-5 text-[var(--accent)] mt-0.5 shrink-0"
                     aria-hidden="true"
                 />
                 <div>
-                    <h1 className="text-lg font-semibold text-white mb-0.5">
+                    <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-0.5">
                         Reports
                     </h1>
-                    <p className="text-[13px] text-[#71717a]">
+                    <p className="text-[13px] text-[var(--text-muted)]">
                         Generate a monthly compliance health summary on demand.
                     </p>
                 </div>
             </header>
 
             {activeClientId === null ? (
-                <div className="bg-[#111113] border border-[#27272a] rounded-md p-12 text-center">
-                    <h2 className="text-sm font-semibold text-white mb-1">
+                <div className="surface-card p-12 text-center">
+                    <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
                         No client selected
                     </h2>
-                    <p className="text-[13px] text-[#71717a]">
+                    <p className="text-[13px] text-[var(--text-muted)]">
                         Select a client from the switcher to generate reports.
                     </p>
                 </div>
@@ -141,12 +141,12 @@ export default function ReportsPage() {
                             e.preventDefault();
                             generate.mutate();
                         }}
-                        className="bg-[#111113] border border-[#27272a] rounded-md p-4 mb-6 flex items-end gap-3 flex-wrap"
+                        className="surface-card p-4 mb-6 flex items-end gap-3 flex-wrap"
                     >
                         <div className="flex-1 min-w-[180px]">
                             <label
                                 htmlFor="report-month"
-                                className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1.5"
+                                className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5"
                             >
                                 Month
                             </label>
@@ -156,13 +156,13 @@ export default function ReportsPage() {
                                 value={month}
                                 onChange={(e) => setMonth(e.target.value)}
                                 required
-                                className="w-full bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-[13px] text-white focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40"
+                                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-2.5 py-1.5 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]"
                             />
                         </div>
                         <button
                             type="submit"
                             disabled={generate.isPending}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#3b82f6] text-white text-[12px] font-medium hover:bg-[#2563eb] disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[var(--accent)] text-white text-[12px] font-medium hover:bg-[var(--accent-strong)] disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]"
                         >
                             <FiPlay className="w-3.5 h-3.5" />
                             {generate.isPending ? "Generating…" : "Generate"}
@@ -171,7 +171,7 @@ export default function ReportsPage() {
                             type="button"
                             onClick={() => downloadHealthSummary.mutate()}
                             disabled={downloadHealthSummary.isPending}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#18181b] border border-[#27272a] text-white text-[12px] font-medium hover:border-[#3f3f46] disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] font-medium hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-hover)] disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]"
                             title="Download monthly summary as CSV"
                         >
                             <FiDownload className="w-3.5 h-3.5" />
@@ -180,29 +180,29 @@ export default function ReportsPage() {
                     </form>
 
                     {summary && (
-                        <div className="bg-[#111113] border border-[#27272a] rounded-md p-6">
+                        <div className="surface-card p-6">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                                 {Object.entries(summary.metrics).map(
                                     ([k, v]) => (
                                         <div
                                             key={k}
-                                            className="bg-[#18181b] rounded p-4"
+                                            className="bg-[var(--bg-muted)] border border-[var(--border-default)] rounded p-4"
                                         >
-                                            <div className="text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1">
+                                            <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
                                                 {k.replace(/_/g, " ")}
                                             </div>
-                                            <div className="text-2xl font-semibold text-white tabular-nums">
+                                            <div className="text-2xl font-semibold text-[var(--text-primary)] tabular-nums">
                                                 {v}
                                             </div>
                                         </div>
                                     )
                                 )}
                             </div>
-                            <details className="border-t border-[#27272a] pt-4">
-                                <summary className="text-[11px] uppercase tracking-wider text-[#a1a1aa] cursor-pointer hover:text-white focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 rounded">
+                            <details className="border-t border-[var(--border-default)] pt-4">
+                                <summary className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] cursor-pointer hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)] rounded">
                                     Raw HTML (debug)
                                 </summary>
-                                <pre className="mt-2 text-xs text-[#71717a] font-mono whitespace-pre-wrap bg-[#18181b] rounded p-3 overflow-x-auto">
+                                <pre className="mt-2 text-xs text-[var(--text-muted)] font-mono whitespace-pre-wrap bg-[var(--bg-muted)] border border-[var(--border-default)] rounded p-3 overflow-x-auto">
                                     {summary.summary_html}
                                 </pre>
                             </details>
@@ -243,11 +243,11 @@ function PenaltyByAuthorityCard() {
     };
 
     return (
-        <div className="bg-[#111113] border border-[#27272a] rounded-md p-5">
+        <div className="surface-card p-5">
             <div className="flex items-center justify-between mb-3 gap-2">
                 <div className="flex items-center gap-2">
                     <FiPieChart className="w-4 h-4 text-[#ec4899]" />
-                    <h2 className="text-[13px] font-semibold text-white">
+                    <h2 className="text-[13px] font-semibold text-[var(--text-primary)]">
                         Penalty by authority — last 90 days
                     </h2>
                 </div>
@@ -262,9 +262,9 @@ function PenaltyByAuthorityCard() {
                     CSV
                 </button>
             </div>
-            {q.isLoading && <div className="h-24 bg-[#18181b] rounded animate-pulse" />}
+            {q.isLoading && <div className="h-24 bg-[var(--bg-hover)] rounded animate-pulse" />}
             {!q.isLoading && rows.length === 0 && (
-                <p className="text-[12px] text-[#71717a]">No notices in window.</p>
+                <p className="text-[12px] text-[var(--text-muted)]">No notices in window.</p>
             )}
             {rows.length > 0 && (
                 <div className="space-y-2">
@@ -278,16 +278,16 @@ function PenaltyByAuthorityCard() {
                                     <span style={{ color: cfg?.color }}>
                                         {cfg?.label ?? r.authority}
                                     </span>
-                                    <span className="text-[#a1a1aa] tabular-nums">
+                                    <span className="text-[var(--text-secondary)] tabular-nums">
                                         ₹{r.total_penalty.toLocaleString("en-IN")} ({r.count})
                                     </span>
                                 </div>
-                                <div className="h-1.5 rounded bg-[#18181b] overflow-hidden">
+                                <div className="h-1.5 rounded bg-[var(--bg-muted)] overflow-hidden">
                                     <div
                                         className="h-full"
                                         style={{
                                             width: `${pct}%`,
-                                            backgroundColor: cfg?.color ?? "#3b82f6",
+                                            backgroundColor: cfg?.color ?? "var(--accent)",
                                         }}
                                     />
                                 </div>
@@ -322,11 +322,11 @@ function NoticeVolumeCard() {
     };
 
     return (
-        <div className="bg-[#111113] border border-[#27272a] rounded-md p-5">
+        <div className="surface-card p-5">
             <div className="flex items-center justify-between mb-3 gap-2">
                 <div className="flex items-center gap-2">
-                    <FiBarChart2 className="w-4 h-4 text-[#3b82f6]" />
-                    <h2 className="text-[13px] font-semibold text-white">
+                    <FiBarChart2 className="w-4 h-4 text-[var(--accent)]" />
+                    <h2 className="text-[13px] font-semibold text-[var(--text-primary)]">
                         Notice volume by status — last 90 days
                     </h2>
                 </div>
@@ -341,9 +341,9 @@ function NoticeVolumeCard() {
                     CSV
                 </button>
             </div>
-            {q.isLoading && <div className="h-24 bg-[#18181b] rounded animate-pulse" />}
+            {q.isLoading && <div className="h-24 bg-[var(--bg-hover)] rounded animate-pulse" />}
             {!q.isLoading && total === 0 && (
-                <p className="text-[12px] text-[#71717a]">No notices in window.</p>
+                <p className="text-[12px] text-[var(--text-muted)]">No notices in window.</p>
             )}
             {total > 0 && (
                 <div className="space-y-2">
@@ -356,16 +356,16 @@ function NoticeVolumeCard() {
                                     <span style={{ color: cfg?.color }}>
                                         {cfg?.label ?? r.status}
                                     </span>
-                                    <span className="text-[#a1a1aa] tabular-nums">
+                                    <span className="text-[var(--text-secondary)] tabular-nums">
                                         {r.count} ({pct.toFixed(0)}%)
                                     </span>
                                 </div>
-                                <div className="h-1.5 rounded bg-[#18181b] overflow-hidden">
+                                <div className="h-1.5 rounded bg-[var(--bg-muted)] overflow-hidden">
                                     <div
                                         className="h-full"
                                         style={{
                                             width: `${pct}%`,
-                                            backgroundColor: cfg?.color ?? "#71717a",
+                                            backgroundColor: cfg?.color ?? "var(--text-muted)",
                                         }}
                                     />
                                 </div>
@@ -400,11 +400,11 @@ function ResponseTimeCard() {
     };
 
     return (
-        <div className="bg-[#111113] border border-[#27272a] rounded-md p-5">
+        <div className="surface-card p-5">
             <div className="flex items-center justify-between mb-3 gap-2">
                 <div className="flex items-center gap-2">
-                    <FiClock className="w-4 h-4 text-[#10b981]" />
-                    <h2 className="text-[13px] font-semibold text-white">
+                    <FiClock className="w-4 h-4 text-[var(--success)]" />
+                    <h2 className="text-[13px] font-semibold text-[var(--text-primary)]">
                         Response time — last 90 days
                     </h2>
                 </div>
@@ -419,9 +419,9 @@ function ResponseTimeCard() {
                     CSV
                 </button>
             </div>
-            {q.isLoading && <div className="h-24 bg-[#18181b] rounded animate-pulse" />}
+            {q.isLoading && <div className="h-24 bg-[var(--bg-hover)] rounded animate-pulse" />}
             {stats && stats.count === 0 && (
-                <p className="text-[12px] text-[#71717a]">
+                <p className="text-[12px] text-[var(--text-muted)]">
                     No resolved/submitted notices in window.
                 </p>
             )}
@@ -433,17 +433,17 @@ function ResponseTimeCard() {
                         { label: "p95", value: stats.p95 },
                         { label: "mean", value: stats.mean },
                     ].map((m) => (
-                        <div key={m.label} className="bg-[#18181b] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider text-[#a1a1aa] mb-1">
+                        <div key={m.label} className="bg-[var(--bg-muted)] border border-[var(--border-default)] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
                                 {m.label}
                             </div>
-                            <div className="text-lg font-semibold text-white tabular-nums">
+                            <div className="text-lg font-semibold text-[var(--text-primary)] tabular-nums">
                                 {m.value.toFixed(1)}
-                                <span className="text-[11px] text-[#71717a] ml-1">days</span>
+                                <span className="text-[11px] text-[var(--text-muted)] ml-1">days</span>
                             </div>
                         </div>
                     ))}
-                    <div className="col-span-2 text-[11px] text-[#71717a] text-right">
+                    <div className="col-span-2 text-[11px] text-[var(--text-muted)] text-right">
                         based on {stats.count} resolved/submitted notices
                     </div>
                 </div>

@@ -80,7 +80,7 @@ export function AddMemberDialog({
 
     return (
         <div
-            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6"
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-6"
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-member-title"
@@ -89,10 +89,10 @@ export function AddMemberDialog({
                 if (e.target === e.currentTarget && !submitting) onClose();
             }}
         >
-            <div className="bg-[#111113] border border-[#27272a] rounded-md p-6 w-full max-w-md">
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md p-6 w-full max-w-md shadow-[var(--shadow-lg)]">
                 <h2
                     id="add-member-title"
-                    className="text-base font-semibold text-white mb-4"
+                    className="text-base font-semibold text-[var(--text-primary)] mb-4"
                 >
                     Add team member
                 </h2>
@@ -100,7 +100,7 @@ export function AddMemberDialog({
                     <div>
                         <label
                             htmlFor="add-member-user-id"
-                            className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1"
+                            className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1"
                         >
                             User ID *
                         </label>
@@ -114,17 +114,18 @@ export function AddMemberDialog({
                                 setUserId(parseInt(e.target.value, 10) || 0)
                             }
                             className="
-                                w-full px-3 py-2 rounded bg-[#18181b]
-                                border border-[#27272a] text-white text-sm tabular-nums
-                                focus:outline-none focus:border-[#3b82f6]/40
-                                focus:ring-2 focus:ring-[#3b82f6]/20
+                                w-full px-3 py-2 rounded bg-[var(--bg-elevated)]
+                                border border-[var(--border-default)] text-[var(--text-primary)] text-sm tabular-nums
+                                placeholder:text-[var(--text-disabled)]
+                                focus:outline-none focus:border-[var(--accent)]
+                                focus:ring-2 focus:ring-[var(--accent-edge)]
                             "
                         />
                     </div>
                     <div>
                         <label
                             htmlFor="add-member-role"
-                            className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1"
+                            className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1"
                         >
                             Role *
                         </label>
@@ -135,9 +136,10 @@ export function AddMemberDialog({
                                 setRole(e.target.value as ComplianceRole)
                             }
                             className="
-                                w-full px-3 py-2 rounded bg-[#18181b]
-                                border border-[#27272a] text-white text-sm
-                                focus:outline-none focus:border-[#3b82f6]/40
+                                w-full px-3 py-2 rounded bg-[var(--bg-elevated)]
+                                border border-[var(--border-default)] text-[var(--text-primary)] text-sm
+                                focus:outline-none focus:border-[var(--accent)]
+                                focus:ring-2 focus:ring-[var(--accent-edge)]
                             "
                         >
                             {(
@@ -155,7 +157,7 @@ export function AddMemberDialog({
                     {role === "auditor" && (
                         <div className="grid grid-cols-2 gap-2">
                             <div>
-                                <label className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1">
+                                <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
                                     Access start
                                 </label>
                                 <input
@@ -164,11 +166,11 @@ export function AddMemberDialog({
                                     onChange={(e) =>
                                         setAccessStart(e.target.value)
                                     }
-                                    className="w-full px-3 py-2 rounded bg-[#18181b] border border-[#27272a] text-white text-sm focus:outline-none focus:border-[#3b82f6]/40"
+                                    className="w-full px-3 py-2 rounded bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]"
                                 />
                             </div>
                             <div>
-                                <label className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1">
+                                <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
                                     Access end
                                 </label>
                                 <input
@@ -177,7 +179,7 @@ export function AddMemberDialog({
                                     onChange={(e) =>
                                         setAccessEnd(e.target.value)
                                     }
-                                    className="w-full px-3 py-2 rounded bg-[#18181b] border border-[#27272a] text-white text-sm focus:outline-none focus:border-[#3b82f6]/40"
+                                    className="w-full px-3 py-2 rounded bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]"
                                 />
                             </div>
                         </div>
@@ -187,7 +189,7 @@ export function AddMemberDialog({
                             type="button"
                             onClick={onClose}
                             disabled={submitting}
-                            className="px-3 py-1.5 text-[#a1a1aa] text-sm hover:text-white transition-colors disabled:opacity-50"
+                            className="px-3 py-1.5 text-[var(--text-secondary)] text-sm hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded transition-colors disabled:opacity-50"
                         >
                             Cancel
                         </button>
@@ -196,9 +198,9 @@ export function AddMemberDialog({
                             onClick={submit}
                             disabled={submitting}
                             className="
-                                px-3 py-1.5 rounded bg-[#3b82f6] text-white text-sm font-medium
-                                hover:bg-[#3b82f6]/90 transition-colors
-                                focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                                px-3 py-1.5 rounded bg-[var(--accent)] text-white text-sm font-medium
+                                hover:bg-[var(--accent-strong)] transition-colors
+                                focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
                                 disabled:opacity-60 disabled:cursor-not-allowed
                             "
                         >

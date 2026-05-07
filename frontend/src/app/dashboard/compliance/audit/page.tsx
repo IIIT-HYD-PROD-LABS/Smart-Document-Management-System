@@ -68,18 +68,21 @@ export default function AuditPage() {
 
     const entries: AuditLogEntry[] = auditQ.data ?? [];
 
+    const fieldClass =
+        "w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-2.5 py-1.5 text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]";
+
     return (
         <div className="px-6 py-8 max-w-5xl mx-auto">
             <header className="mb-6 flex items-start gap-3">
                 <FiShield
-                    className="w-5 h-5 text-[#3b82f6] mt-0.5 shrink-0"
+                    className="w-5 h-5 text-[var(--accent)] mt-0.5 shrink-0"
                     aria-hidden="true"
                 />
                 <div>
-                    <h1 className="text-lg font-semibold text-white mb-0.5">
+                    <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-0.5">
                         Audit log
                     </h1>
-                    <p className="text-[13px] text-[#71717a]">
+                    <p className="text-[13px] text-[var(--text-muted)]">
                         System-of-record for compliance actions. Immutable at
                         the database level.
                     </p>
@@ -87,28 +90,28 @@ export default function AuditPage() {
             </header>
 
             <div
-                className="rounded-md p-4 mb-6 bg-[#3b82f6]/10 border border-[#3b82f6]/30 flex items-start gap-3"
+                className="rounded-md p-4 mb-6 bg-[var(--accent-soft)] border border-[var(--accent-edge)] flex items-start gap-3"
                 role="note"
             >
                 <FiInfo
-                    className="w-4 h-4 text-[#3b82f6] mt-0.5 shrink-0"
+                    className="w-4 h-4 text-[var(--accent)] mt-0.5 shrink-0"
                     aria-hidden="true"
                 />
-                <p className="text-[13px] text-[#a1a1aa]">
+                <p className="text-[13px] text-[var(--text-secondary)]">
                     Records here are immutable — enforced at the database
                     level. This is your auditor-grade trail.
                 </p>
             </div>
 
-            <div className="bg-[#111113] border border-[#27272a] rounded-md p-4 mb-4">
-                <h2 className="text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-3">
+            <div className="surface-card p-4 mb-4">
+                <h2 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-3">
                     Filters
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div>
                         <label
                             htmlFor="audit-date-from"
-                            className="block text-[11px] uppercase tracking-wider text-[#71717a] mb-1.5"
+                            className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5"
                         >
                             From date
                         </label>
@@ -117,13 +120,13 @@ export default function AuditPage() {
                             type="date"
                             value={dateFrom}
                             onChange={(e) => setDateFrom(e.target.value)}
-                            className="w-full bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-[13px] text-white focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40"
+                            className={fieldClass}
                         />
                     </div>
                     <div>
                         <label
                             htmlFor="audit-date-to"
-                            className="block text-[11px] uppercase tracking-wider text-[#71717a] mb-1.5"
+                            className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5"
                         >
                             To date
                         </label>
@@ -132,13 +135,13 @@ export default function AuditPage() {
                             type="date"
                             value={dateTo}
                             onChange={(e) => setDateTo(e.target.value)}
-                            className="w-full bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-[13px] text-white focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40"
+                            className={fieldClass}
                         />
                     </div>
                     <div>
                         <label
                             htmlFor="audit-actor"
-                            className="block text-[11px] uppercase tracking-wider text-[#71717a] mb-1.5"
+                            className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5"
                         >
                             Actor (user id)
                         </label>
@@ -149,13 +152,13 @@ export default function AuditPage() {
                             value={actor}
                             onChange={(e) => setActor(e.target.value)}
                             placeholder="e.g. 12"
-                            className="w-full bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-[13px] text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40"
+                            className={fieldClass}
                         />
                     </div>
                     <div>
                         <label
                             htmlFor="audit-action"
-                            className="block text-[11px] uppercase tracking-wider text-[#71717a] mb-1.5"
+                            className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5"
                         >
                             Action
                         </label>
@@ -163,7 +166,7 @@ export default function AuditPage() {
                             id="audit-action"
                             value={actionFilter}
                             onChange={(e) => setActionFilter(e.target.value)}
-                            className="w-full bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-[13px] text-white focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40"
+                            className={fieldClass}
                         >
                             {ACTION_OPTIONS.map((a) => (
                                 <option key={a || "_all"} value={a}>
@@ -175,25 +178,25 @@ export default function AuditPage() {
                 </div>
             </div>
 
-            <div className="bg-[#111113] border border-[#27272a] rounded-md overflow-hidden">
+            <div className="surface-card overflow-hidden">
                 {auditQ.isLoading ? (
                     <ul role="status" aria-live="polite">
                         {[0, 1, 2, 3].map((i) => (
                             <li
                                 key={i}
-                                className="px-4 py-4 border-b border-[#27272a] last:border-0"
+                                className="px-4 py-4 border-b border-[var(--border-default)] last:border-0"
                             >
-                                <div className="h-3 w-2/3 bg-[#18181b] rounded animate-pulse mb-2" />
-                                <div className="h-3 w-1/3 bg-[#18181b] rounded animate-pulse" />
+                                <div className="h-3 w-2/3 bg-[var(--bg-hover)] rounded animate-pulse mb-2" />
+                                <div className="h-3 w-1/3 bg-[var(--bg-hover)] rounded animate-pulse" />
                             </li>
                         ))}
                     </ul>
                 ) : entries.length === 0 ? (
                     <div className="p-12 text-center">
-                        <h3 className="text-sm font-semibold text-white mb-1">
+                        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
                             No audit records in this range
                         </h3>
-                        <p className="text-[13px] text-[#71717a]">
+                        <p className="text-[13px] text-[var(--text-muted)]">
                             Adjust the date range or actor filter to see audit
                             history.
                         </p>
@@ -205,28 +208,28 @@ export default function AuditPage() {
                             return (
                                 <li
                                     key={e.id}
-                                    className="px-4 py-4 border-b border-[#27272a] last:border-0"
+                                    className="px-4 py-4 border-b border-[var(--border-default)] last:border-0"
                                 >
                                     <div className="flex items-baseline gap-2 flex-wrap">
-                                        <span className="text-[13px] font-semibold text-white">
+                                        <span className="text-[13px] font-semibold text-[var(--text-primary)]">
                                             {e.action}
                                         </span>
                                         {e.resource_type && (
-                                            <span className="text-[12px] text-[#a1a1aa]">
+                                            <span className="text-[12px] text-[var(--text-secondary)]">
                                                 on {e.resource_type}
                                                 {e.resource_id !== null
                                                     ? ` #${e.resource_id}`
                                                     : ""}
                                             </span>
                                         )}
-                                        <span className="ml-auto text-[11px] text-[#52525b] tabular-nums" title={ts.abs}>
+                                        <span className="ml-auto text-[11px] text-[var(--text-subtle)] tabular-nums" title={ts.abs}>
                                             {ts.abs}
                                         </span>
                                     </div>
-                                    <div className="mt-1 flex items-center gap-3 text-[12px] text-[#71717a]">
+                                    <div className="mt-1 flex items-center gap-3 text-[12px] text-[var(--text-muted)]">
                                         <span>
                                             actor:{" "}
-                                            <span className="font-mono text-[#a1a1aa]">
+                                            <span className="font-mono text-[var(--text-secondary)]">
                                                 {e.user_id ?? "system"}
                                             </span>
                                         </span>
@@ -238,10 +241,10 @@ export default function AuditPage() {
                                     </div>
                                     {e.details && (
                                         <details className="mt-2">
-                                            <summary className="text-[11px] uppercase tracking-wider text-[#52525b] cursor-pointer hover:text-[#a1a1aa] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 rounded">
+                                            <summary className="text-[11px] uppercase tracking-wider text-[var(--text-subtle)] cursor-pointer hover:text-[var(--text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)] rounded">
                                                 Diff
                                             </summary>
-                                            <pre className="mt-2 text-xs text-[#a1a1aa] bg-[#18181b] rounded p-3 overflow-x-auto whitespace-pre-wrap">
+                                            <pre className="mt-2 text-xs text-[var(--text-secondary)] bg-[var(--bg-muted)] border border-[var(--border-default)] rounded p-3 overflow-x-auto whitespace-pre-wrap">
                                                 {JSON.stringify(e.details, null, 2)}
                                             </pre>
                                         </details>

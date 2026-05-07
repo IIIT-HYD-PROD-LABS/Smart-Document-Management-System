@@ -64,7 +64,7 @@ export default function CalendarPage() {
         <div className="px-6 py-8 max-w-7xl mx-auto">
             <Link
                 href="/dashboard/compliance"
-                className="inline-flex items-center gap-1.5 text-[12px] text-[#a1a1aa] hover:text-white mb-4"
+                className="inline-flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] mb-4"
             >
                 <FiArrowLeft className="w-3.5 h-3.5" />
                 Back to dashboard
@@ -72,12 +72,12 @@ export default function CalendarPage() {
 
             <header className="mb-6">
                 <div className="flex items-center gap-3 mb-2">
-                    <FiCalendar className="w-5 h-5 text-[#3b82f6]" />
-                    <h1 className="text-2xl font-semibold text-white tracking-tight">
+                    <FiCalendar className="w-5 h-5 text-[var(--accent)]" />
+                    <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight">
                         Compliance calendar
                     </h1>
                 </div>
-                <p className="text-[13px] text-[#a1a1aa]">
+                <p className="text-[13px] text-[var(--text-muted)]">
                     Indian statutory filing deadlines + gazetted holidays for FY {year - 1}-{String(year).slice(2)}.
                 </p>
             </header>
@@ -90,7 +90,7 @@ export default function CalendarPage() {
                 />
                 <AuthoritySelect value={authorityFilter} onChange={setAuthorityFilter} />
                 <CategorySelect value={categoryFilter} onChange={setCategoryFilter} />
-                <span className="ml-auto text-[12px] text-[#71717a] tabular-nums">
+                <span className="ml-auto text-[12px] text-[var(--text-muted)] tabular-nums">
                     {entries.length} {entries.length === 1 ? "entry" : "entries"}
                 </span>
             </div>
@@ -126,22 +126,22 @@ function YearMonthPicker({
         } else onMonth(month + 1);
     };
     return (
-        <div className="inline-flex items-center gap-2 px-3 h-9 rounded bg-[#0c0c0f] border border-[#1f1f23]">
+        <div className="inline-flex items-center gap-2 px-3 h-9 rounded bg-[var(--bg-elevated)] border border-[var(--border-default)]">
             <button
                 type="button"
                 onClick={goPrev}
-                className="text-[#a1a1aa] hover:text-white px-1"
+                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-1"
                 aria-label="Previous month"
             >
                 ‹
             </button>
-            <span className="text-[13px] text-white font-medium min-w-[80px] text-center">
+            <span className="text-[13px] text-[var(--text-primary)] font-medium min-w-[80px] text-center">
                 {MONTH_NAMES[month - 1]} {year}
             </span>
             <button
                 type="button"
                 onClick={goNext}
-                className="text-[#a1a1aa] hover:text-white px-1"
+                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-1"
                 aria-label="Next month"
             >
                 ›
@@ -162,9 +162,9 @@ function AuthoritySelect({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             className="
-                h-9 px-3 rounded bg-[#0c0c0f] border border-[#1f1f23]
-                text-[13px] text-white
-                focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                h-9 px-3 rounded bg-[var(--bg-elevated)] border border-[var(--border-default)]
+                text-[13px] text-[var(--text-primary)]
+                focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
             "
             aria-label="Filter by authority"
         >
@@ -190,9 +190,9 @@ function CategorySelect({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             className="
-                h-9 px-3 rounded bg-[#0c0c0f] border border-[#1f1f23]
-                text-[13px] text-white
-                focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40
+                h-9 px-3 rounded bg-[var(--bg-elevated)] border border-[var(--border-default)]
+                text-[13px] text-[var(--text-primary)]
+                focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
             "
             aria-label="Filter by category"
         >
@@ -228,12 +228,12 @@ function MonthGrid({
     const todayIso = new Date().toISOString().slice(0, 10);
 
     return (
-        <div className="rounded border border-[#1f1f23] overflow-hidden">
-            <div className="grid grid-cols-7 bg-[#0a0a0c] border-b border-[#1f1f23]">
+        <div className="rounded border border-[var(--border-default)] overflow-hidden bg-[var(--bg-elevated)]">
+            <div className="grid grid-cols-7 bg-[var(--bg-muted)] border-b border-[var(--border-default)]">
                 {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
                     <div
                         key={d}
-                        className="px-2 py-2 text-[10px] uppercase tracking-wider text-[#71717a] text-center"
+                        className="px-2 py-2 text-[10px] uppercase tracking-wider text-[var(--text-muted)] text-center"
                     >
                         {d}
                     </div>
@@ -245,7 +245,7 @@ function MonthGrid({
                         return (
                             <div
                                 key={`empty-${idx}`}
-                                className="bg-[#0a0a0c] min-h-[96px]"
+                                className="bg-[var(--bg-muted)] min-h-[96px] border-r border-b border-[var(--border-subtle)]"
                             />
                         );
                     const dateEntries = entriesByDate.get(c.iso) ?? [];
@@ -255,15 +255,15 @@ function MonthGrid({
                         <div
                             key={c.iso}
                             className={`
-                                relative border-r border-b border-[#1f1f23] p-2 min-h-[96px]
-                                ${isWeekend ? "bg-[#080809]" : "bg-[#0c0c0f]"}
-                                ${isToday ? "ring-1 ring-inset ring-[#3b82f6]" : ""}
+                                relative border-r border-b border-[var(--border-subtle)] p-2 min-h-[96px]
+                                ${isWeekend ? "bg-[var(--bg-muted)]" : "bg-[var(--bg-elevated)]"}
+                                ${isToday ? "ring-1 ring-inset ring-[var(--accent)]" : ""}
                             `}
                         >
                             <span
                                 className={`
                                     text-[11px] font-mono tabular-nums
-                                    ${isToday ? "text-[#3b82f6] font-semibold" : "text-[#a1a1aa]"}
+                                    ${isToday ? "text-[var(--accent)] font-semibold" : "text-[var(--text-secondary)]"}
                                 `}
                             >
                                 {c.day}
@@ -273,7 +273,7 @@ function MonthGrid({
                                     <DayEntry key={e.id} entry={e} />
                                 ))}
                                 {dateEntries.length > 3 && (
-                                    <span className="text-[10px] text-[#71717a]">
+                                    <span className="text-[10px] text-[var(--text-muted)]">
                                         +{dateEntries.length - 3} more
                                     </span>
                                 )}
@@ -292,7 +292,7 @@ function DayEntry({ entry }: { entry: CalendarEntry }) {
             <div
                 className="
                     text-[10px] px-1.5 py-0.5 rounded
-                    bg-[#71717a1a] text-[#a1a1aa]
+                    bg-[var(--bg-muted)] text-[var(--text-secondary)] border border-[var(--border-default)]
                     truncate
                 "
                 title={entry.label}
@@ -302,11 +302,15 @@ function DayEntry({ entry }: { entry: CalendarEntry }) {
         );
     }
     const auth = entry.authority as Authority | null;
-    const color = auth ? AUTHORITY_CONFIG[auth]?.color ?? "#3b82f6" : "#3b82f6";
+    const color = auth ? AUTHORITY_CONFIG[auth]?.color ?? "#2563eb" : "#2563eb";
     return (
         <div
             className="text-[10px] px-1.5 py-0.5 rounded truncate font-medium"
-            style={{ backgroundColor: `${color}1a`, color }}
+            style={{
+                backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
+                color,
+                border: `1px solid color-mix(in srgb, ${color} 25%, transparent)`,
+            }}
             title={entry.label}
         >
             {entry.label}
@@ -316,11 +320,11 @@ function DayEntry({ entry }: { entry: CalendarEntry }) {
 
 function Legend() {
     return (
-        <div className="mt-6 flex items-start gap-2 rounded border border-[#1f1f23] bg-[#0c0c0f] px-3 py-2">
-            <FiInfo className="w-3.5 h-3.5 text-[#71717a] mt-0.5 shrink-0" />
-            <p className="text-[11px] text-[#71717a] leading-relaxed">
+        <div className="mt-6 flex items-start gap-2 rounded border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2">
+            <FiInfo className="w-3.5 h-3.5 text-[var(--text-muted)] mt-0.5 shrink-0" />
+            <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
                 Indian statutory deadlines (GSTR, TDS, Advance Tax, ITR, MCA AOC-4 / MGT-7) are
-                color-coded by authority. Gazetted holidays are gray. Today is highlighted in blue.
+                color-coded by authority. Gazetted holidays are gray. Today is highlighted in the accent color.
                 If a deadline falls on a Sunday or gazetted holiday, the system auto-shifts to
                 the next working day.
             </p>

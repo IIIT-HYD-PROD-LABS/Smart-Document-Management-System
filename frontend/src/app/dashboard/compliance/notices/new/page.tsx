@@ -103,10 +103,10 @@ export default function NewNoticePage() {
     if (activeClientId === null) {
         return (
             <div className="px-6 py-8 max-w-3xl mx-auto">
-                <h1 className="text-lg font-semibold text-white mb-1">
+                <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
                     Upload notice
                 </h1>
-                <p className="text-[13px] text-[#71717a]">
+                <p className="text-[13px] text-[var(--text-muted)]">
                     Select a client from the switcher first, then return here to
                     upload a notice.
                 </p>
@@ -114,20 +114,24 @@ export default function NewNoticePage() {
         );
     }
 
+    const inputClass =
+        "w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-2.5 py-1.5 text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)]";
+    const labelClass = "block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5";
+
     return (
         <div className="px-6 py-8 max-w-3xl mx-auto">
             <Link
                 href="/dashboard/compliance"
-                className="inline-flex items-center gap-1.5 text-[12px] text-[#a1a1aa] hover:text-white mb-4 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40 rounded px-1"
+                className="inline-flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] mb-4 focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)] rounded px-1"
             >
                 <FiArrowLeft className="w-3.5 h-3.5" />
                 Back to dashboard
             </Link>
 
-            <h1 className="text-lg font-semibold text-white mb-1">
+            <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
                 Upload notice
             </h1>
-            <p className="text-[13px] text-[#71717a] mb-6">
+            <p className="text-[13px] text-[var(--text-muted)] mb-6">
                 Enter the notice metadata. Attach the source PDF or image after
                 saving — the upload tools live on the notice detail page.
             </p>
@@ -135,10 +139,7 @@ export default function NewNoticePage() {
             <form onSubmit={onSubmit} className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label
-                            htmlFor="authority"
-                            className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1.5"
-                        >
+                        <label htmlFor="authority" className={labelClass}>
                             Authority
                         </label>
                         <select
@@ -147,7 +148,7 @@ export default function NewNoticePage() {
                             onChange={(e) =>
                                 setAuthority(e.target.value as Authority)
                             }
-                            className="w-full bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-[13px] text-white focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40"
+                            className={inputClass}
                         >
                             {(Object.keys(AUTHORITY_CONFIG) as Authority[]).map(
                                 (a) => (
@@ -160,10 +161,7 @@ export default function NewNoticePage() {
                     </div>
 
                     <div>
-                        <label
-                            htmlFor="notice_number"
-                            className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1.5"
-                        >
+                        <label htmlFor="notice_number" className={labelClass}>
                             Notice number
                         </label>
                         <input
@@ -173,15 +171,12 @@ export default function NewNoticePage() {
                             onChange={(e) => setNoticeNumber(e.target.value)}
                             placeholder={`e.g. ${AUTHORITY_HINT[authority]}`}
                             required
-                            className="w-full bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-[13px] text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40 font-mono"
+                            className={`${inputClass} font-mono`}
                         />
                     </div>
 
                     <div>
-                        <label
-                            htmlFor="received_date"
-                            className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1.5"
-                        >
+                        <label htmlFor="received_date" className={labelClass}>
                             Received date
                         </label>
                         <input
@@ -190,15 +185,12 @@ export default function NewNoticePage() {
                             value={receivedDate}
                             onChange={(e) => setReceivedDate(e.target.value)}
                             required
-                            className="w-full bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-[13px] text-white focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40"
+                            className={inputClass}
                         />
                     </div>
 
                     <div>
-                        <label
-                            htmlFor="response_deadline"
-                            className="block text-[11px] uppercase tracking-wider text-[#a1a1aa] mb-1.5"
-                        >
+                        <label htmlFor="response_deadline" className={labelClass}>
                             Response deadline
                         </label>
                         <input
@@ -208,22 +200,19 @@ export default function NewNoticePage() {
                             onChange={(e) =>
                                 setResponseDeadline(e.target.value)
                             }
-                            className="w-full bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-[13px] text-white focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40"
+                            className={inputClass}
                         />
                     </div>
                 </div>
 
-                <fieldset className="bg-[#111113] border border-[#27272a] rounded-md p-5">
-                    <legend className="px-2 text-[11px] uppercase tracking-wider text-[#a1a1aa]">
+                <fieldset className="surface-card p-5">
+                    <legend className="px-2 text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
                         Financial fields
                     </legend>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
                         <div>
-                            <label
-                                htmlFor="tax_demand"
-                                className="block text-[11px] uppercase tracking-wider text-[#71717a] mb-1.5"
-                            >
+                            <label htmlFor="tax_demand" className={labelClass}>
                                 Tax demand
                             </label>
                             <input
@@ -234,14 +223,11 @@ export default function NewNoticePage() {
                                 value={taxDemand}
                                 onChange={(e) => setTaxDemand(e.target.value)}
                                 placeholder="0.00"
-                                className="w-full bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-[13px] text-white placeholder:text-[#52525b] tabular-nums focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40"
+                                className={`${inputClass} tabular-nums`}
                             />
                         </div>
                         <div>
-                            <label
-                                htmlFor="interest"
-                                className="block text-[11px] uppercase tracking-wider text-[#71717a] mb-1.5"
-                            >
+                            <label htmlFor="interest" className={labelClass}>
                                 Interest
                             </label>
                             <input
@@ -252,14 +238,11 @@ export default function NewNoticePage() {
                                 value={interest}
                                 onChange={(e) => setInterest(e.target.value)}
                                 placeholder="0.00"
-                                className="w-full bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-[13px] text-white placeholder:text-[#52525b] tabular-nums focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40"
+                                className={`${inputClass} tabular-nums`}
                             />
                         </div>
                         <div>
-                            <label
-                                htmlFor="penalty"
-                                className="block text-[11px] uppercase tracking-wider text-[#71717a] mb-1.5"
-                            >
+                            <label htmlFor="penalty" className={labelClass}>
                                 Penalty
                             </label>
                             <input
@@ -270,16 +253,16 @@ export default function NewNoticePage() {
                                 value={penalty}
                                 onChange={(e) => setPenalty(e.target.value)}
                                 placeholder="0.00"
-                                className="w-full bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-[13px] text-white placeholder:text-[#52525b] tabular-nums focus:outline-none focus:border-[#3f3f46] focus:ring-1 focus:ring-[#3b82f6]/40"
+                                className={`${inputClass} tabular-nums`}
                             />
                         </div>
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-[#27272a] flex items-center justify-between">
-                        <span className="text-[11px] uppercase tracking-wider text-[#71717a]">
+                    <div className="mt-4 pt-4 border-t border-[var(--border-default)] flex items-center justify-between">
+                        <span className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
                             Total liability (auto)
                         </span>
-                        <span className="text-base font-semibold text-white tabular-nums">
+                        <span className="text-base font-semibold text-[var(--text-primary)] tabular-nums">
                             {totalLiability
                                 ? `₹${Number(totalLiability).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
                                 : "—"}
@@ -290,14 +273,14 @@ export default function NewNoticePage() {
                 <div className="flex items-center justify-end gap-2">
                     <Link
                         href="/dashboard/compliance"
-                        className="px-3 py-1.5 rounded text-[12px] text-[#a1a1aa] hover:text-white hover:bg-[#18181b] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
+                        className="px-3 py-1.5 rounded text-[12px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]"
                     >
                         Cancel
                     </Link>
                     <button
                         type="submit"
                         disabled={create.isPending || !noticeNumber.trim()}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#3b82f6] text-white text-[12px] font-medium hover:bg-[#2563eb] disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/40"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[var(--accent)] text-white text-[12px] font-medium hover:bg-[var(--accent-strong)] disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]"
                     >
                         <FiSave className="w-3.5 h-3.5" />
                         {create.isPending ? "Saving…" : "Save notice"}
