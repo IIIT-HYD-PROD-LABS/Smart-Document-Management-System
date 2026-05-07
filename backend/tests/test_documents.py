@@ -66,6 +66,9 @@ def _make_mock_document(**kwargs):
     # versions relationship for DocumentResponse.compute_total_versions
     doc.versions = kwargs.get("versions", [])
 
+    # Phase 15 D-40: provenance label surfaced via DocumentListItem.source
+    doc.source = kwargs.get("source", "manual")
+
     # __table__ for model_validate introspection
     table_mock = MagicMock()
     table_mock.columns.keys.return_value = [
@@ -74,7 +77,7 @@ def _make_mock_document(**kwargs):
         "extracted_text", "extracted_metadata", "ai_summary",
         "ai_extracted_fields", "ai_extraction_status", "ai_provider",
         "highlighted_text", "status", "current_version", "celery_task_id",
-        "search_vector", "created_at", "updated_at",
+        "search_vector", "created_at", "updated_at", "source",
     ]
     doc.__table__ = table_mock
 

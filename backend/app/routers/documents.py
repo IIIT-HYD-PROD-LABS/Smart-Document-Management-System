@@ -537,6 +537,9 @@ def get_document_trends(
     return DocumentTrends(trends=trends)
 
 
+_VALID_SOURCE_FILTERS = ("manual", "gmail", "portal", "all")
+
+
 @router.get("/all", response_model=DocumentListResponse)
 @limiter.limit("30/minute")
 def get_all_documents(
@@ -544,11 +547,43 @@ def get_all_documents(
     response: Response,
     page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
+    source_filter: str = Query(
+        "all",
+        description=(
+            "Provenance filter: manual | gmail | portal | all. "
+            "'gmail' covers both attachments and synthetic body documents."
+        ),
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get all documents for the current user."""
+    """Get all documents for the current user.
+
+    D-40: source_filter=all (default) returns Gmail-ingested docs alongside
+    manual uploads so users can browse by v1.0 category regardless of
+    where the doc came from. Pass ``manual`` to recover pre-Phase-15
+    behavior.
+    """
+    if source_filter not in _VALID_SOURCE_FILTERS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Invalid source_filter '{source_filter}'. "
+                f"Valid: {list(_VALID_SOURCE_FILTERS)}"
+            ),
+        )
+
     query = db.query(Document).filter(Document.user_id == current_user.id)
+
+    if source_filter == "manual":
+        query = query.filter(Document.source == "manual")
+    elif source_filter == "gmail":
+        # Both attachments (source='gmail') and synthetic body docs
+        # (source='gmail_body') belong to the Gmail provenance bucket.
+        query = query.filter(Document.source.in_(("gmail", "gmail_body")))
+    elif source_filter == "portal":
+        query = query.filter(Document.source == "portal")
+    # source_filter == "all" -> no extra filter
 
     total = query.count()
     documents = (

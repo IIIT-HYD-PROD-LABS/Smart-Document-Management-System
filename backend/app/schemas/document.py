@@ -64,6 +64,7 @@ class DocumentListItem(BaseModel):
     current_version: int = 1
     created_at: datetime
     updated_at: datetime | None = None
+    source: str = "manual"
 
 
 class DocumentListResponse(BaseModel):
