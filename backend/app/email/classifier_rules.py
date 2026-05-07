@@ -35,6 +35,14 @@ COMPLIANCE_SUBJECT_KEYWORDS: re.Pattern = re.compile(
 )
 
 
+# D-39: minimum body length to justify persisting an email body as a
+# Document for v1.0 ML classification. Below this, the body is unlikely
+# to carry enough signal for the TF-IDF classifier (which itself requires
+# >=50 chars in classify_document) and risks polluting the listing with
+# auto-replies, signatures, and unsubscribe footers.
+MIN_BODY_LENGTH_FOR_CLASSIFICATION: int = 200
+
+
 # Sender-domain → ComplianceNotice.authority mapping. authority CHECK
 # constraint requires one of GST|IT|MCA|RBI|SEBI; default to GST when
 # only matches the broad gov.in / nic.in pattern.

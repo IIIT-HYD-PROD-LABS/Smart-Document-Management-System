@@ -1,7 +1,13 @@
 """Gmail message + attachment ingestion — Phase 15 EMAIL-05, EMAIL-06, EMAIL-08.
 
 Reuses v1.0 storage_service + document_tasks pipeline (D-14). Body never
-persisted (D-34); audit args PII-redacted (D-36).
+persisted (D-34) for compliance/bill routes; audit args PII-redacted
+(D-36).
+
+D-39 carve-out: when a message matches no rule but carries >=200 chars
+of body text, we persist a synthetic .txt Document (source='gmail_body')
+and run it through Phase 3 ML classification so v1.0 listings + search
+can surface attachment-less Gmail content.
 
 process_classified_email is the EMAIL-06 wiring: classifier verdict ->
 ComplianceNotice (gmail / received) OR review queue OR ignored.
@@ -15,6 +21,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.email.classifier_rules import MIN_BODY_LENGTH_FOR_CLASSIFICATION
 from app.email.models.credential import GmailCredential
 from app.email.models.message_log import GmailMessageLog
 from app.email.services.classifier import classify
@@ -42,7 +49,10 @@ def ingest_message(
 ) -> tuple[GmailMessageLog, str]:
     """Classify and persist message log row. Returns (message_log, route_taken).
 
-    Body lives only in this Python frame — D-34 fetch-once-discard.
+    Body lives only in this Python frame for compliance/bill routes — D-34
+    fetch-once-discard. The D-39 gmail_body carve-out (no-rule-match plus
+    body >= MIN_BODY_LENGTH_FOR_CLASSIFICATION) deliberately persists the
+    body as a synthetic .txt Document so v1.0 ML classification can run.
     """
     is_compliance, confidence = classify(sender, subject)
     if is_compliance and confidence >= 0.75:
@@ -66,6 +76,26 @@ def ingest_message(
     db.add(log)
     db.commit()
     db.refresh(log)
+
+    # D-39: rule miss + non-trivial body -> persist as gmail_body Document
+    # so v1.0 ML classifies + indexes it. Best-effort; never fails the
+    # caller's pipeline.
+    if route == GmailMessageLog.ROUTE_IGNORE and len(body) >= MIN_BODY_LENGTH_FOR_CLASSIFICATION:
+        try:
+            _persist_body_as_document(
+                db,
+                credential=credential,
+                message_log=log,
+                body=body,
+                subject=subject,
+            )
+        except Exception as e:
+            logger.warning(
+                "gmail_body persist failed: msg=%s err=%s",
+                gmail_message_id,
+                e,
+            )
+
     return log, route
 
 
@@ -114,6 +144,62 @@ def ingest_attachment(
         category=DocumentCategory.UNKNOWN,
         status=DocumentStatus.PENDING,
         source_email_id=message_log.id,
+        source="gmail",
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    try:
+        from app.tasks.document_tasks import process_document_task
+        process_document_task.delay(doc.id)
+    except Exception as e:
+        logger.warning("Celery process_document_task.delay failed: %s", e)
+    return doc
+
+
+def _persist_body_as_document(
+    db: Session,
+    *,
+    credential: GmailCredential,
+    message_log: GmailMessageLog,
+    body: str,
+    subject: str,
+) -> Optional[Document]:
+    """D-39: persist a Gmail body as a synthetic .txt Document.
+
+    Title (original_filename) defaults to the email subject truncated to
+    200 chars; falls back to ``Email <sha8>.txt`` when the subject is
+    empty. Runs through the v1.0 process_document_task so Phase 3 ML
+    classification + Phase 5 LLM extraction populate Document.category
+    and friends. source='gmail_body' lets the listing UI distinguish
+    body-derived docs from real attachments (D-40, D-41).
+    """
+    body_bytes = body.encode("utf-8")
+    file_size = len(body_bytes)
+
+    raw_subject = (subject or "").strip()
+    short_sha = message_log.body_sha256[:8] if message_log.body_sha256 else "msg"
+    if raw_subject:
+        # Strip control chars + cap at 200 chars (D-39). Append .txt so
+        # downloads / previews get a sensible extension.
+        clean = "".join(ch for ch in raw_subject if ch.isprintable() and ch != "\x00")
+        title = clean[:196] + ".txt" if not clean.endswith(".txt") else clean[:200]
+    else:
+        title = f"Email {short_sha}.txt"
+
+    file_path, s3_url = save_file(body_bytes, title)
+    doc = Document(
+        user_id=credential.user_id,
+        filename=os.path.basename(file_path) if file_path else title,
+        original_filename=title,
+        file_type="txt",
+        file_size=file_size,
+        file_path=file_path if not s3_url else None,
+        s3_url=s3_url,
+        category=DocumentCategory.UNKNOWN,
+        status=DocumentStatus.PENDING,
+        source_email_id=message_log.id,
+        source="gmail_body",
     )
     db.add(doc)
     db.commit()

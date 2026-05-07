@@ -88,6 +88,13 @@ def extract_and_classify(file_bytes: bytes, file_type: str) -> tuple[str, str, f
         extracted_text = extract_text_from_pdf(file_bytes)
     elif file_type == "docx":
         extracted_text = extract_text_from_docx(file_bytes)
+    elif file_type == "txt":
+        # D-39: Gmail bodies are persisted as synthetic .txt files;
+        # decode directly rather than running OCR.
+        try:
+            extracted_text = file_bytes.decode("utf-8", errors="replace")
+        except Exception:
+            extracted_text = ""
     else:
         extracted_text = extract_text_from_image(file_bytes)
 
