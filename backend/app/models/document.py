@@ -85,6 +85,18 @@ class Document(Base):
         index=True,
     )
 
+    # Phase 15 D-39/D-40: provenance label driving the source filter on
+    # /api/documents/all and the UI badge. CHECK constraint enforces the
+    # four valid values; existing rows default to 'manual'. Migration
+    # 0028 adds the column + CHECK + ix_documents_source index.
+    source = Column(
+        String(20),
+        nullable=False,
+        default="manual",
+        server_default="manual",
+        index=True,
+    )
+
     # Full-text search vector (populated by trigger on INSERT/UPDATE; managed by migration 0003)
     # CRITICAL: No Index(...) here -- GIN index is created via op.execute() in migration to avoid
     # Alembic autogenerate false-diff bug (issue #1390)
