@@ -192,6 +192,65 @@ def dispatch_alert(
     return counters
 
 
+def dispatch_non_notice_alert(
+    db: Session,
+    *,
+    client_id: int,
+    alert_type: str,
+    channels: list[str],
+    recipients: list[dict],
+    payload: dict[str, Any],
+) -> dict[str, int]:
+    """Fan-out for alerts that have no parent ComplianceNotice — bill reminders
+    (BILL-04) and Gmail credential events (EMAIL-10).
+
+    Skips NoticeAlertLog idempotency because the caller owns dedup:
+      - bill_reminder_task enforces ``bill.reminder_count <= 3``
+      - credential_vault enforces ``status=REVOKED`` once-only flip
+
+    Returns the same {sent, queued, failed, skipped} counter shape as
+    dispatch_alert so callers can branch uniformly.
+    """
+    from app.compliance.services.senders import (
+        EmailSender,
+        SmsSender,
+        WebSocketSender,
+    )
+
+    counters = {"sent": 0, "queued": 0, "failed": 0, "skipped": 0}
+    senders = {
+        "email": EmailSender(),
+        "sms": SmsSender(),
+        "websocket": WebSocketSender(),
+    }
+    body = dict(payload or {})
+    body["client_id"] = client_id
+    body["alert_type"] = alert_type
+
+    for ch in channels:
+        sender = senders.get(ch)
+        if sender is None:
+            counters["skipped"] += len(recipients)
+            continue
+        for r in recipients:
+            try:
+                result = sender.send(recipient=r, payload=body)
+                if result.delivery_status in ("sent", "delivered"):
+                    counters["sent"] += 1
+                elif result.delivery_status == "queued":
+                    counters["queued"] += 1
+                else:
+                    counters["failed"] += 1
+            except Exception as exc:
+                logger.exception(
+                    "dispatch_non_notice_alert: %s sender raised for "
+                    "client=%d alert_type=%s",
+                    ch, client_id, alert_type,
+                )
+                counters["failed"] += 1
+    return counters
+
+
 def list_pending_alerts(
     db: Session, *, client_id: Optional[int], page: int = 1, page_size: int = 50
 ) -> tuple[list[NoticeAlertLog], int]:

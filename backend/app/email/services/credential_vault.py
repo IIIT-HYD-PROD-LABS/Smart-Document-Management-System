@@ -97,20 +97,30 @@ def handle_invalid_grant(db: Session, credential_id: int) -> None:
             )
 
     try:
-        from app.compliance.services.alert_service import dispatch_alert
-
-        dispatch_alert(
-            event_type="gmail.connection.lost",
-            user_id=cred.user_id,
-            client_id=cred.client_id,
-            details={"credential_id": credential_id},
+        from app.compliance.services.alert_service import (
+            dispatch_non_notice_alert,
+            resolve_recipients,
         )
-    except (ImportError, TypeError) as e:
-        # TypeError covers signature mismatch — Phase 11 dispatch_alert has
-        # a different signature (takes notice + recipients). Wire-up to a
-        # bill/credential-shaped alert pathway lands in Plan 05.
+
+        recipients = resolve_recipients(
+            db,
+            client_id=cred.client_id,
+            recipient_roles=("compliance_head", "ca_consultant"),
+        )
+        dispatch_non_notice_alert(
+            db,
+            client_id=cred.client_id,
+            alert_type="gmail_connection_lost",
+            channels=["email", "websocket"],
+            recipients=recipients,
+            payload={
+                "credential_id": credential_id,
+                "user_id": cred.user_id,
+                "reason": "invalid_grant",
+            },
+        )
+    except Exception as e:
         logger.warning(
-            "gmail.connection.lost alert emit skipped (%s): %s",
-            type(e).__name__,
+            "gmail.connection.lost alert emit failed: %s",
             e,
         )

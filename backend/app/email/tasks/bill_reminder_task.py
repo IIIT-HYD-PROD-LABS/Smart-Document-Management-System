@@ -53,31 +53,33 @@ def fire_reminder(bill_id: int, tier: str) -> None:
         )
 
         try:
-            from app.compliance.services.alert_service import dispatch_alert
+            from app.compliance.services.alert_service import (
+                dispatch_non_notice_alert,
+                resolve_recipients,
+            )
 
-            dispatch_alert(
+            recipients = resolve_recipients(
+                db,
+                client_id=bill.client_id,
+                recipient_roles=("compliance_head", "cfo"),
+            )
+            dispatch_non_notice_alert(
+                db,
                 client_id=bill.client_id,
                 alert_type=tier,
-                target=f"bill:{bill.id}",
+                channels=["email", "websocket"],
+                recipients=recipients,
                 payload={
+                    "target": f"bill:{bill.id}",
                     "biller_name": bill.biller_name,
                     "amount_due": str(bill.amount_due),
                     "due_date": bill.due_date.isoformat() if bill.due_date else None,
                 },
             )
-        except (ImportError, TypeError) as e:
-            # Phase 11 dispatch_alert's actual signature is
-            # (db, *, notice, alert_type, channels, recipients, payload)
-            # — bill alerts have no parent ComplianceNotice, so the credential/
-            # bill-level alert pathway is wired in Plan 05 (router-side).
-            # For now, log the would-be dispatch so the cool-down state is
-            # still updated and the schedule remains observable.
+        except Exception as e:
             logger.warning(
-                "bill reminder dispatch skipped (%s): bill_id=%s tier=%s err=%s",
-                type(e).__name__,
-                bill_id,
-                tier,
-                e,
+                "bill reminder dispatch failed: bill_id=%s tier=%s err=%s",
+                bill_id, tier, e,
             )
 
         bill.reminder_count += 1
