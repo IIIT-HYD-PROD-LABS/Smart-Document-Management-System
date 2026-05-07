@@ -35,3 +35,10 @@ requires-python = ">=3.12"
 # fails to resolve it. `unsafe-best-match` matches pip's behavior of
 # trying every index — both are trusted, no dependency-confusion risk.
 index-strategy = "unsafe-best-match"
+
+[tool.pytest.ini_options]
+# Phase 15 — async MCP tool tests use FastMCP's Client(server_instance)
+# in-memory transport. asyncio_mode="auto" lets pytest-asyncio pick up
+# `async def test_*` functions without per-test @pytest.mark.asyncio.
+asyncio_mode = "auto"
+testpaths = ["tests"]

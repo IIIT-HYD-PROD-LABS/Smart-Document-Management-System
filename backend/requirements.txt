@@ -42,6 +42,12 @@ APScheduler==3.11.0
 twilio==9.4.4
 holidays==0.61
 
+# Phase 15 — Gmail MCP Integration (FastMCP server, Gmail API client,
+# google-auth-oauthlib for web OAuth flow). google-auth pulled transitively.
+fastmcp==3.2.4
+google-api-python-client==2.196.0
+google-auth-oauthlib==1.4.0
+
 # OCR & Image Processing
 pytesseract==0.3.10
 opencv-python-headless==4.8.1.78
@@ -89,3 +95,4 @@ python-dateutil==2.8.2
 
 # ── Testing (not needed in production) ──────────────────────────
 pytest==9.0.3
+pytest-asyncio>=0.21,<1.0
