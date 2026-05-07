@@ -20,6 +20,16 @@ from app.compliance.models.notice import (  # noqa: F401, E402
 from app.compliance.models.notice_type import NoticeType  # noqa: F401, E402
 from app.compliance.models.regulatory_calendar import RegulatoryCalendar  # noqa: F401, E402
 
+# Phase 15 Gmail models — register so SQLAlchemy resolves Document.source_email
+# relationship() and the email tests can reference these classes directly.
+from app.email.models import (  # noqa: F401, E402
+    GmailCredential,
+    GmailFilterRule,
+    GmailFetchLog,
+    GmailMessageLog,
+    Bill,
+)
+
 __all__ = [
     # v1.0
     "User",
@@ -37,4 +47,10 @@ __all__ = [
     "NoticeTag",
     "NoticeType",
     "RegulatoryCalendar",
+    # Phase 15 gmail
+    "GmailCredential",
+    "GmailFilterRule",
+    "GmailFetchLog",
+    "GmailMessageLog",
+    "Bill",
 ]

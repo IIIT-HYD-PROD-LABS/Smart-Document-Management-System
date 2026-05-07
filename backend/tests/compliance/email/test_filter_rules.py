@@ -11,11 +11,16 @@ import pytest
 
 def test_filter_rule_priority_column_exists():
     """GmailFilterRule has Integer column `priority` (open question #5; EMAIL-04)."""
-    try:
-        from app.email.models.filter_rule import GmailFilterRule  # noqa: F401
-    except ImportError:
-        pytest.skip("Plan 02 — GmailFilterRule ORM not yet implemented")
-    pytest.skip("Plan 02 — priority column assertion lands then")
+    from app.email.models.filter_rule import GmailFilterRule
+
+    assert "priority" in GmailFilterRule.__table__.columns, (
+        "GmailFilterRule must declare a `priority` column (open question #5)"
+    )
+    col = GmailFilterRule.__table__.columns["priority"]
+    assert str(col.type).upper().startswith("INTEGER"), (
+        f"priority must be INTEGER; got {col.type}"
+    )
+    assert col.nullable is False, "priority must be NOT NULL"
 
 
 def test_lower_priority_rule_wins_when_two_match():

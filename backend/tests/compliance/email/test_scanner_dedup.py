@@ -11,11 +11,13 @@ import pytest
 
 def test_composite_unique_credential_id_message_id():
     """INSERT duplicate (credential_id, gmail_message_id) raises IntegrityError (EMAIL-08)."""
-    try:
-        from app.email.models.message_log import GmailMessageLog  # noqa: F401
-    except ImportError:
-        pytest.skip("Plan 02 — GmailMessageLog ORM not yet implemented")
-    pytest.skip("Plan 02 — composite UNIQUE assertion lands then")
+    from app.email.models.message_log import GmailMessageLog
+
+    # Schema-level assertion: the composite UNIQUE constraint exists on the table.
+    constraint_names = {c.name for c in GmailMessageLog.__table__.constraints}
+    assert "uq_gmail_message_log_dedup" in constraint_names, (
+        "GmailMessageLog must declare composite UNIQUE on (credential_id, gmail_message_id)"
+    )
 
 
 def test_attachment_sha256_unique_within_credential():
