@@ -55,33 +55,33 @@ export default function SearchPage() {
     };
 
     const inputClass =
-        "w-full px-3 py-2 bg-[#111113] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors";
-    const labelClass = "block text-xs text-[#71717a] mb-1";
+        "w-full px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md text-sm text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] transition-colors";
+    const labelClass = "block text-xs text-[var(--text-muted)] mb-1";
 
     return (
         <div>
             <div className="mb-8">
-                <h1 className="text-lg font-semibold text-white">Search</h1>
-                <p className="text-sm text-[#52525b] mt-1">Find documents by content or keywords</p>
+                <h1 className="text-lg font-semibold text-[var(--text-primary)]">Search</h1>
+                <p className="text-sm text-[var(--text-muted)] mt-1">Find documents by content or keywords</p>
             </div>
 
             <form onSubmit={handleSearch} className="mb-8 space-y-4">
                 {/* Main search bar */}
                 <div className="flex flex-col sm:flex-row gap-2">
                     <div className="relative flex-1">
-                        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#52525b] w-4 h-4" />
+                        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-subtle)] w-4 h-4" />
                         <input
                             type="text"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2 bg-[#111113] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors"
+                            className="w-full pl-9 pr-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md text-sm text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] transition-colors"
                             placeholder="Search by content, keywords..."
                         />
                     </div>
                     <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        className="px-3 py-2 bg-[#111113] border border-[#27272a] rounded-md text-sm text-[#a1a1aa] focus:outline-none focus:border-[#3f3f46] transition-colors cursor-pointer"
+                        className="px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] transition-colors cursor-pointer"
                     >
                         <option value="">All</option>
                         {categories.filter(Boolean).map((c) => (
@@ -91,14 +91,14 @@ export default function SearchPage() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="px-4 py-2 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] disabled:opacity-50 transition-colors cursor-pointer"
+                        className="px-4 py-2 text-sm font-medium bg-[var(--accent)] text-white rounded-md hover:bg-[var(--accent-strong)] disabled:opacity-50 transition-colors cursor-pointer"
                     >
                         {loading ? "..." : "Search"}
                     </button>
                 </div>
 
                 {/* Filter panel */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-[#0d0d0f] border border-[#27272a] rounded-lg">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-[var(--bg-muted)] border border-[var(--border-default)] rounded-lg">
                     <div>
                         <label className={labelClass}>Date from</label>
                         <input
@@ -146,25 +146,25 @@ export default function SearchPage() {
 
             {searched && (
                 <div>
-                    <p className="text-xs text-[#52525b] mb-4">
+                    <p className="text-xs text-[var(--text-muted)] mb-4">
                         {results.length} result{results.length !== 1 ? "s" : ""}
                     </p>
                     {results.length > 0 ? (
-                        <div className="bg-[#111113] border border-[#27272a] rounded-lg divide-y divide-[#1f1f23]">
+                        <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg divide-y divide-[var(--border-default)]">
                             {results.map((doc) => (
                                 <div
                                     key={doc.id}
                                     onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
-                                    className="px-5 py-4 hover:bg-[#18181b] transition-colors cursor-pointer"
+                                    className="px-5 py-4 hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
                                 >
                                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-                                        <FiFileText className="w-4 h-4 text-[#52525b] shrink-0" />
-                                        <span className="text-sm text-white truncate max-w-[60vw] sm:max-w-none">{doc.original_filename}</span>
+                                        <FiFileText className="w-4 h-4 text-[var(--text-subtle)] shrink-0" />
+                                        <span className="text-sm font-medium text-[var(--text-primary)] truncate max-w-[60vw] sm:max-w-none">{doc.original_filename}</span>
                                         <CategoryBadge category={doc.category} />
                                         <span className="hidden sm:inline-flex"><ConfidenceBadge score={doc.confidence_score ?? 0} /></span>
                                     </div>
                                     {doc.extracted_text && (
-                                        <p className="text-xs text-[#71717a] leading-relaxed line-clamp-2 ml-7">
+                                        <p className="text-xs text-[var(--text-muted)] leading-relaxed line-clamp-2 ml-7">
                                             {doc.extracted_text.substring(0, 200)}
                                         </p>
                                     )}
@@ -172,8 +172,8 @@ export default function SearchPage() {
                             ))}
                         </div>
                     ) : (
-                        <div className="bg-[#111113] border border-[#27272a] rounded-lg py-16 text-center">
-                            <p className="text-sm text-[#52525b]">No documents match your search</p>
+                        <div className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-lg py-16 text-center">
+                            <p className="text-sm text-[var(--text-muted)]">No documents match your search</p>
                         </div>
                     )}
                 </div>

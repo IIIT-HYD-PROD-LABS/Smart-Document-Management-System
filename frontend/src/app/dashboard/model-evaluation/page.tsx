@@ -29,15 +29,15 @@ interface EvaluationReport {
 }
 
 function accuracyColor(value: number): string {
-    if (value >= 0.85) return "text-[#10b981]";
-    if (value >= 0.70) return "text-[#f59e0b]";
-    return "text-[#ef4444]";
+    if (value >= 0.85) return "text-[var(--success)]";
+    if (value >= 0.70) return "text-[var(--warning)]";
+    return "text-[var(--danger)]";
 }
 
 function accuracyBgColor(value: number): string {
-    if (value >= 0.85) return "bg-[#10b981]/10 text-[#10b981]";
-    if (value >= 0.70) return "bg-[#f59e0b]/10 text-[#f59e0b]";
-    return "bg-[#ef4444]/10 text-[#ef4444]";
+    if (value >= 0.85) return "bg-[var(--success-soft)] text-[var(--success)]";
+    if (value >= 0.70) return "bg-[var(--warning-soft)] text-[var(--warning)]";
+    return "bg-[var(--danger-soft)] text-[var(--danger)]";
 }
 
 export default function ModelEvaluationPage() {
@@ -75,12 +75,12 @@ export default function ModelEvaluationPage() {
         return (
             <div>
                 <div className="mb-8">
-                    <h1 className="text-lg font-semibold text-white">Model Evaluation Report</h1>
-                    <p className="text-sm text-[#52525b] mt-1">Classification model performance metrics</p>
+                    <h1 className="text-lg font-semibold text-[var(--text-primary)]">Model Evaluation Report</h1>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">Classification model performance metrics</p>
                 </div>
-                <div className="bg-[#111113] border border-[#27272a] rounded-lg py-16 text-center">
-                    <FiBarChart2 className="w-8 h-8 mx-auto mb-3 text-[#52525b]" />
-                    <p className="text-sm text-[#52525b]">{error || "No report data available."}</p>
+                <div className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-lg py-16 text-center">
+                    <FiBarChart2 className="w-8 h-8 mx-auto mb-3 text-[var(--text-subtle)]" />
+                    <p className="text-sm text-[var(--text-muted)]">{error || "No report data available."}</p>
                 </div>
             </div>
         );
@@ -91,98 +91,98 @@ export default function ModelEvaluationPage() {
     return (
         <div>
             <div className="mb-8">
-                <h1 className="text-lg font-semibold text-white">Model Evaluation Report</h1>
-                <p className="text-sm text-[#52525b] mt-1">Classification model performance metrics</p>
+                <h1 className="text-lg font-semibold text-[var(--text-primary)]">Model Evaluation Report</h1>
+                <p className="text-sm text-[var(--text-muted)] mt-1">Classification model performance metrics</p>
             </div>
 
             {/* Overall Metrics */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-                <div className="bg-[#111113] border border-[#27272a] rounded-lg p-4">
-                    <p className="text-xs text-[#52525b] mb-1">Test Accuracy</p>
+                <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg p-4">
+                    <p className="text-xs text-[var(--text-muted)] mb-1">Test Accuracy</p>
                     <p className={`text-xl font-semibold ${accuracyColor(report.test_accuracy)}`}>
                         {(report.test_accuracy * 100).toFixed(1)}%
                     </p>
                 </div>
-                <div className="bg-[#111113] border border-[#27272a] rounded-lg p-4">
-                    <p className="text-xs text-[#52525b] mb-1">CV Score</p>
-                    <p className="text-xl font-semibold text-white">
+                <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg p-4">
+                    <p className="text-xs text-[var(--text-muted)] mb-1">CV Score</p>
+                    <p className="text-xl font-semibold text-[var(--text-primary)]">
                         {(report.cv_mean * 100).toFixed(1)}%
-                        <span className="text-xs text-[#52525b] ml-1">+/-{(report.cv_std * 100).toFixed(1)}</span>
+                        <span className="text-xs text-[var(--text-muted)] ml-1">+/-{(report.cv_std * 100).toFixed(1)}</span>
                     </p>
                 </div>
-                <div className="bg-[#111113] border border-[#27272a] rounded-lg p-4">
-                    <p className="text-xs text-[#52525b] mb-1">Best Model</p>
-                    <p className="text-sm font-semibold text-white">{report.best_model}</p>
+                <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg p-4">
+                    <p className="text-xs text-[var(--text-muted)] mb-1">Best Model</p>
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">{report.best_model}</p>
                 </div>
-                <div className="bg-[#111113] border border-[#27272a] rounded-lg p-4">
-                    <p className="text-xs text-[#52525b] mb-1">Total Samples</p>
-                    <p className="text-xl font-semibold text-white">{report.total_samples.toLocaleString()}</p>
-                    <p className="text-[10px] text-[#52525b]">{report.data_source}</p>
+                <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg p-4">
+                    <p className="text-xs text-[var(--text-muted)] mb-1">Total Samples</p>
+                    <p className="text-xl font-semibold text-[var(--text-primary)]">{report.total_samples.toLocaleString()}</p>
+                    <p className="text-[10px] text-[var(--text-subtle)]">{report.data_source}</p>
                 </div>
             </div>
 
             {/* Data Split */}
-            <div className="bg-[#111113] border border-[#27272a] rounded-lg p-4 mb-8">
-                <h2 className="text-sm font-medium text-white mb-3">Data Split</h2>
-                <div className="flex gap-6 text-xs">
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg p-4 mb-8">
+                <h2 className="text-sm font-medium text-[var(--text-primary)] mb-3">Data Split</h2>
+                <div className="flex flex-wrap gap-6 text-xs">
                     <div>
-                        <span className="text-[#52525b]">Train:</span>{" "}
-                        <span className="text-white">{report.train_size}</span>
+                        <span className="text-[var(--text-muted)]">Train:</span>{" "}
+                        <span className="text-[var(--text-primary)] font-medium">{report.train_size}</span>
                     </div>
                     <div>
-                        <span className="text-[#52525b]">Validation:</span>{" "}
-                        <span className="text-white">{report.val_size}</span>
+                        <span className="text-[var(--text-muted)]">Validation:</span>{" "}
+                        <span className="text-[var(--text-primary)] font-medium">{report.val_size}</span>
                     </div>
                     <div>
-                        <span className="text-[#52525b]">Test:</span>{" "}
-                        <span className="text-white">{report.test_size}</span>
+                        <span className="text-[var(--text-muted)]">Test:</span>{" "}
+                        <span className="text-[var(--text-primary)] font-medium">{report.test_size}</span>
                     </div>
                     <div>
-                        <span className="text-[#52525b]">Vocabulary:</span>{" "}
-                        <span className="text-white">{report.vocabulary_size?.toLocaleString()}</span>
+                        <span className="text-[var(--text-muted)]">Vocabulary:</span>{" "}
+                        <span className="text-[var(--text-primary)] font-medium">{report.vocabulary_size?.toLocaleString()}</span>
                     </div>
                 </div>
             </div>
 
             {/* Per-Category Metrics Table */}
-            <div className="bg-[#111113] border border-[#27272a] rounded-lg overflow-hidden mb-8">
-                <div className="px-4 py-3 border-b border-[#1f1f23]">
-                    <h2 className="text-sm font-medium text-white">Per-Category Metrics</h2>
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg overflow-hidden mb-8">
+                <div className="px-4 py-3 border-b border-[var(--border-default)]">
+                    <h2 className="text-sm font-medium text-[var(--text-primary)]">Per-Category Metrics</h2>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                        <thead>
-                            <tr className="text-[#52525b] text-xs border-b border-[#1f1f23]">
-                                <th className="text-left px-4 py-2 font-medium">Category</th>
-                                <th className="text-right px-4 py-2 font-medium">Precision</th>
-                                <th className="text-right px-4 py-2 font-medium">Recall</th>
-                                <th className="text-right px-4 py-2 font-medium">F1-Score</th>
-                                <th className="text-right px-4 py-2 font-medium">Support</th>
+                        <thead className="bg-[var(--bg-muted)]">
+                            <tr className="text-[var(--text-secondary)] text-xs border-b border-[var(--border-default)]">
+                                <th className="text-left px-4 py-2 font-medium uppercase tracking-wider">Category</th>
+                                <th className="text-right px-4 py-2 font-medium uppercase tracking-wider">Precision</th>
+                                <th className="text-right px-4 py-2 font-medium uppercase tracking-wider">Recall</th>
+                                <th className="text-right px-4 py-2 font-medium uppercase tracking-wider">F1-Score</th>
+                                <th className="text-right px-4 py-2 font-medium uppercase tracking-wider">Support</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#1f1f23]">
+                        <tbody className="divide-y divide-[var(--border-default)]">
                             {categories.map((cat) => {
                                 const m = report.classification_report[cat];
                                 if (!m) return null;
                                 return (
-                                    <tr key={cat} className="hover:bg-[#18181b] transition-colors">
-                                        <td className="px-4 py-2 text-white capitalize">{cat}</td>
+                                    <tr key={cat} className="hover:bg-[var(--bg-hover)] transition-colors">
+                                        <td className="px-4 py-2 text-[var(--text-primary)] capitalize font-medium">{cat}</td>
                                         <td className="px-4 py-2 text-right">
-                                            <span className={`px-1.5 py-0.5 rounded text-xs ${accuracyBgColor(m.precision)}`}>
+                                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${accuracyBgColor(m.precision)}`}>
                                                 {(m.precision * 100).toFixed(0)}%
                                             </span>
                                         </td>
                                         <td className="px-4 py-2 text-right">
-                                            <span className={`px-1.5 py-0.5 rounded text-xs ${accuracyBgColor(m.recall)}`}>
+                                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${accuracyBgColor(m.recall)}`}>
                                                 {(m.recall * 100).toFixed(0)}%
                                             </span>
                                         </td>
                                         <td className="px-4 py-2 text-right">
-                                            <span className={`px-1.5 py-0.5 rounded text-xs ${accuracyBgColor(m["f1-score"])}`}>
+                                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${accuracyBgColor(m["f1-score"])}`}>
                                                 {(m["f1-score"] * 100).toFixed(0)}%
                                             </span>
                                         </td>
-                                        <td className="px-4 py-2 text-right text-[#a1a1aa]">{m.support}</td>
+                                        <td className="px-4 py-2 text-right text-[var(--text-muted)] tabular-nums">{m.support}</td>
                                     </tr>
                                 );
                             })}
@@ -192,10 +192,10 @@ export default function ModelEvaluationPage() {
             </div>
 
             {/* Confusion Matrix */}
-            <div className="bg-[#111113] border border-[#27272a] rounded-lg overflow-hidden">
-                <div className="px-4 py-3 border-b border-[#1f1f23]">
-                    <h2 className="text-sm font-medium text-white">Confusion Matrix</h2>
-                    <p className="text-[10px] text-[#52525b] mt-0.5">Rows = actual, Columns = predicted</p>
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--border-default)]">
+                    <h2 className="text-sm font-medium text-[var(--text-primary)]">Confusion Matrix</h2>
+                    <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Rows = actual, Columns = predicted</p>
                 </div>
                 <div className="overflow-x-auto p-4">
                     <table className="text-xs">
@@ -203,7 +203,7 @@ export default function ModelEvaluationPage() {
                             <tr>
                                 <th className="px-2 py-1" />
                                 {categories.map((cat) => (
-                                    <th key={cat} className="px-2 py-1 text-[#52525b] font-medium capitalize text-center min-w-[48px]">
+                                    <th key={cat} className="px-2 py-1 text-[var(--text-muted)] font-medium capitalize text-center min-w-[48px]">
                                         {cat.slice(0, 4)}
                                     </th>
                                 ))}
@@ -212,7 +212,7 @@ export default function ModelEvaluationPage() {
                         <tbody>
                             {report.confusion_matrix.map((row, i) => (
                                 <tr key={i}>
-                                    <td className="px-2 py-1 text-[#a1a1aa] font-medium capitalize">{categories[i]}</td>
+                                    <td className="px-2 py-1 text-[var(--text-secondary)] font-medium capitalize">{categories[i]}</td>
                                     {row.map((val, j) => {
                                         const isCorrect = i === j;
                                         const maxInRow = Math.max(...row);
@@ -220,16 +220,16 @@ export default function ModelEvaluationPage() {
                                         return (
                                             <td
                                                 key={j}
-                                                className={`px-2 py-1 text-center rounded ${
+                                                className={`px-2 py-1 text-center rounded tabular-nums ${
                                                     isCorrect && val > 0
-                                                        ? "bg-[#10b981]/20 text-[#10b981] font-medium"
+                                                        ? "bg-[var(--success-soft)] text-[var(--success)] font-semibold"
                                                         : val > 0
-                                                        ? `text-[#a1a1aa]`
-                                                        : "text-[#3f3f46]"
+                                                        ? "text-[var(--text-secondary)]"
+                                                        : "text-[var(--text-subtle)]"
                                                 }`}
                                                 style={
                                                     !isCorrect && val > 0
-                                                        ? { backgroundColor: `rgba(239, 68, 68, ${intensity * 0.15})` }
+                                                        ? { backgroundColor: `rgba(185, 28, 28, ${intensity * 0.12})` }
                                                         : undefined
                                                 }
                                             >
