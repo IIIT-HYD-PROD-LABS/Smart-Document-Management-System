@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
 status: Ready to execute
-stopped_at: Completed 15-01-PLAN.md (Wave 0 test infrastructure); ready for Plan 15-02 (DB foundations + 5+ migrations)
-last_updated: "2026-05-07T17:23:20.365Z"
+stopped_at: Completed 15-02-PLAN.md (DB foundations); ready for Plan 15-03 (services — oauth, credential vault, classifier, bill extractor, scanner)
+last_updated: "2026-05-07T17:43:37.988Z"
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 18
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 15 (gmail-mcp-integration) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 
 ## Shipped Milestones
 
@@ -72,6 +72,10 @@ See .planning/milestones/v1.0-ROADMAP.md for v1.0 decisions.
 - [Phase 15]: [Phase 15] Plan 01: Wave 0 RED-state test infrastructure — 17 backend pytest stubs + 4 frontend vitest stubs + 8-fixture conftest gating Plans 02-07; in-memory FastMCP Client(mcp) pattern (D-38) documented in test_mcp_tools.py
 - [Phase 15]: [Phase 15] Plan 01: Fernet test key derived via SHA-256(stable phrase) producing valid 32-byte raw key — plan's literal urlsafe_b64encode would have raised ValueError 'Fernet key must be 32 url-safe base64-encoded bytes'; Rule 1 deviation in conftest.py
 - [Phase 15]: [Phase 15] Plan 01: Reconciliation contracts locked in stubs — rbi.org.in sender domain (test_compliance_router.py recon #4), priority column on GmailFilterRule (test_filter_rules.py open Q #5), in-memory FastMCP Client (test_mcp_tools.py recon #1), body never persisted (test_pii_lifecycle.py D-34)
+- [Phase 15-gmail-mcp-integration]: Plan 02: Migration 0025 uses descriptive slug suffix (0025_phase15_gmail_mcp) matching existing chain convention; bare '0025' would have broken visual + downgrade reference
+- [Phase 15-gmail-mcp-integration]: Plan 02: RLS subquery pattern for credential-scoped tables (filter_rules, message_log, fetch_log) — credential_id IN (SELECT id FROM gmail_credentials WHERE client_id = ...) instead of denormalized client_id column
+- [Phase 15-gmail-mcp-integration]: Plan 02: Bill hybrid model encoded with two independent FKs (source_document_id NULLABLE for text-only bills, source_email_id always set for provenance) — analytics queries can filter on IS NULL for the no-attachment cohort
+- [Phase 15-gmail-mcp-integration]: Plan 02: 4 Plan 01 RED stubs flipped to GREEN at schema level (priority column, composite UNIQUE on message_log, three-state CHECK on fetch_log, partial unique index ux_bills_recurrence_key); 37 service/router-level stubs remain skipped for Plans 03-05
 
 ### Pending Todos
 
@@ -87,10 +91,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-07T17:23:20.362Z
+Last session: 2026-05-07T17:43:37.985Z
 Previous session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
 
-Stopped at: Completed 15-01-PLAN.md (Wave 0 test infrastructure); ready for Plan 15-02 (DB foundations + 5+ migrations)
+Stopped at: Completed 15-02-PLAN.md (DB foundations); ready for Plan 15-03 (services — oauth, credential vault, classifier, bill extractor, scanner)
 
 v2.1 deferral commit: 10-RESEARCH-FINAL.md locks InLegalBERT as the v2.1 primary base model recommendation, training-data strategy (SEBI scrape + LLM-template synthetic + hand-labeled real held-out test set), and authority severity weights (CA/CFO sign-off pending — placeholders ship for v2.0).
 
