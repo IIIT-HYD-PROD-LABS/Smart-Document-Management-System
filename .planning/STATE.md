@@ -2,23 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
-status: Phase 10-13 v2.0 CODE-COMPLETE + smokes PASSED. SECOND hardening pass shipped: 5 CRITICAL + 9 HIGH fixes from 5-agent end-to-end audit covering Phase 1-13. Closed cross-user document leak (CRIT-1), APScheduler RLS regression (CRIT-2), audit dead-letter durability (CRIT-3), regulatory audit failure visibility (CRIT-4), LLM extraction status mislabeling (CRIT-5), plus 9 Tier B fixes. 163 backend tests GREEN. See HARDENING-PLAN-2.md.
-stopped_at: "v2.0 Phases 10-13 CODE-COMPLETE 2026-05-05. Phase 13 ships: PostgreSQL-FTS-backed unified cross-entity search across compliance_notices + documents, with 4 new endpoints (/api/compliance/search/unified + /api/compliance/reports/{penalty-by-authority,notice-volume-by-status,response-time}); migration 0023 adds search_vector TSVECTOR + GIN index + trigger to compliance_notices (mirrors Phase 4 documents pattern); frontend cross-entity search page at /dashboard/compliance/search + reports analytics cards (penalty by authority, notice volume by status, response time percentiles). Phase 13 v2.1 deferrals binding: Elastic Cloud, outbox pattern, indexer worker, daily reconciliation, ES degraded-mode banner, severity-weighted compliance score, real-time search-as-you-type, vector/semantic search, server-side snippet sanitization. Phase 13 v2.0 chosen split per 13-RESEARCH-FINAL.md: criteria 1-3 (unified search + cross-system + sub-3s reports) deliverable today on PG; criteria 4-5 (ES fallback + reconciliation) are scale infrastructure that only matter once ES exists. Saves recurring Elastic Cloud subscription until v2.1 evidence-based justification. End-to-end smoke PASSED: 'GST' query returned 3 notice + 8 document hits ranked correctly (top rank 0.8529); SEBI query filtered to single critical notice; aggregations returned correct shapes. 161 backend tests GREEN. Frontend XSS hardening: search snippets render as plain text (HTML stripped) — security hook caught the unsafe HTML render path on first commit and the code was rewritten before review. Migration head=0023_phase13_search_vector_on_notices. Phase 14 CONTEXT seeded with external blockers (GSP empanelment, IT API access); Phase 15 CONTEXT seeded 2026-04-28. Next: /gsd:discuss-phase 14 once external decisions land, OR /gsd:discuss-phase 15 (Gmail MCP — fewer blockers)."
-last_updated: "2026-05-06T18:30:00.000Z"
+status: "Phase 10-13 v2.0 CODE-COMPLETE + smokes PASSED. SECOND hardening pass shipped: 5 CRITICAL + 9 HIGH fixes from 5-agent end-to-end audit covering Phase 1-13. Closed cross-user document leak (CRIT-1), APScheduler RLS regression (CRIT-2), audit dead-letter durability (CRIT-3), regulatory audit failure visibility (CRIT-4), LLM extraction status mislabeling (CRIT-5), plus 9 Tier B fixes. 163 backend tests GREEN. See HARDENING-PLAN-2.md."
+stopped_at: "Phase 15 context refined — 40 decisions locked (28 seed + 12 new). Ready for /gsd:plan-phase 15."
+last_updated: "2026-05-07T16:00:26.979Z"
 progress:
   total_phases: 7
-  completed_phases: 1
-  v2_phase_10_v2_0_code_complete_at: "2026-05-05"
-  v2_phase_11_v2_0_code_complete_at: "2026-05-05"
-  v2_phase_12_v2_0_code_complete_at: "2026-05-05"
-  v2_phase_13_v2_0_code_complete_at: "2026-05-05"
-  v2_0_1_patch_user_facing_fixes_at: "2026-05-06"
-  v2_0_1_patch_supabase_advisor_at: "2026-05-06"
-  total_plans: 15
-  completed_plans: 15
-  percent: 63
-  v2_phase_9_shipped_at: "2026-04-28"
-  alembic_head: "0024_supabase_security_advisor_fixes"
+  completed_phases: 3
+  total_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -28,17 +19,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Automated classification and intelligent management of documents and compliance notices
-**Current focus:** Phase 09 — compliance-foundation
+**Current focus:** v2.0.1 patch shipped (2026-05-06); next milestone-bearing work is Phase 15 (Gmail MCP) — Phase 14 (Portals) blocked on external decisions.
 
 ## Current Position
 
-Phase: 11 (alerts-and-calendar) — v2.0 CODE-COMPLETE 2026-05-05.
-Phases 12, 13, 14 CONTEXTS seeded (12 unblocked, 14 has hard external blockers).
-Phase 15 CONTEXT was seeded 2026-04-28.
+Phases 09, 10, 11, 12, 13 v2.0 CODE-COMPLETE (2026-05-05). Smokes PASSED for 10/12/13; Phase 11 awaits user browser smoke. v2.0.1 patch (2026-05-06) closed 7 user-facing bugs + Supabase Security Advisor migration `0024` (5 CRIT + 6 HIGH).
+Phase 14 (portal integration): CONTEXT seeded; BLOCKED on external (GSP empanelment, IT e-filing API access). Slice **14a** (RBI/SEBI scrapers + generic IMAP + credential vault + fetch-log infra) is buildable today without external creds — see Phase 14 brainstorm 2026-05-07.
+Phase 15 (Gmail MCP): CONTEXT seeded 2026-04-28 — ready for /gsd:discuss-phase 15.
+
 Next:
-  1. Manual user smoke of Phase 10 + 11 (browser flows): create notice, transition to Under Review, see ConfidenceBadge + risk panel, navigate to /calendar (37 deadlines visible), open NotificationBell (WebSocket connects).
-  2. /gsd:discuss-phase 12 → /gsd:research-phase 12 → /gsd:plan-phase 12 (Response Drafting + Evidence Management).
-  3. Phase 14 awaits external decisions (GSP empanelment, IT API access) — see 14-CONTEXT.md Open Blockers.
+
+  1. Manual user smoke of Phase 11 (browser): /calendar shows 37 FY 2025-26 deadlines; NotificationBell connects WebSocket; ConfidenceBadge + risk panel render on a notice transitioned Received → Under Review.
+  2. /gsd:discuss-phase 15 → /gsd:research-phase 15 → /gsd:plan-phase 15 (Gmail MCP read-only ingestion + Bills entity).
+  3. Optional parallel track: /gsd:discuss-phase 14 framed as Slice 14a only (RBI/SEBI scrapers + IMAP + portal credential vault), defer 14b (GST/IT/MCA portals) until empanelment + API access decisions land.
 
 ## Shipped Milestones
 
@@ -98,10 +91,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-05T10:00:00Z (Phase 10 v2.0 ship — review queue infra + auto-escalation + frontend SHAP UI)
+Last session: 2026-05-07T16:00:26.971Z
 Previous session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
 
-Stopped at: 2026-05-05 — Phase 10 v2.0 code-complete. Three plans (10-01 review queue backend, 10-02 auto-escalation, 10-03 frontend SHAP UI) all landed. Backend delivers: NoticeReviewQueue ORM + Pydantic schemas + service layer + 3 review endpoints (/api/compliance/review/{pending,id,id/assign}); escalation.py with should_escalate + escalate functions wired into compliance_tasks.classify_and_score_notice; NOTICE_REVIEW permission added to compliance_head, ca_consultant, legal_team. Frontend delivers: ConfidenceBadge + WhyThisRiskScore + RiskTierDot upgrade (with motion-safe pulse on Critical) + /dashboard/compliance/review page + sidebar nav entry. 82 unit + service tests GREEN; integration tests for client_with_membership fixture error on Supabase pooler (pre-existing — needs local Postgres for SET ROLE). Pre-Phase-10 Wave 0 already had migration 0020, the ML columns ORM, the compliance-worker Celery service, the rule-based risk scorer, regex_patterns, and 3 supporting test files.
+Stopped at: Phase 15 context refined — 40 decisions locked (28 seed + 12 new). Ready for /gsd:plan-phase 15.
 
 v2.1 deferral commit: 10-RESEARCH-FINAL.md locks InLegalBERT as the v2.1 primary base model recommendation, training-data strategy (SEBI scrape + LLM-template synthetic + hand-labeled real held-out test set), and authority severity weights (CA/CFO sign-off pending — placeholders ship for v2.0).
 
