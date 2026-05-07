@@ -55,7 +55,7 @@ google-api-python-client==2.196.0
 google-auth-oauthlib==1.4.0
 
 # OCR & Image Processing
-pytesseract==0.3.10
+pytesseract==0.3.13
 opencv-python-headless==4.8.1.78
 Pillow==12.2.0
 
