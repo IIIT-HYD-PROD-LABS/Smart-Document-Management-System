@@ -21,6 +21,10 @@ import {
     FiCalendar,
     FiActivity,
     FiBookOpen,
+    FiMail,
+    FiSettings,
+    FiInbox,
+    FiCreditCard,
 } from "react-icons/fi";
 
 /**
@@ -59,6 +63,15 @@ const NAV_GROUPS: NavGroup[] = [
             { href: "/dashboard/documents", icon: FiFileText, label: "Documents", roles: ["admin", "editor", "viewer"] },
             { href: "/dashboard/shared", icon: FiShare2, label: "Shared", roles: ["admin", "editor", "viewer"] },
             { href: "/dashboard/analytics", icon: FiBarChart2, label: "Analytics", roles: ["admin", "editor", "viewer"] },
+        ],
+    },
+    {
+        label: "Email",
+        items: [
+            { href: "/dashboard/email/connect", icon: FiMail, label: "Connect", roles: ["admin", "editor"] },
+            { href: "/dashboard/email/settings", icon: FiSettings, label: "Settings", roles: ["admin", "editor"] },
+            { href: "/dashboard/email/activity", icon: FiInbox, label: "Activity", roles: ["admin", "editor", "viewer"] },
+            { href: "/dashboard/email/bills", icon: FiCreditCard, label: "Bills", roles: ["admin", "editor", "viewer"] },
         ],
     },
     {
