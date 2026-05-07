@@ -135,7 +135,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
   7. A "View source email" deep-link on every Gmail-ingested Document and ComplianceNotice fetches the email body via MCP at view-time without persisting it (PII minimization)
 **Plans**: 7 plans
 - [x] 15-01-PLAN.md — Wave 0 test infrastructure (17 backend + 4 frontend stub tests, conftest fixtures, requirements pinning)
-- [ ] 15-02-PLAN.md — Wave 1 DB foundations (alembic 0025: 5 tables + RLS, ORM models, Pydantic schemas, permission, alert types)
+- [x] 15-02-PLAN.md — Wave 1 DB foundations (alembic 0025: 5 tables + RLS, ORM models, Pydantic schemas, permission, alert types)
 - [ ] 15-03-PLAN.md — Wave 2A services (oauth, vault, access cache, scanner, classifier with rbi.org.in, bill extractor + bill service + ingestion + scanner_task)
 - [ ] 15-04-PLAN.md — Wave 2B MCP server (FastMCP with 6 tools + in-memory client per reconciliation #1 + lifespan handler in main.py)
 - [ ] 15-05-PLAN.md — Wave 3A backend routers (7 routers under /api/email gated by email_integration:use)
@@ -155,7 +155,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 | 12. Response Drafting + Evidence Management | v2.0 | 1/1 v2.0 + 0/N v2.1 | v2.0 CODE-COMPLETE + smoke PASSED; v2.1 deferred (templates + LLM drafts + PDF merge + ITC recon + regulation library) | 2026-05-05 |
 | 13. Elasticsearch + Cross-Entity Search | v2.0 | 1/1 v2.0 + 0/N v2.1 | v2.0 CODE-COMPLETE + smoke PASSED via PG-FTS; v2.1 deferred (Elastic Cloud + outbox + reconciliation) | 2026-05-05 |
 | 14. Government Portal Integration | v2.0 | 0/TBD | CONTEXT seeded 2026-05-05 — **BLOCKED on GSP empanelment + IT API decisions** | - |
-| 15. Gmail MCP Integration | v2.0 | 1/7 | In Progress|  |
+| 15. Gmail MCP Integration | v2.0 | 2/7 | In Progress|  |
 | 12. Response Drafting + Evidence Management | v2.0 | 0/TBD | Not started | - |
 | 13. Elasticsearch + Cross-Entity Search + Reporting | v2.0 | 0/TBD | Not started | - |
 | 14. Government Portal Integration | v2.0 | 0/TBD | Not started | - |
