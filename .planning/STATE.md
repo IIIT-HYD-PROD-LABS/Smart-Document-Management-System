@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
 status: Ready to execute
-stopped_at: Completed 15-04-PLAN.md (MCP tools + lifespan + dep reconciliation); ready for Plan 15-05 (routers)
-last_updated: "2026-05-07T18:24:15.509Z"
+stopped_at: Completed 15-05-PLAN.md (7 routers mounted under /api/email + service-layer mutation rule held); ready for Plan 15-06 (frontend)
+last_updated: "2026-05-07T18:35:32.006Z"
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 18
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 15 (gmail-mcp-integration) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 
 ## Shipped Milestones
 
@@ -85,6 +85,11 @@ See .planning/milestones/v1.0-ROADMAP.md for v1.0 decisions.
 - [Phase 15-gmail-mcp-integration]: Plan 04: in-memory FastMCP transport (D-38) verified — grep -r subprocess across MCP module + main.py returns 0; Client(mcp) is the only call path; native Python exceptions propagate (RuntimeError on bad transport, ToolError on Gmail API errors)
 - [Phase 15-gmail-mcp-integration]: Plan 04: FastAPI lifespan handler is the project's first; warmups APScheduler + registers MCP module at boot. get_scheduler() wrapped in try/except so a missing apscheduler_jobs table cannot block startup. Migration 0026 pre-creates the table with CRUD grants to app_runtime so Phase 11 boot path is finally healthy.
 - [Phase 15-gmail-mcp-integration]: Plan 04: gmail_list_attachments uses format='full' not format='metadata' — Gmail metadata format omits payload.parts[].body.attachmentId so attachments would always come back []. Quota cost equals gmail_read_message; correctness > quota optimization.
+- [Phase 15-gmail-mcp-integration]: Plan 05: Permission gate dependency takes ClientMembership directly (not (User, ClientMembership)) — routers read membership.user_id + membership.client_id from a single Depends() object; ensures every endpoint goes through get_active_membership which is the only path enforcing auditor expiry + cross-client mode rules
+- [Phase 15-gmail-mcp-integration]: Plan 05: OAuth callback re-validates state JWT user_id + client_id against current membership before save_credential — defense in depth on top of JWT signature validation; rejects with 403 even if a malicious user has a valid state token from another session
+- [Phase 15-gmail-mcp-integration]: Plan 05: DELETE /credentials soft-disables (status='disabled') instead of hard-deleting — hard-delete would orphan source_email_id FKs from ingested Documents and Bill rows, breaking the provenance chain. STATUS_DISABLED reuses the existing CHECK-constraint value.
+- [Phase 15-gmail-mcp-integration]: Plan 05: Bulk mark-paid uses db.begin_nested() (SAVEPOINT) per row — survives inner exception cleanly without disturbing outer session (TenantContextMiddleware sets app.current_client_id via SET LOCAL inside request transaction); equivalent partial-failure semantics to Phase 9 LIFE-08 db.rollback pattern but composes better with mid-request middleware writes.
+- [Phase 15-gmail-mcp-integration]: Plan 05: view_email router does NOT write its own audit log — the MCP tool _audit_call('gmail_read_message', ...) writes the PII-redacted MCP_TOOL_CALL row from Plan 04 D-35/D-36 wiring; double-counting at the router would inflate audit volume without adding traceability.
 
 ### Pending Todos
 
@@ -100,10 +105,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-07T18:24:01.872Z
+Last session: 2026-05-07T18:35:32.003Z
 Previous session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
 
-Stopped at: Completed 15-04-PLAN.md (MCP tools + lifespan + dep reconciliation); ready for Plan 15-05 (routers)
+Stopped at: Completed 15-05-PLAN.md (7 routers mounted under /api/email + service-layer mutation rule held); ready for Plan 15-06 (frontend)
 
 v2.1 deferral commit: 10-RESEARCH-FINAL.md locks InLegalBERT as the v2.1 primary base model recommendation, training-data strategy (SEBI scrape + LLM-template synthetic + hand-labeled real held-out test set), and authority severity weights (CA/CFO sign-off pending — placeholders ship for v2.0).
 
