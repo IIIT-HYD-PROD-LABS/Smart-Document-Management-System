@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
-status: Ready to execute
-stopped_at: Completed 15-06-PLAN.md (frontend — 15 files + sidebar + tsconfig fix); ready for Plan 15-07 (smoke verification)
-last_updated: "2026-05-07T18:49:39.908Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 15-07-PLAN.md (smoke + manual checklist); Phase 15 v2.0 ready for verifier
+last_updated: "2026-05-07T18:59:33.496Z"
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 18
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # Project State
@@ -94,6 +94,9 @@ See .planning/milestones/v1.0-ROADMAP.md for v1.0 decisions.
 - [Phase 15-gmail-mcp-integration]: Plan 06: Excluded **/__tests__/** from frontend/tsconfig.json — Plan 01 vitest stubs (describe.skip + it.todo) imported vitest but vitest was never installed; tsc --noEmit was failing. Plan 06 success criterion permits keeping stubs deferred. Vitest install + config deferred to a tooling plan.
 - [Phase 15-gmail-mcp-integration]: Plan 06: Sidebar Email group inserted as a peer between Documents and Compliance, not nested inside either — email feeds both surfaces (compliance notices via routing rules; DMS attachments and bills which span both). Connect/Settings restricted to admin+editor (mutating); Activity/Bills viewable by viewer (read-only).
 - [Phase 15-gmail-mcp-integration]: Plan 06: D-37 on-demand 'View source email' button — bills/[id]/page.tsx never auto-fetches the body. User must click; body held in React state for the rendered session only (refresh discards). No localStorage, no Zustand store, no service worker cache. Aligns with D-34 PII lifecycle on the frontend side.
+- [Phase 15]: [Phase 15] Plan 07: Smoke + manual checklist — 12 automated checks (mocks Gmail API, real DB+Redis) verify reconciliations #1 (in-memory FastMCP Client) and #4 (rbi.org.in classifier) at runtime; W5 robust BILL_MARK_PAID assertion (kwargs.get OR str(call_args)); 12-step manual checklist covers real OAuth round-trip + Pitfall 4 Google verification submission as 4-8 week pre-launch dependency
+- [Phase 15]: [Phase 15] Plan 07: Per-run unique smoke fixture pattern (phase15-smoke-{epoch} label) — Phase 15's GmailCredential UNIQUE on (user_id, client_id) breaks the 'find first admin' pattern from Phase 9/10/12/13 smokes; per-run unique label keeps smoke idempotent across CI re-runs
+- [Phase 15]: [Phase 15] Plan 07: Smoke check 9 encodes the v2.0 deferral contract for low-confidence classifier routing — process_classified_email at confidence=0.5 must NOT create a ComplianceNotice (Plan 03 deferred review-queue enqueue to Plan 05); if a future plan wires real review-queue enqueue, the smoke must update to count notice_review_queue rows instead
 
 ### Pending Todos
 
@@ -109,10 +112,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-07T18:49:39.905Z
+Last session: 2026-05-07T18:59:18.846Z
 Previous session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
 
-Stopped at: Completed 15-06-PLAN.md (frontend — 15 files + sidebar + tsconfig fix); ready for Plan 15-07 (smoke verification)
+Stopped at: Completed 15-07-PLAN.md (smoke + manual checklist); Phase 15 v2.0 ready for verifier
 
 v2.1 deferral commit: 10-RESEARCH-FINAL.md locks InLegalBERT as the v2.1 primary base model recommendation, training-data strategy (SEBI scrape + LLM-template synthetic + hand-labeled real held-out test set), and authority severity weights (CA/CFO sign-off pending — placeholders ship for v2.0).
 
