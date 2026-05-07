@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
 status: Ready to execute
-stopped_at: Completed 15-05-PLAN.md (7 routers mounted under /api/email + service-layer mutation rule held); ready for Plan 15-06 (frontend)
-last_updated: "2026-05-07T18:35:32.006Z"
+stopped_at: Completed 15-06-PLAN.md (frontend — 15 files + sidebar + tsconfig fix); ready for Plan 15-07 (smoke verification)
+last_updated: "2026-05-07T18:49:39.908Z"
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 18
-  completed_plans: 17
+  completed_plans: 18
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 15 (gmail-mcp-integration) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 
 ## Shipped Milestones
 
@@ -90,6 +90,10 @@ See .planning/milestones/v1.0-ROADMAP.md for v1.0 decisions.
 - [Phase 15-gmail-mcp-integration]: Plan 05: DELETE /credentials soft-disables (status='disabled') instead of hard-deleting — hard-delete would orphan source_email_id FKs from ingested Documents and Bill rows, breaking the provenance chain. STATUS_DISABLED reuses the existing CHECK-constraint value.
 - [Phase 15-gmail-mcp-integration]: Plan 05: Bulk mark-paid uses db.begin_nested() (SAVEPOINT) per row — survives inner exception cleanly without disturbing outer session (TenantContextMiddleware sets app.current_client_id via SET LOCAL inside request transaction); equivalent partial-failure semantics to Phase 9 LIFE-08 db.rollback pattern but composes better with mid-request middleware writes.
 - [Phase 15-gmail-mcp-integration]: Plan 05: view_email router does NOT write its own audit log — the MCP tool _audit_call('gmail_read_message', ...) writes the PII-redacted MCP_TOOL_CALL row from Plan 04 D-35/D-36 wiring; double-counting at the router would inflate audit volume without adding traceability.
+- [Phase 15-gmail-mcp-integration]: Plan 06: Reconciliation #3 enforced at the source — frontend/src/lib/email-api.ts imports api from @/lib/api which already attaches Cookies.get('token') via interceptor. No email-side code touches js-cookie or localStorage; grep -r localStorage across new files returns 0. NotificationBell.tsx Phase 11 bug NOT replicated.
+- [Phase 15-gmail-mcp-integration]: Plan 06: Excluded **/__tests__/** from frontend/tsconfig.json — Plan 01 vitest stubs (describe.skip + it.todo) imported vitest but vitest was never installed; tsc --noEmit was failing. Plan 06 success criterion permits keeping stubs deferred. Vitest install + config deferred to a tooling plan.
+- [Phase 15-gmail-mcp-integration]: Plan 06: Sidebar Email group inserted as a peer between Documents and Compliance, not nested inside either — email feeds both surfaces (compliance notices via routing rules; DMS attachments and bills which span both). Connect/Settings restricted to admin+editor (mutating); Activity/Bills viewable by viewer (read-only).
+- [Phase 15-gmail-mcp-integration]: Plan 06: D-37 on-demand 'View source email' button — bills/[id]/page.tsx never auto-fetches the body. User must click; body held in React state for the rendered session only (refresh discards). No localStorage, no Zustand store, no service worker cache. Aligns with D-34 PII lifecycle on the frontend side.
 
 ### Pending Todos
 
@@ -105,10 +109,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-07T18:35:32.003Z
+Last session: 2026-05-07T18:49:39.905Z
 Previous session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
 
-Stopped at: Completed 15-05-PLAN.md (7 routers mounted under /api/email + service-layer mutation rule held); ready for Plan 15-06 (frontend)
+Stopped at: Completed 15-06-PLAN.md (frontend — 15 files + sidebar + tsconfig fix); ready for Plan 15-07 (smoke verification)
 
 v2.1 deferral commit: 10-RESEARCH-FINAL.md locks InLegalBERT as the v2.1 primary base model recommendation, training-data strategy (SEBI scrape + LLM-template synthetic + hand-labeled real held-out test set), and authority severity weights (CA/CFO sign-off pending — placeholders ship for v2.0).
 
