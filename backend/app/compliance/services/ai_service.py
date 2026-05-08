@@ -26,6 +26,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.compliance.models.ai_credential import AICredential
@@ -140,7 +141,14 @@ def set_credential(
     model: str,
     api_key: str,
 ) -> AICredential:
-    """Insert-or-update the per-tenant credential row."""
+    """Insert-or-update the per-tenant credential row.
+
+    Two concurrent POSTs from the same admin (e.g., a double-click on
+    "Save") both pass the get_credential read-modify-write guard and
+    both attempt INSERT. The unique constraint catches the second
+    commit; we rebind to the existing row + retry the update so the
+    caller sees a clean 200 instead of a 500 IntegrityError stack.
+    """
     enc = encrypt_field(api_key)
     if enc is None:  # encrypt_field returns None only when input is None
         raise ValueError("api_key encryption produced None")
@@ -161,7 +169,24 @@ def set_credential(
         api_key_enc=enc,
     )
     db.add(row)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # Another concurrent request just created the row; treat this
+        # as an update on the now-existing record.
+        existing = get_credential(db, client_id)
+        if existing is None:
+            # Highly unlikely (constraint fired but row not visible) —
+            # bubble the original error semantics so the caller sees a
+            # 5xx rather than silently no-op.
+            raise
+        existing.provider = provider
+        existing.model = model
+        existing.api_key_enc = enc
+        db.commit()
+        db.refresh(existing)
+        return existing
     db.refresh(row)
     return row
 

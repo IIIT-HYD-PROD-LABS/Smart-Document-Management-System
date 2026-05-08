@@ -174,8 +174,14 @@ class GoogleProvider(AIProvider):
     def _send(
         self, system: str, contents: list[dict], max_tokens: int
     ) -> str:
-        """Shared helper used by both `complete` and `chat`."""
-        url = f"{self._BASE}/{self._model}:generateContent?key={self._api_key}"
+        """Shared helper used by both `complete` and `chat`.
+
+        The API key goes in the `x-goog-api-key` header rather than the
+        URL query string (Google supports both). URLs end up in proxy
+        logs, error messages, and trace exporters; secrets in headers
+        are far less likely to leak.
+        """
+        url = f"{self._BASE}/{self._model}:generateContent"
         payload = {
             "system_instruction": {"parts": [{"text": system}]},
             "contents": contents,
@@ -185,7 +191,12 @@ class GoogleProvider(AIProvider):
             },
         }
         try:
-            r = httpx.post(url, json=payload, timeout=30.0)
+            r = httpx.post(
+                url,
+                json=payload,
+                headers={"x-goog-api-key": self._api_key},
+                timeout=30.0,
+            )
         except httpx.RequestError as e:
             raise AIProviderError(f"gemini request failed: {e}") from e
 

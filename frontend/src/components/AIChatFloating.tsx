@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import {
+    FiBriefcase,
     FiCpu,
     FiMessageCircle,
     FiSend,
@@ -14,6 +15,7 @@ import {
 
 import { extractErrorMessage } from "@/lib/api";
 import { aiApi } from "@/lib/api/ai";
+import { useCurrentClient } from "@/stores/currentClientStore";
 import {
     PROVIDER_LABEL,
     type AIProvider,
@@ -49,11 +51,19 @@ export default function AIChatFloating() {
     const [busy, setBusy] = useState(false);
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const inputRef = useRef<HTMLTextAreaElement | null>(null);
+    const fabRef = useRef<HTMLButtonElement | null>(null);
+    const closeRef = useRef<HTMLButtonElement | null>(null);
+
+    const activeClientId = useCurrentClient((s) => s.activeClientId);
+    const crossClientMode = useCurrentClient((s) => s.crossClientMode);
+    const hasTenantContext =
+        crossClientMode || activeClientId !== null;
 
     const { data: cred } = useQuery({
         queryKey: ["ai-credential"],
         queryFn: () => aiApi.getCredential().then((r) => r.data),
         staleTime: 30_000,
+        enabled: hasTenantContext,
     });
 
     // Keep the message list scrolled to the bottom whenever turns change.
@@ -63,34 +73,69 @@ export default function AIChatFloating() {
         el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     }, [turns, busy]);
 
-    // Auto-focus the input when the drawer opens.
+    // Focus management on drawer open/close.
+    // - Open + cred + tenant   → focus the input.
+    // - Open + (no cred OR no tenant) → focus the close button so
+    //   keyboard users land somewhere reachable inside the dialog.
+    // - Close → restore focus to the FAB that opened it.
     useEffect(() => {
-        if (open && cred) inputRef.current?.focus();
-    }, [open, cred]);
+        if (!open) {
+            // Slight defer so the close transition can finish before the
+            // browser repaints the focus ring on the FAB.
+            const t = setTimeout(() => fabRef.current?.focus(), 150);
+            return () => clearTimeout(t);
+        }
+        if (cred && hasTenantContext) {
+            inputRef.current?.focus();
+        } else {
+            closeRef.current?.focus();
+        }
+    }, [open, cred, hasTenantContext]);
+
+    // Escape closes the drawer (matches the in-tree dialog convention
+    // used by RoleDescriptionDrawer / AddMemberDialog).
+    useEffect(() => {
+        if (!open) return;
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setOpen(false);
+        };
+        document.addEventListener("keydown", handler);
+        return () => document.removeEventListener("keydown", handler);
+    }, [open]);
 
     const send = async (text: string) => {
         const trimmed = text.trim();
         if (!trimmed || busy) return;
         const userTurn: ChatTurn = { role: "user", content: trimmed };
-        const next: ChatTurn[] = [...turns, userTurn].slice(-MAX_HISTORY);
-        setTurns(next);
+        // Use a functional updater so back-to-back sends compose
+        // correctly even if React hasn't yet flushed an earlier set.
+        let nextSnapshot: ChatTurn[] = [];
+        setTurns((current) => {
+            const next = [...current, userTurn].slice(-MAX_HISTORY);
+            nextSnapshot = next;
+            return next;
+        });
         setInput("");
         setBusy(true);
         try {
-            // Strip the local-only `out_of_scope` flag before sending.
-            const payload = next.map((t) => ({
+            const payload = nextSnapshot.map((t) => ({
                 role: t.role,
                 content: t.content,
             }));
             const r = await aiApi.chat(payload);
-            setTurns([
-                ...next,
-                {
-                    role: "assistant",
-                    content: r.data.reply,
-                    out_of_scope: r.data.out_of_scope,
-                },
-            ]);
+            // Functional updater again — and re-truncate so `turns`
+            // never grows past MAX_HISTORY (the request payload is
+            // already capped, but local state could drift otherwise).
+            setTurns((current) =>
+                [
+                    ...current,
+                    {
+                        role: "assistant" as const,
+                        content: r.data.reply,
+                        out_of_scope: r.data.out_of_scope,
+                    },
+                ].slice(-MAX_HISTORY),
+            );
         } catch (e) {
             toast.error(extractErrorMessage(e, "AI chat failed."));
         } finally {
@@ -109,6 +154,7 @@ export default function AIChatFloating() {
         <>
             {/* FAB */}
             <button
+                ref={fabRef}
                 type="button"
                 onClick={() => setOpen((v) => !v)}
                 className={`
@@ -142,8 +188,15 @@ export default function AIChatFloating() {
                 />
             )}
 
-            {/* Drawer */}
+            {/* Drawer — modal dialog. Matches the in-tree convention
+             * (RoleDescriptionDrawer / AddMemberDialog): role + aria-modal
+             * for screen readers, Escape to close, focus restored to the
+             * FAB on close (see effect above). */}
             <aside
+                role="dialog"
+                aria-modal="true"
+                aria-label="AI assistant chat"
+                aria-hidden={!open}
                 className={`
                     fixed top-0 right-0 z-40 h-full
                     w-full md:w-[400px]
@@ -154,8 +207,6 @@ export default function AIChatFloating() {
                     transition-transform duration-200 ease-in-out
                     ${open ? "translate-x-0" : "translate-x-full"}
                 `}
-                aria-hidden={!open}
-                aria-label="AI assistant chat"
             >
                 <header className="px-4 h-14 flex items-center gap-2 border-b border-[var(--border-default)] shrink-0">
                     <div className="w-8 h-8 rounded-md bg-[var(--accent-soft)] flex items-center justify-center">
@@ -187,16 +238,19 @@ export default function AIChatFloating() {
                         </button>
                     )}
                     <button
+                        ref={closeRef}
                         type="button"
                         onClick={() => setOpen(false)}
                         className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1.5 rounded hover:bg-[var(--bg-hover)] cursor-pointer"
-                        aria-label="Close"
+                        aria-label="Close AI chat"
                     >
                         <FiX className="w-4 h-4" />
                     </button>
                 </header>
 
-                {!cred ? (
+                {!hasTenantContext ? (
+                    <NoTenantState />
+                ) : !cred ? (
                     <ConnectFirstState />
                 ) : (
                     <>
@@ -294,6 +348,46 @@ function ConnectFirstState() {
                 >
                     <FiSettings className="w-3 h-3" />
                     Open AI settings
+                </Link>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Rendered when no tenant has been picked yet (fresh login on a
+ * non-compliance route, or membership lookup hasn't resolved). The
+ * AI surface is tenant-scoped — every backend route requires
+ * X-Client-Id — so this is the right moment to send the user to the
+ * client list rather than 4xx silently when they hit Send.
+ */
+function NoTenantState() {
+    return (
+        <div className="flex-1 flex items-center justify-center px-6 py-12">
+            <div className="text-center max-w-sm">
+                <div className="w-12 h-12 rounded-full bg-[var(--bg-hover)] mx-auto flex items-center justify-center mb-3">
+                    <FiBriefcase className="w-5 h-5 text-[var(--text-muted)]" />
+                </div>
+                <h3 className="text-[14px] font-semibold text-[var(--text-primary)] mb-1.5">
+                    Select a client first
+                </h3>
+                <p className="text-[12.5px] text-[var(--text-muted)] leading-relaxed mb-4">
+                    The AI assistant works in the context of a single
+                    compliance client. Pick one from the Compliance section to
+                    get started.
+                </p>
+                <Link
+                    href="/dashboard/compliance/clients"
+                    className="
+                        inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md
+                        text-[12.5px] font-medium
+                        bg-[var(--accent)] text-white
+                        hover:bg-[var(--accent-strong)] cursor-pointer
+                        transition-colors
+                    "
+                >
+                    <FiBriefcase className="w-3 h-3" />
+                    Open clients
                 </Link>
             </div>
         </div>

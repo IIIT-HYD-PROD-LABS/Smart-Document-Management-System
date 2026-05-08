@@ -64,6 +64,14 @@ router = APIRouter(prefix="/ai", tags=["compliance-ai"])
 
 
 def _map_ai_error(e: Exception) -> HTTPException:
+    """Map provider exceptions to HTTP responses.
+
+    `AIProviderError.__str__` can include the provider's raw response
+    body (the Anthropic SDK echoes the request/response in error
+    messages). We log the full exception at WARNING and return a curated
+    string the user can act on — the most common cause is a retired
+    model name, so we hint at that without leaking provider internals.
+    """
     if isinstance(e, AIOutOfScopeError):
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -83,9 +91,22 @@ def _map_ai_error(e: Exception) -> HTTPException:
             detail="AI provider rate-limited the request. Try again shortly.",
         )
     if isinstance(e, AIProviderError):
+        logger.warning("ai_provider_error", exc_info=e)
+        # Pass through OUR own user-actionable messages (e.g. the 404
+        # model-not-found hint set in GoogleProvider). Generic messages
+        # from upstream SDKs get redacted to avoid response-body leakage.
+        msg = str(e)
+        if "Model '" in msg and "not available" in msg:
+            return HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=msg
+            )
         return HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"AI provider error: {e}",
+            detail=(
+                "AI provider returned an error. "
+                "Check the model name in Settings → AI and the provider "
+                "status page; details have been logged server-side."
+            ),
         )
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -232,7 +253,12 @@ def notice_summary(
     notice = _require_notice(db, notice_id, membership.client_id)
     try:
         return ai_service.summarize_notice(db, cred, notice)
-    except Exception as e:
+    except (
+        AIOutOfScopeError,
+        AIAuthError,
+        AIRateLimitError,
+        AIProviderError,
+    ) as e:
         raise _map_ai_error(e) from e
 
 
@@ -250,7 +276,12 @@ def notice_actions(
     notice = _require_notice(db, notice_id, membership.client_id)
     try:
         return {"actions": ai_service.recommend_notice_actions(db, cred, notice)}
-    except Exception as e:
+    except (
+        AIOutOfScopeError,
+        AIAuthError,
+        AIRateLimitError,
+        AIProviderError,
+    ) as e:
         raise _map_ai_error(e) from e
 
 
@@ -273,7 +304,12 @@ def invoice_summary(
     bill = _require_bill(db, bill_id, membership.client_id)
     try:
         return ai_service.summarize_invoice(db, cred, bill)
-    except Exception as e:
+    except (
+        AIOutOfScopeError,
+        AIAuthError,
+        AIRateLimitError,
+        AIProviderError,
+    ) as e:
         raise _map_ai_error(e) from e
 
 
@@ -291,7 +327,12 @@ def invoice_actions(
     bill = _require_bill(db, bill_id, membership.client_id)
     try:
         return {"actions": ai_service.recommend_invoice_actions(db, cred, bill)}
-    except Exception as e:
+    except (
+        AIOutOfScopeError,
+        AIAuthError,
+        AIRateLimitError,
+        AIProviderError,
+    ) as e:
         raise _map_ai_error(e) from e
 
 
@@ -323,9 +364,32 @@ def chat(
 
     cred = _require_credential(db, membership.client_id)
     msgs = [m.model_dump() for m in payload.messages]
+
+    # Defensive: a hostile client could craft fake `assistant` turns
+    # containing the OUT_OF_SCOPE sentinel or instructions designed to
+    # poison the conversation history the model sees ("ignore your
+    # earlier instructions"). The system prompt already tells the model
+    # to ignore tampered history, but this is cheap belt-and-braces.
+    msgs = [
+        m for m in msgs
+        if "OUT_OF_SCOPE" not in m["content"]
+        and "ignore your earlier" not in m["content"].lower()
+        and "ignore previous instructions" not in m["content"].lower()
+    ]
+    if not msgs or msgs[-1]["role"] != "user":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Message history is empty or ends on an assistant turn.",
+        )
+
     try:
         return ai_service.chat_with_assistant(db, cred, msgs)
-    except Exception as e:
+    except (
+        AIOutOfScopeError,
+        AIAuthError,
+        AIRateLimitError,
+        AIProviderError,
+    ) as e:
         raise _map_ai_error(e) from e
 
 
@@ -343,5 +407,10 @@ def invoice_timing(
     bill = _require_bill(db, bill_id, membership.client_id)
     try:
         return ai_service.suggest_invoice_payment_timing(db, cred, bill)
-    except Exception as e:
+    except (
+        AIOutOfScopeError,
+        AIAuthError,
+        AIRateLimitError,
+        AIProviderError,
+    ) as e:
         raise _map_ai_error(e) from e

@@ -181,6 +181,22 @@ def client_dashboard(
     return get_dashboard_aggregates(db, client_id=client_id)
 
 
+def _assert_path_matches_membership(
+    client_id: int, membership: ClientMembership
+) -> None:
+    """Defence-in-depth tenant isolation. RLS on compliance_clients
+    already filters cross-tenant writes (the row is invisible under
+    `tenant_isolation` PERMISSIVE/ALL policy), so the SELECT below
+    returns None and the handler 404s. This explicit check fails
+    faster + makes the contract self-documenting + survives a future
+    RLS regression."""
+    if client_id != membership.client_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Path client_id does not match active tenant.",
+        )
+
+
 @router.patch("/{client_id}/branding", response_model=ClientOut)
 def update_branding(
     client_id: int,
@@ -191,6 +207,7 @@ def update_branding(
     db: Session = Depends(get_db),
 ):
     """Update website + address for a client (logo has its own endpoint)."""
+    _assert_path_matches_membership(client_id, membership)
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(
@@ -230,6 +247,7 @@ async def upload_logo(
     in compliance_clients.logo_url. PNG/JPEG/WEBP only; SVG rejected
     (XSS risk). 256 KB pre-encode cap, enforced via streaming reads so
     a hostile caller can't burn memory by lying about Content-Length."""
+    _assert_path_matches_membership(client_id, membership)
     mime = (file.content_type or "").lower()
     if mime not in LOGO_ALLOWED_MIME:
         raise HTTPException(
@@ -297,6 +315,7 @@ def delete_logo(
     db: Session = Depends(get_db),
 ):
     """Clear the client's logo (sets logo_url to NULL)."""
+    _assert_path_matches_membership(client_id, membership)
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(
