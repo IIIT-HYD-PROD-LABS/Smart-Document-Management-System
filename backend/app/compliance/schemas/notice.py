@@ -142,6 +142,21 @@ class NoticeOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    # Phase 10 ML fields. The DB columns + frontend types/compliance.ts
+    # both declare these; this schema previously dropped them, so the
+    # WhyThisRiskScore panel + risk-tier dot rendered empty even when
+    # the classifier had populated rows. NULL is allowed for v2.0
+    # rule-based output that didn't run the classifier (D-06).
+    classifier_authority_confidence: Optional[Decimal] = None
+    classifier_type_confidence: Optional[Decimal] = None
+    risk_score: Optional[Decimal] = None
+    risk_tier: Optional[str] = None
+    ner_extracted_fields: Optional[dict] = None
+    model_version: Optional[str] = None
+    source: Optional[str] = None
+    classified_at: Optional[datetime] = None
+    risk_scored_at: Optional[datetime] = None
+
 
 class NoticeFilters(BaseModel):
     """Query-param shape for LIFE-07 list endpoint."""

@@ -191,6 +191,52 @@ export default function AuditPage() {
                             </li>
                         ))}
                     </ul>
+                ) : auditQ.isError ? (
+                    // Distinguish "no rows" from "you can't see them" — 403
+                    // is the common case (only `auditor`, `compliance_head`,
+                    // and `ca_consultant` have AUDIT_VIEW). Anything else
+                    // surfaces as a generic load-failure block.
+                    (() => {
+                        const status = (
+                            auditQ.error as { response?: { status?: number } }
+                        )?.response?.status;
+                        if (status === 403) {
+                            return (
+                                <div className="p-12 text-center">
+                                    <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
+                                        You don&apos;t have access to the audit log
+                                    </h3>
+                                    <p className="text-[13px] text-[var(--text-muted)] max-w-md mx-auto">
+                                        Audit visibility is restricted to{" "}
+                                        <code className="font-mono text-[12px] bg-[var(--bg-hover)] px-1 py-0.5 rounded">
+                                            auditor
+                                        </code>
+                                        ,{" "}
+                                        <code className="font-mono text-[12px] bg-[var(--bg-hover)] px-1 py-0.5 rounded">
+                                            compliance_head
+                                        </code>
+                                        , and{" "}
+                                        <code className="font-mono text-[12px] bg-[var(--bg-hover)] px-1 py-0.5 rounded">
+                                            ca_consultant
+                                        </code>{" "}
+                                        roles. Ask your tenant admin to upgrade
+                                        your membership if you need to see this.
+                                    </p>
+                                </div>
+                            );
+                        }
+                        return (
+                            <div className="p-12 text-center">
+                                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
+                                    Couldn&apos;t load audit log
+                                </h3>
+                                <p className="text-[13px] text-[var(--text-muted)]">
+                                    {(auditQ.error as Error)?.message ||
+                                        "Try refreshing the page."}
+                                </p>
+                            </div>
+                        );
+                    })()
                 ) : entries.length === 0 ? (
                     <div className="p-12 text-center">
                         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">

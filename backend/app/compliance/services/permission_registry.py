@@ -60,6 +60,13 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.REPORT_EXPORT,
         CompliancePermission.ESCALATION_TRIGGER,
         CompliancePermission.EMAIL_INTEGRATION_USE,
+        # AUDIT_VIEW: senior in-house compliance owner is the natural
+        # consumer of "what happened on this client?" — locking the audit
+        # log to the auditor role only made the page useless for the
+        # head, who then asked their auditor to forward exports. Putting
+        # the read here keeps the DB-level append-only trigger as the
+        # actual integrity guarantee; the role just controls *visibility*.
+        CompliancePermission.AUDIT_VIEW,
     }),
     ComplianceRole.LEGAL_TEAM: frozenset({
         CompliancePermission.NOTICE_VIEW,
@@ -95,6 +102,9 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.REPORT_VIEW,
         CompliancePermission.REPORT_EXPORT,
         CompliancePermission.EMAIL_INTEGRATION_USE,
+        # External CAs need the audit trail for their working papers —
+        # an audit they cannot see is one they cannot rely on.
+        CompliancePermission.AUDIT_VIEW,
     }),
     ComplianceRole.STAFF: frozenset({
         CompliancePermission.NOTICE_VIEW,

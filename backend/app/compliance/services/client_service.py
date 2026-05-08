@@ -191,14 +191,21 @@ def get_dashboard_aggregates(db: Session, client_id: int) -> dict:
     )
     by_authority = {a: cnt for a, cnt in auth_rows}
 
-    # Phase 9 placeholder — Phase 10 will populate from risk_score column.
-    by_risk_tier = {
-        "unscored": total,
-        "critical": 0,
-        "high": 0,
-        "medium": 0,
-        "low": 0,
-    }
+    # Real GROUP BY on the risk_tier column. NULL (rule-based output that
+    # didn't run the classifier, manual entries pre-Phase 10) buckets as
+    # "unscored" so the five-color contract from 09-UI-SPEC stays stable.
+    risk_rows = (
+        db.query(
+            ComplianceNotice.risk_tier, func.count(ComplianceNotice.id)
+        )
+        .filter(ComplianceNotice.client_id == client_id)
+        .group_by(ComplianceNotice.risk_tier)
+        .all()
+    )
+    by_risk_tier = {"unscored": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
+    for tier, cnt in risk_rows:
+        key = tier if tier in ("critical", "high", "medium", "low") else "unscored"
+        by_risk_tier[key] = by_risk_tier[key] + cnt
 
     today = datetime.now(timezone.utc).date()
     overdue = (
