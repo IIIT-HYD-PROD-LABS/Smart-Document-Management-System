@@ -1,4 +1,4 @@
-# SmartDocs / TaxSync
+TaxSync
 
 **AI-powered document management + compliance tracking system** built for IIIT Hyderabad Production Labs. Upload any document — PDFs, scanned images, DOCX — and the system automatically extracts text via OCR, classifies it using machine learning, and makes it searchable. v2.0 layers a multi-tenant **compliance notice tracking** workflow on top: ingest GST/IT/MCA/RBI/SEBI notices, route through a 4-stage approval pipeline, fire deadline alerts, and export per-client compliance reports.
 
