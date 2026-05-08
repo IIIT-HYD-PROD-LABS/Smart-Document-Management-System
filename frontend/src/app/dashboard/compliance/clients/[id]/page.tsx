@@ -1,10 +1,11 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { FiUsers, FiFileText } from "react-icons/fi";
 import { complianceApi } from "@/lib/api/compliance";
+import { useCurrentClient } from "@/stores/currentClientStore";
 import type { ClientDetail, DashboardAggregates } from "@/types/compliance";
 import BrandingSection from "@/components/compliance/BrandingSection";
 
@@ -12,9 +13,12 @@ import BrandingSection from "@/components/compliance/BrandingSection";
  * Client detail page (CLIENT-01).
  *
  * Shows client name, type, registrations list, and a 4-card stats summary
- * from the dashboard aggregates endpoint. Risk tier "unscored" stat reflects
- * the Phase 9 reality (Phase 10 will populate risk_score; for now every
- * notice is unscored — UI-SPEC reserves the layout).
+ * from the dashboard aggregates endpoint. Mirrors the route param into the
+ * Zustand active-client store so subsequent API calls (which read the
+ * X-Client-Id header from the store) target the client whose URL the user
+ * is viewing — without this, navigating directly to a client URL while the
+ * store still holds a stale id from a prior session causes a header/path
+ * mismatch and the backend 400s every fetch.
  */
 export default function ClientDetailPage({
     params,
@@ -24,10 +28,24 @@ export default function ClientDetailPage({
     const { id } = use(params);
     const clientId = parseInt(id, 10);
 
+    const activeClientId = useCurrentClient((s) => s.activeClientId);
+    const setActiveClientId = useCurrentClient((s) => s.setActiveClientId);
+
+    // Sync the store to the route param. The query below depends on this
+    // running first, so we gate the queries on `enabled` matching.
+    useEffect(() => {
+        if (!Number.isNaN(clientId) && clientId !== activeClientId) {
+            setActiveClientId(clientId);
+        }
+    }, [clientId, activeClientId, setActiveClientId]);
+
+    const tenantReady =
+        !Number.isNaN(clientId) && activeClientId === clientId;
+
     const { data: client, isLoading, error } = useQuery<ClientDetail>({
         queryKey: ["client", clientId],
         queryFn: () => complianceApi.getClient(clientId).then((r) => r.data),
-        enabled: !Number.isNaN(clientId),
+        enabled: tenantReady,
     });
 
     const { data: dashboard } = useQuery<DashboardAggregates>({
@@ -36,7 +54,7 @@ export default function ClientDetailPage({
             complianceApi
                 .getClientDashboard(clientId)
                 .then((r) => r.data),
-        enabled: !Number.isNaN(clientId) && Boolean(client),
+        enabled: tenantReady && Boolean(client),
     });
 
     if (Number.isNaN(clientId)) {

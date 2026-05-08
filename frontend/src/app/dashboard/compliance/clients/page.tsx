@@ -1,10 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { FiBriefcase, FiPlus } from "react-icons/fi";
 import { complianceApi } from "@/lib/api/compliance";
-import { COMPLIANCE_ROLE_LABELS, type Membership } from "@/types/compliance";
+import { useCurrentClient } from "@/stores/currentClientStore";
+import {
+    COMPLIANCE_ROLE_LABELS,
+    type Client,
+    type Membership,
+} from "@/types/compliance";
 
 /**
  * Clients list page (CLIENT-01..03).
@@ -18,9 +23,34 @@ import { COMPLIANCE_ROLE_LABELS, type Membership } from "@/types/compliance";
  * (a future enhancement is a /clients?ids=... batch endpoint).
  */
 export default function ClientsListPage() {
+    const setActiveClientId = useCurrentClient((s) => s.setActiveClientId);
+
     const { data: memberships, isLoading, error } = useQuery<Membership[]>({
         queryKey: ["memberships", "mine"],
         queryFn: () => complianceApi.listMyMemberships().then((r) => r.data),
+    });
+
+    // Fan-out fetch the actual client names — listMyMemberships returns
+    // only ids, but the user expects names. The detail-page useEffect
+    // sets the active client BEFORE its own getClient fires; here we do
+    // the same just in time for each row's query so a fresh-page-load
+    // shows real names instead of "Client #206".
+    const clientQueries = useQueries({
+        queries: (memberships ?? []).map((m) => ({
+            queryKey: ["client", m.client_id],
+            queryFn: async () => {
+                setActiveClientId(m.client_id);
+                const { data } = await complianceApi.getClient(m.client_id);
+                return data;
+            },
+            enabled: Boolean(memberships),
+            staleTime: 60_000,
+        })),
+    });
+    const clientById = new Map<number, Client>();
+    clientQueries.forEach((q, i) => {
+        const m = memberships?.[i];
+        if (m && q.data) clientById.set(m.client_id, q.data as Client);
     });
 
     if (isLoading) {
@@ -98,28 +128,42 @@ export default function ClientsListPage() {
                 </Link>
             </div>
             <div className="space-y-2">
-                {memberships.map((m) => (
-                    <Link
-                        key={m.id}
-                        href={`/dashboard/compliance/clients/${m.client_id}`}
-                        className="
-                            block p-4 rounded-md
-                            bg-[var(--bg-elevated)] border border-[var(--border-default)]
-                            hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-hover)] transition-colors
-                            focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
-                            shadow-[var(--shadow-sm)]
-                        "
-                    >
-                        <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-medium text-[var(--text-primary)]">
-                                Client #{m.client_id}
-                            </span>
-                            <span className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">
-                                {COMPLIANCE_ROLE_LABELS[m.compliance_role]}
-                            </span>
-                        </div>
-                    </Link>
-                ))}
+                {memberships.map((m) => {
+                    const c = clientById.get(m.client_id);
+                    return (
+                        <Link
+                            key={m.id}
+                            href={`/dashboard/compliance/clients/${m.client_id}`}
+                            onClick={() => setActiveClientId(m.client_id)}
+                            className="
+                                block p-4 rounded-md
+                                bg-[var(--bg-elevated)] border border-[var(--border-default)]
+                                hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-hover)] transition-colors
+                                focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
+                                shadow-[var(--shadow-sm)]
+                            "
+                        >
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                                        {c?.name ?? `Client #${m.client_id}`}
+                                    </p>
+                                    {c && (
+                                        <p className="text-[11.5px] text-[var(--text-muted)] mt-0.5 truncate">
+                                            {c.client_type
+                                                .replace("_", " ")
+                                                .toUpperCase()}
+                                            {c.industry ? ` · ${c.industry}` : ""}
+                                        </p>
+                                    )}
+                                </div>
+                                <span className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider shrink-0">
+                                    {COMPLIANCE_ROLE_LABELS[m.compliance_role]}
+                                </span>
+                            </div>
+                        </Link>
+                    );
+                })}
             </div>
         </div>
     );

@@ -10,8 +10,21 @@ import {
     FiInfo,
 } from "react-icons/fi";
 import { complianceApi } from "@/lib/api/compliance";
-import type { CalendarEntry, Authority } from "@/types/compliance";
+import { useCurrentClient } from "@/stores/currentClientStore";
+import type {
+    CalendarEntry,
+    Authority,
+    ComplianceNotice,
+} from "@/types/compliance";
 import { AUTHORITY_CONFIG } from "@/components/compliance/AuthorityBadge";
+
+/** Local-only widening of the CalendarEntry shape so we can render notice
+ *  response-deadlines on the same grid without touching the canonical
+ *  CalendarEntry type (which mirrors the backend RegulatoryCalendar table). */
+type CalendarItem = CalendarEntry & {
+    notice_id?: number;
+    notice_status?: string;
+};
 
 const MONTH_NAMES = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -36,6 +49,8 @@ export default function CalendarPage() {
     const [authorityFilter, setAuthorityFilter] = useState<string>("");
     const [categoryFilter, setCategoryFilter] = useState<string>("");
 
+    const activeClientId = useCurrentClient((s) => s.activeClientId);
+
     const entriesQ = useQuery({
         queryKey: ["calendar-entries", year, month, authorityFilter, categoryFilter],
         queryFn: async () => {
@@ -49,16 +64,77 @@ export default function CalendarPage() {
         },
     });
 
+    // Pull this tenant's notices and synthesise calendar entries for the
+    // ones whose response_deadline falls in the visible month. The
+    // backend calendar endpoint only returns statutory deadlines +
+    // holidays; without this overlay the user's own work is invisible.
+    const noticesQ = useQuery({
+        queryKey: ["calendar-notices", activeClientId, year, month, authorityFilter],
+        queryFn: async () => {
+            const { data } = await complianceApi.listNotices({
+                page: 1,
+                page_size: 200,
+                authority: (authorityFilter || undefined) as
+                    | Authority
+                    | undefined,
+            });
+            return data;
+        },
+        enabled: activeClientId !== null,
+    });
+
     const entries = entriesQ.data ?? [];
+    const noticeEntries: CalendarItem[] = useMemo(() => {
+        const items = noticesQ.data?.items ?? [];
+        const monthStr = String(month).padStart(2, "0");
+        const out: CalendarItem[] = [];
+        for (const n of items as ComplianceNotice[]) {
+            if (!n.response_deadline) continue;
+            // ISO date "YYYY-MM-DD" — exact-match the visible month.
+            if (!n.response_deadline.startsWith(`${year}-${monthStr}`)) continue;
+            // Hide from the calendar once the notice is in a terminal
+            // state — the deadline isn't actionable any more.
+            if (n.status === "resolved" || n.status === "dismissed") continue;
+            // Honour the user's category filter so "Filing deadlines"
+            // doesn't unexpectedly hide notice rows.
+            if (
+                categoryFilter &&
+                categoryFilter !== "circular_extension"
+            ) {
+                continue;
+            }
+            out.push({
+                id: -n.id,  // negative id avoids collision with statutory ids
+                year,
+                date: n.response_deadline,
+                authority: n.authority,
+                label: `${n.notice_number} · ${n.status.replace("_", " ")}`,
+                // Reuse `circular_extension` so the existing filter chip
+                // works without backend changes.
+                category: "circular_extension",
+                reference_url: null,
+                notes: null,
+                notice_id: n.id,
+                notice_status: n.status,
+            });
+        }
+        return out;
+    }, [noticesQ.data, year, month, categoryFilter]);
+
     const entriesByDate = useMemo(() => {
-        const m = new Map<string, CalendarEntry[]>();
+        const m = new Map<string, CalendarItem[]>();
         for (const e of entries) {
             const list = m.get(e.date) ?? [];
             list.push(e);
             m.set(e.date, list);
         }
+        for (const e of noticeEntries) {
+            const list = m.get(e.date) ?? [];
+            list.push(e);
+            m.set(e.date, list);
+        }
         return m;
-    }, [entries]);
+    }, [entries, noticeEntries]);
 
     return (
         <div className="px-6 py-8 max-w-7xl mx-auto">
@@ -91,7 +167,16 @@ export default function CalendarPage() {
                 <AuthoritySelect value={authorityFilter} onChange={setAuthorityFilter} />
                 <CategorySelect value={categoryFilter} onChange={setCategoryFilter} />
                 <span className="ml-auto text-[12px] text-[var(--text-muted)] tabular-nums">
-                    {entries.length} {entries.length === 1 ? "entry" : "entries"}
+                    {entries.length + noticeEntries.length}{" "}
+                    {entries.length + noticeEntries.length === 1
+                        ? "entry"
+                        : "entries"}
+                    {noticeEntries.length > 0 && (
+                        <span className="ml-2 text-[var(--text-subtle)]">
+                            ({noticeEntries.length} notice deadline
+                            {noticeEntries.length === 1 ? "" : "s"})
+                        </span>
+                    )}
                 </span>
             </div>
 
@@ -211,7 +296,7 @@ function MonthGrid({
 }: {
     year: number;
     month: number;
-    entriesByDate: Map<string, CalendarEntry[]>;
+    entriesByDate: Map<string, CalendarItem[]>;
 }) {
     // Build the grid (Sun-Sat, padded for first week's offset)
     const firstOfMonth = new Date(year, month - 1, 1);
@@ -286,7 +371,7 @@ function MonthGrid({
     );
 }
 
-function DayEntry({ entry }: { entry: CalendarEntry }) {
+function DayEntry({ entry }: { entry: CalendarItem }) {
     if (entry.category === "holiday") {
         return (
             <div
@@ -303,6 +388,27 @@ function DayEntry({ entry }: { entry: CalendarEntry }) {
     }
     const auth = entry.authority as Authority | null;
     const color = auth ? AUTHORITY_CONFIG[auth]?.color ?? "#2563eb" : "#2563eb";
+
+    // Notice deadlines render as a clickable Link so the calendar acts
+    // as a navigation surface, not a static reference. Statutory rows
+    // remain static (no detail page to navigate to).
+    if (entry.notice_id) {
+        return (
+            <Link
+                href={`/dashboard/compliance/notices/${entry.notice_id}`}
+                className="block text-[10px] px-1.5 py-0.5 rounded truncate font-medium hover:brightness-95"
+                style={{
+                    backgroundColor: `color-mix(in srgb, ${color} 18%, transparent)`,
+                    color,
+                    border: `1px dashed color-mix(in srgb, ${color} 40%, transparent)`,
+                }}
+                title={entry.label}
+            >
+                ▸ {entry.label}
+            </Link>
+        );
+    }
+
     return (
         <div
             className="text-[10px] px-1.5 py-0.5 rounded truncate font-medium"
