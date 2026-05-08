@@ -49,16 +49,35 @@ class AIRateLimitError(AIProviderError):
 
 
 class AIProvider(ABC):
-    """Each adapter exposes a single `complete` method. We keep it
-    synchronous because the FastAPI request handlers are already running
-    on a threadpool for blocking work, and the AI surface is one-shot
-    (no streaming for v1)."""
+    """Each adapter exposes two methods.
+
+    `complete(system, user)` is the one-shot helper used by the per-page
+    summaries and action lists.
+
+    `chat(system, messages)` is the multi-turn variant used by the
+    sidebar chat drawer. Messages must be an alternating user/assistant
+    list ending on a user turn — the adapter does NOT validate this; the
+    caller is responsible.
+
+    Both are synchronous because FastAPI request handlers run blocking
+    work on a threadpool, and the AI surface is one-shot (no streaming
+    for v1).
+    """
 
     @abstractmethod
     def complete(
         self,
         system: str,
         user: str,
+        max_tokens: int = 1024,
+    ) -> str:
+        ...
+
+    @abstractmethod
+    def chat(
+        self,
+        system: str,
+        messages: list[dict],
         max_tokens: int = 1024,
     ) -> str:
         ...
@@ -76,7 +95,8 @@ class AnthropicProvider(AIProvider):
         self._client = Anthropic(api_key=api_key, timeout=30.0)
         self._model = model
 
-    def complete(self, system: str, user: str, max_tokens: int = 1024) -> str:
+    def _send(self, system: str, messages: list[dict], max_tokens: int) -> str:
+        """Shared helper used by both `complete` and `chat`."""
         try:
             from anthropic import (  # noqa: F401 — type imports only
                 APIStatusError,
@@ -91,7 +111,7 @@ class AnthropicProvider(AIProvider):
                 model=self._model,
                 max_tokens=max_tokens,
                 system=system,
-                messages=[{"role": "user", "content": user}],
+                messages=messages,
             )
         except AuthenticationError as e:
             raise AIAuthError(str(e)) from e
@@ -115,6 +135,14 @@ class AnthropicProvider(AIProvider):
             )
         return text
 
+    def complete(self, system: str, user: str, max_tokens: int = 1024) -> str:
+        return self._send(system, [{"role": "user", "content": user}], max_tokens)
+
+    def chat(
+        self, system: str, messages: list[dict], max_tokens: int = 1024
+    ) -> str:
+        return self._send(system, messages, max_tokens)
+
 
 # ─────────────────────────────────────────────────────────────────────
 # Google Gemini  (REST)
@@ -133,13 +161,24 @@ class GoogleProvider(AIProvider):
         self._api_key = api_key
         self._model = model
 
-    def complete(self, system: str, user: str, max_tokens: int = 1024) -> str:
+    @staticmethod
+    def _to_gemini_contents(messages: list[dict]) -> list[dict]:
+        """Map our `{role: 'user'|'assistant', content: str}` shape to
+        Gemini's `{role: 'user'|'model', parts: [{text}]}` schema."""
+        out = []
+        for m in messages:
+            role = "model" if m.get("role") == "assistant" else "user"
+            out.append({"role": role, "parts": [{"text": m.get("content", "")}]})
+        return out
+
+    def _send(
+        self, system: str, contents: list[dict], max_tokens: int
+    ) -> str:
+        """Shared helper used by both `complete` and `chat`."""
         url = f"{self._BASE}/{self._model}:generateContent?key={self._api_key}"
         payload = {
             "system_instruction": {"parts": [{"text": system}]},
-            "contents": [
-                {"role": "user", "parts": [{"text": user}]},
-            ],
+            "contents": contents,
             "generationConfig": {
                 "temperature": 0.2,
                 "maxOutputTokens": max_tokens,
@@ -171,6 +210,18 @@ class GoogleProvider(AIProvider):
         if not parts or "text" not in parts[0]:
             raise AIProviderError(f"gemini missing text part: {body}")
         return parts[0]["text"]
+
+    def complete(self, system: str, user: str, max_tokens: int = 1024) -> str:
+        return self._send(
+            system,
+            [{"role": "user", "parts": [{"text": user}]}],
+            max_tokens,
+        )
+
+    def chat(
+        self, system: str, messages: list[dict], max_tokens: int = 1024
+    ) -> str:
+        return self._send(system, self._to_gemini_contents(messages), max_tokens)
 
 
 # ─────────────────────────────────────────────────────────────────────

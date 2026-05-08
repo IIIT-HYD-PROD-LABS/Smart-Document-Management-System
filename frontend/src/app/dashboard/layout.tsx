@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-query";
 import { LoadingSpinner } from "@/components";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import AIChatFloating from "@/components/AIChatFloating";
 import { useCurrentClient } from "@/stores/currentClientStore";
 import { complianceApi } from "@/lib/api/compliance";
 import type { ClientDetail } from "@/types/compliance";
@@ -34,7 +35,6 @@ import {
     FiSettings,
     FiInbox,
     FiClipboard,
-    FiChevronRight,
     FiGlobe,
     FiCpu,
 } from "react-icons/fi";
@@ -237,25 +237,75 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     md:translate-x-0
                 `}
             >
-                {/* Brand */}
-                <div className="px-5 h-14 flex items-center justify-between border-b border-[var(--border-default)]">
-                    <Link
-                        href="/dashboard"
-                        className="flex items-center gap-2 group"
-                        aria-label="TaxSync home"
-                    >
-                        <span className="w-7 h-7 rounded-md bg-[var(--accent)] flex items-center justify-center shadow-sm">
-                            <span className="font-mono text-[12px] font-semibold text-white">
-                                Tx
+                {/* Brand — TaxSync is enterprise; the tenant company's
+                 * identity sits at the top of the sidebar. TaxSync moves
+                 * to a subtle "Powered by" treatment near the user
+                 * cluster (see bottom of this file). */}
+                <div className="px-4 h-14 flex items-center justify-between border-b border-[var(--border-default)] gap-2">
+                    {crossClientMode ? (
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-8 h-8 rounded-md bg-[var(--accent-soft)] flex items-center justify-center shrink-0">
+                                <FiGlobe className="w-4 h-4 text-[var(--accent)]" />
                             </span>
-                        </span>
-                        <span className="text-[14px] font-semibold text-[var(--text-primary)] tracking-tight">
-                            TaxSync
-                        </span>
-                    </Link>
+                            <div className="min-w-0">
+                                <p className="text-[13.5px] font-semibold text-[var(--text-primary)] tracking-tight truncate">
+                                    All clients
+                                </p>
+                                <p className="text-[10.5px] text-[var(--text-subtle)] truncate">
+                                    Cross-client mode
+                                </p>
+                            </div>
+                        </div>
+                    ) : activeClient ? (
+                        <Link
+                            href={`/dashboard/compliance/clients/${activeClient.id}`}
+                            className="flex items-center gap-2 min-w-0 group"
+                            aria-label={`Open ${activeClient.name} branding`}
+                        >
+                            {activeClient.logo_url ? (
+                                <span className="w-8 h-8 rounded-md bg-white border border-[var(--border-default)] flex items-center justify-center overflow-hidden shrink-0">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={activeClient.logo_url}
+                                        alt=""
+                                        className="max-w-full max-h-full object-contain p-0.5"
+                                    />
+                                </span>
+                            ) : (
+                                <span className="w-8 h-8 rounded-md bg-[var(--accent)] flex items-center justify-center text-[12px] font-semibold text-white shrink-0 shadow-sm">
+                                    {activeClient.name?.[0]?.toUpperCase() || "C"}
+                                </span>
+                            )}
+                            <div className="min-w-0">
+                                <p className="text-[13.5px] font-semibold text-[var(--text-primary)] tracking-tight truncate group-hover:text-[var(--accent)] transition-colors">
+                                    {activeClient.name}
+                                </p>
+                                {activeClient.industry && (
+                                    <p className="text-[10.5px] text-[var(--text-subtle)] truncate">
+                                        {activeClient.industry}
+                                    </p>
+                                )}
+                            </div>
+                        </Link>
+                    ) : (
+                        <Link
+                            href="/dashboard"
+                            className="flex items-center gap-2 min-w-0"
+                            aria-label="TaxSync home"
+                        >
+                            <span className="w-8 h-8 rounded-md bg-[var(--accent)] flex items-center justify-center shadow-sm shrink-0">
+                                <span className="font-mono text-[13px] font-semibold text-white">
+                                    Tx
+                                </span>
+                            </span>
+                            <span className="text-[14px] font-semibold text-[var(--text-primary)] tracking-tight truncate">
+                                TaxSync
+                            </span>
+                        </Link>
+                    )}
                     <button
                         onClick={() => setSidebarOpen(false)}
-                        className="text-[var(--text-subtle)] hover:text-[var(--text-primary)] md:hidden cursor-pointer"
+                        className="text-[var(--text-subtle)] hover:text-[var(--text-primary)] md:hidden cursor-pointer shrink-0"
                         aria-label="Close menu"
                     >
                         <FiX className="w-4 h-4" />
@@ -310,74 +360,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     })}
                 </nav>
 
-                {/* Active-client co-brand cluster — sits between the nav
-                 * and the user cluster. Click to jump to the client's
-                 * detail/branding page. Hidden when no client is selected. */}
-                {(activeClient || crossClientMode) && (
-                    <div className="border-t border-[var(--border-default)] px-3 pt-3 pb-1">
-                        <p className="microtype px-2 mb-1.5">Active client</p>
-                        {crossClientMode ? (
-                            <div
-                                className="
-                                    flex items-center gap-2.5 px-2 py-2 rounded-md
-                                    bg-[var(--bg-hover)] border border-[var(--border-default)]
-                                "
-                            >
-                                <div className="w-8 h-8 rounded-md bg-[var(--accent-soft)] flex items-center justify-center shrink-0">
-                                    <FiGlobe className="w-3.5 h-3.5 text-[var(--accent)]" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">
-                                        All clients
-                                    </p>
-                                    <p className="text-[11.5px] text-[var(--text-subtle)] truncate">
-                                        Cross-client mode
-                                    </p>
-                                </div>
-                            </div>
-                        ) : activeClient ? (
-                            <Link
-                                href={`/dashboard/compliance/clients/${activeClient.id}`}
-                                className="
-                                    group flex items-center gap-2.5 px-2 py-2 rounded-md
-                                    hover:bg-[var(--bg-hover)] transition-colors duration-150
-                                "
-                                aria-label={`Open ${activeClient.name} details`}
-                            >
-                                {activeClient.logo_url ? (
-                                    <span className="w-8 h-8 rounded-md bg-white border border-[var(--border-default)] flex items-center justify-center overflow-hidden shrink-0">
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img
-                                            src={activeClient.logo_url}
-                                            alt=""
-                                            className="max-w-full max-h-full object-contain p-0.5"
-                                        />
-                                    </span>
-                                ) : (
-                                    <span className="w-8 h-8 rounded-md bg-[var(--accent)] flex items-center justify-center text-[12px] font-semibold text-white shrink-0 shadow-sm">
-                                        {activeClient.name?.[0]?.toUpperCase() || "C"}
-                                    </span>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">
-                                        {activeClient.name}
-                                    </p>
-                                    {activeClient.industry && (
-                                        <p className="text-[11.5px] text-[var(--text-subtle)] truncate">
-                                            {activeClient.industry}
-                                        </p>
-                                    )}
-                                </div>
-                                <FiChevronRight
-                                    className="w-3.5 h-3.5 text-[var(--text-subtle)] group-hover:text-[var(--text-muted)] shrink-0"
-                                    aria-hidden
-                                />
-                            </Link>
-                        ) : null}
-                    </div>
-                )}
-
-                {/* User cluster */}
+                {/* User + Sign-out + subtle "Powered by TaxSync".
+                 * Active client identity moved to the top brand block;
+                 * this footer is just the human + the platform mark. */}
                 <div className="border-t border-[var(--border-default)] p-3">
                     <div className="flex items-center gap-2.5 px-2 py-2 mb-1 rounded-md hover:bg-[var(--bg-hover)] transition-colors">
                         <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-[12px] font-semibold text-white shrink-0 shadow-sm">
@@ -407,6 +392,24 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         <FiLogOut className="w-3.5 h-3.5" />
                         Sign out
                     </button>
+                    <Link
+                        href="/dashboard"
+                        className="
+                            mt-2 flex items-center gap-1.5 px-3 py-1.5
+                            text-[10.5px] text-[var(--text-subtle)]
+                            hover:text-[var(--text-muted)]
+                            transition-colors duration-150 cursor-pointer
+                            border-t border-[var(--border-subtle)] pt-2
+                        "
+                        aria-label="TaxSync home"
+                    >
+                        <span className="w-3.5 h-3.5 rounded-sm bg-[var(--accent-soft)] flex items-center justify-center shrink-0">
+                            <span className="font-mono text-[8px] font-semibold text-[var(--accent)]">
+                                Tx
+                            </span>
+                        </span>
+                        <span>Powered by TaxSync</span>
+                    </Link>
                 </div>
             </aside>
 
@@ -419,6 +422,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     <div className="max-w-7xl mx-auto">{children}</div>
                 </div>
             </main>
+
+            {/* Floating Ask AI — persists across every dashboard route. */}
+            <AIChatFloating />
         </div>
     );
 }

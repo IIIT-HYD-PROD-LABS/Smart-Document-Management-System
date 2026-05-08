@@ -54,6 +54,30 @@ export interface InvoiceTimingResponse {
     suggested_payment_date: string | null;
 }
 
+// ── Chat ──
+
+export type ChatRole = "user" | "assistant";
+
+export interface ChatMessage {
+    role: ChatRole;
+    content: string;
+}
+
+/** Local-only — adds the out_of_scope flag the assistant message carries
+ *  back from the backend so the drawer can style refused turns distinctly. */
+export interface ChatTurn extends ChatMessage {
+    out_of_scope?: boolean;
+}
+
+export interface ChatRequest {
+    messages: ChatMessage[];
+}
+
+export interface ChatResponse {
+    reply: string;
+    out_of_scope: boolean;
+}
+
 // Sensible defaults per provider — surfaced in the Settings page so the
 // user doesn't have to memorise model identifiers.
 export const DEFAULT_MODEL: Record<AIProvider, string> = {

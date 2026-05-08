@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { FiImage, FiTrash2, FiUploadCloud } from "react-icons/fi";
 
+import { extractErrorMessage } from "@/lib/api";
 import { complianceApi } from "@/lib/api/compliance";
 import type { Client } from "@/types/compliance";
 
@@ -43,10 +44,15 @@ export default function BrandingSection({ client }: Props) {
         website !== (client.website ?? "") ||
         address !== (client.address ?? "");
 
-    const onClientPatched = (next: Client) => {
-        queryClient.setQueryData(["client", client.id], (prev: Client | undefined) =>
-            prev ? { ...prev, ...next } : next,
-        );
+    /**
+     * Refetch the parent client query and the sidebar's active-client
+     * query rather than mutating cache shapes. The branding endpoints
+     * return `ClientOut` (no registrations / memberships); a manual
+     * `setQueryData` merge would silently drop the nested arrays the
+     * client detail page renders. Refetch is the safe canonical choice.
+     */
+    const refreshClientCaches = () => {
+        queryClient.invalidateQueries({ queryKey: ["client", client.id] });
         queryClient.invalidateQueries({ queryKey: ["active-client"] });
     };
 
@@ -61,14 +67,11 @@ export default function BrandingSection({ client }: Props) {
         }
         setLogoBusy(true);
         try {
-            const r = await complianceApi.uploadClientLogo(client.id, file);
-            onClientPatched(r.data);
+            await complianceApi.uploadClientLogo(client.id, file);
+            refreshClientCaches();
             toast.success("Logo updated.");
         } catch (e: unknown) {
-            const msg =
-                (e as { response?: { data?: { detail?: string } } })?.response
-                    ?.data?.detail || "Logo upload failed.";
-            toast.error(msg);
+            toast.error(extractErrorMessage(e, "Logo upload failed."));
         } finally {
             setLogoBusy(false);
         }
@@ -78,14 +81,11 @@ export default function BrandingSection({ client }: Props) {
         if (!client.logo_url) return;
         setLogoBusy(true);
         try {
-            const r = await complianceApi.deleteClientLogo(client.id);
-            onClientPatched(r.data);
+            await complianceApi.deleteClientLogo(client.id);
+            refreshClientCaches();
             toast.success("Logo removed.");
         } catch (e: unknown) {
-            const msg =
-                (e as { response?: { data?: { detail?: string } } })?.response
-                    ?.data?.detail || "Logo removal failed.";
-            toast.error(msg);
+            toast.error(extractErrorMessage(e, "Logo removal failed."));
         } finally {
             setLogoBusy(false);
         }
@@ -95,17 +95,14 @@ export default function BrandingSection({ client }: Props) {
         if (!dirty) return;
         setSavingFields(true);
         try {
-            const r = await complianceApi.updateClientBranding(client.id, {
+            await complianceApi.updateClientBranding(client.id, {
                 website: website.trim() || null,
                 address: address.trim() || null,
             });
-            onClientPatched(r.data);
+            refreshClientCaches();
             toast.success("Saved.");
         } catch (e: unknown) {
-            const msg =
-                (e as { response?: { data?: { detail?: string } } })?.response
-                    ?.data?.detail || "Save failed.";
-            toast.error(msg);
+            toast.error(extractErrorMessage(e, "Save failed."));
         } finally {
             setSavingFields(false);
         }

@@ -7,6 +7,8 @@ import type {
     AICredential,
     AICredentialCreate,
     AICredentialTestResult,
+    ChatMessage,
+    ChatResponse,
     InvoiceActionsResponse,
     InvoiceSummaryResponse,
     InvoiceTimingResponse,
@@ -93,6 +95,14 @@ export const aiApi = {
         api.post<InvoiceTimingResponse>(
             `/compliance/ai/invoice-timing/${billId}`,
             {},
+            withTenant(),
+        ),
+
+    // ──── Chat ────
+    chat: (messages: ChatMessage[]) =>
+        api.post<ChatResponse>(
+            "/compliance/ai/chat",
+            { messages },
             withTenant(),
         ),
 };

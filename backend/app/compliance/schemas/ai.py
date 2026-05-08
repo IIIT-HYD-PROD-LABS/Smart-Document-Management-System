@@ -96,3 +96,29 @@ class OutOfScopeError(BaseModel):
     than a backend error so the user understands the boundary."""
 
     detail: str = "I can only help with TaxSync compliance and finance work."
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Chat
+# ─────────────────────────────────────────────────────────────────────
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=8000)
+
+
+class ChatRequest(BaseModel):
+    """Stateless chat request — full message history each call.
+
+    Capped at 20 messages and 8000 chars per message to keep cost +
+    latency bounded. Last message MUST be from the user; the validator
+    enforces that.
+    """
+
+    messages: List[ChatMessage] = Field(..., min_length=1, max_length=20)
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    out_of_scope: bool = False

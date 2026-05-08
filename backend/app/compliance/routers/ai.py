@@ -33,6 +33,8 @@ from app.compliance.schemas.ai import (
     AICredentialCreate,
     AICredentialOut,
     AICredentialTestResult,
+    ChatRequest,
+    ChatResponse,
     InvoiceActionsResponse,
     InvoiceSummaryResponse,
     InvoiceTimingResponse,
@@ -289,6 +291,40 @@ def invoice_actions(
     bill = _require_bill(db, bill_id, membership.client_id)
     try:
         return {"actions": ai_service.recommend_invoice_actions(db, cred, bill)}
+    except Exception as e:
+        raise _map_ai_error(e) from e
+
+
+@router.post("/chat", response_model=ChatResponse)
+def chat(
+    payload: ChatRequest,
+    membership: ClientMembership = Depends(
+        require_compliance_permission(CompliancePermission.NOTICE_VIEW)
+    ),
+    db: Session = Depends(get_db),
+):
+    """Multi-turn chat with the BYOK assistant.
+
+    Stateless on the server side — the client sends the full message
+    history each call. Capped at 20 messages by the schema. The last
+    message must be from the user; we validate that here so a malformed
+    client doesn't burn tokens on a noop.
+    """
+    if not payload.messages:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one message is required.",
+        )
+    if payload.messages[-1].role != "user":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The last message must be from the user.",
+        )
+
+    cred = _require_credential(db, membership.client_id)
+    msgs = [m.model_dump() for m in payload.messages]
+    try:
+        return ai_service.chat_with_assistant(db, cred, msgs)
     except Exception as e:
         raise _map_ai_error(e) from e
 

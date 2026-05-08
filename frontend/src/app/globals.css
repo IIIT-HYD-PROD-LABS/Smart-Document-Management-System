@@ -283,6 +283,18 @@ body > * { position: relative; z-index: 1; }
     min-height: 24px;
 }
 
+/* AI chat drawer typing-indicator dots — three staggered pulses. */
+@keyframes ai-typing {
+    0%, 60%, 100% {
+        opacity: 0.25;
+        transform: translateY(0);
+    }
+    30% {
+        opacity: 1;
+        transform: translateY(-2px);
+    }
+}
+
 /* ───────────────────────────────────────────────────────────
  * Reduced motion
  * ─────────────────────────────────────────────────────────── */

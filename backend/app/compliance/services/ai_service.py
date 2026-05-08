@@ -61,6 +61,7 @@ __all__ = [
     "AIOutOfScopeError",
     "AIProviderError",
     "AIRateLimitError",
+    "chat_with_assistant",
     "delete_credential",
     "get_credential",
     "recommend_invoice_actions",
@@ -430,6 +431,32 @@ def recommend_invoice_actions(
         for item in raw
         if isinstance(item, dict) and item.get("label")
     ]
+
+
+def chat_with_assistant(
+    db: Session, cred: AICredential, messages: list[dict]
+) -> dict:
+    """Multi-turn chat with the scope-locked TaxSync assistant.
+
+    `messages` is a list of `{role: 'user'|'assistant', content: str}`
+    in chronological order. The provider's chat method handles
+    conversation framing natively. If the model returns the
+    OUT_OF_SCOPE sentinel, we return a friendly canned reply with
+    `out_of_scope=True` so the frontend can style the bubble distinctly
+    (a 422 round-trip would defeat the chat UX).
+    """
+    p = _build_active_provider(db, cred)
+    raw = p.chat(SCOPE_LOCK_SYSTEM, messages, max_tokens=1024)
+    cleaned = (raw or "").strip()
+    if cleaned == OUT_OF_SCOPE_SENTINEL:
+        return {
+            "reply": (
+                "I can only help with TaxSync compliance and finance work — "
+                "notices, deadlines, vendor invoices, and the approval chain."
+            ),
+            "out_of_scope": True,
+        }
+    return {"reply": cleaned, "out_of_scope": False}
 
 
 def suggest_invoice_payment_timing(
