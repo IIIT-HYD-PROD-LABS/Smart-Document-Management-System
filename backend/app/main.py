@@ -135,6 +135,7 @@ app.include_router(early_access.router)
 # Depends(require_compliance_permission(...)) — RBAC is enforced at the
 # route layer; RLS isolation is automatic via TenantContextMiddleware.
 from app.compliance.routers import (  # noqa: E402  (intentional grouping with v1.0 routers above)
+    ai as compliance_ai,
     alerts as compliance_alerts,
     audit as compliance_audit,
     calendar as compliance_calendar,
@@ -167,6 +168,8 @@ app.include_router(compliance_responses.router, prefix="/api/compliance")
 app.include_router(compliance_search.router, prefix="/api/compliance")
 app.include_router(compliance_notice_types.router, prefix="/api/compliance")
 app.include_router(compliance_regulatory_calendar.router, prefix="/api/compliance")
+# Phase 16 — BYOK AI surface (notice + invoice summaries / actions / timing)
+app.include_router(compliance_ai.router, prefix="/api/compliance")
 
 # Phase 15 — Gmail MCP integration routers (Plan 15-05 Wave 4).
 # All seven mount under /api/email. Every endpoint composes

@@ -15,6 +15,7 @@ import {
     FiActivity,
     FiBriefcase,
     FiArrowUpRight,
+    FiCpu,
 } from "react-icons/fi";
 import toast from "react-hot-toast";
 
@@ -188,7 +189,7 @@ export default function DashboardPage() {
                     secondary="Pending review"
                 />
                 <MetricCard
-                    label="Bills due (7 days)"
+                    label="Invoices due (7 days)"
                     value={"—"}
                     icon={FiClock}
                     tint="var(--danger)"
@@ -335,7 +336,7 @@ export default function DashboardPage() {
                         Common tasks you can start in one click
                     </p>
                 </header>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <ActionTile
                         icon={FiUpload}
                         title="Upload document"
@@ -346,7 +347,7 @@ export default function DashboardPage() {
                     <ActionTile
                         icon={FiMail}
                         title="Connect Gmail"
-                        description="Auto-import bills and compliance notices from your inbox."
+                        description="Auto-import vendor invoices and compliance notices from your inbox."
                         href="/dashboard/email/connect"
                         tint="var(--success)"
                     />
@@ -356,6 +357,13 @@ export default function DashboardPage() {
                         description="Track notices, deadlines, and risk across your client roster."
                         href="/dashboard/compliance"
                         tint="var(--warning)"
+                    />
+                    <ActionTile
+                        icon={FiCpu}
+                        title="Ask AI"
+                        description="Bring your own Claude or Gemini key. Summaries + actions, scoped to TaxSync only."
+                        href="/dashboard/settings/ai"
+                        tint="#7c3aed"
                     />
                 </div>
             </section>

@@ -4,8 +4,16 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+    QueryClient,
+    QueryClientProvider,
+    useQuery,
+} from "@tanstack/react-query";
 import { LoadingSpinner } from "@/components";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useCurrentClient } from "@/stores/currentClientStore";
+import { complianceApi } from "@/lib/api/compliance";
+import type { ClientDetail } from "@/types/compliance";
 import {
     FiHome,
     FiUpload,
@@ -25,7 +33,10 @@ import {
     FiMail,
     FiSettings,
     FiInbox,
-    FiCreditCard,
+    FiClipboard,
+    FiChevronRight,
+    FiGlobe,
+    FiCpu,
 } from "react-icons/fi";
 
 /**
@@ -72,7 +83,7 @@ const NAV_GROUPS: NavGroup[] = [
             { href: "/dashboard/email/connect", icon: FiMail, label: "Connect", roles: ["admin", "editor"] },
             { href: "/dashboard/email/settings", icon: FiSettings, label: "Settings", roles: ["admin", "editor"] },
             { href: "/dashboard/email/activity", icon: FiInbox, label: "Activity", roles: ["admin", "editor", "viewer"] },
-            { href: "/dashboard/email/bills", icon: FiCreditCard, label: "Bills", roles: ["admin", "editor", "viewer"] },
+            { href: "/dashboard/email/bills", icon: FiClipboard, label: "Vendor invoices", roles: ["admin", "editor", "viewer"] },
         ],
     },
     {
@@ -88,6 +99,12 @@ const NAV_GROUPS: NavGroup[] = [
         ],
     },
     {
+        label: "Settings",
+        items: [
+            { href: "/dashboard/settings/ai", icon: FiCpu, label: "AI assistant", roles: ["admin", "editor", "viewer"] },
+        ],
+    },
+    {
         label: "Admin",
         items: [
             { href: "/dashboard/admin", icon: FiShield, label: "Admin", roles: ["admin"] },
@@ -96,11 +113,58 @@ const NAV_GROUPS: NavGroup[] = [
     },
 ];
 
+// Dashboard pages are all auth-gated (redirect to /login on unauthenticated
+// access). They have no business being statically prerendered — the Phase 16
+// useQuery in the co-brand sidebar would crash at build time. force-dynamic
+// is the cheapest correct knob; cascades to every nested dashboard route.
+export const dynamic = "force-dynamic";
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+    // One QueryClient for the entire dashboard tree — covers the sidebar
+    // active-client fetch, the AI credential lookup, every notice/invoice
+    // detail query. Compliance pages inside used to mount their own client;
+    // that's now redundant but kept for backwards-compat without breakage.
+    const [queryClient] = useState(
+        () =>
+            new QueryClient({
+                defaultOptions: {
+                    queries: {
+                        staleTime: 30_000,
+                        refetchOnWindowFocus: false,
+                        retry: 1,
+                    },
+                },
+            }),
+    );
+
+    return (
+        <QueryClientProvider client={queryClient}>
+            <DashboardLayoutInner>{children}</DashboardLayoutInner>
+        </QueryClientProvider>
+    );
+}
+
+function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     const { user, isLoading, logout } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    const activeClientId = useCurrentClient((s) => s.activeClientId);
+    const crossClientMode = useCurrentClient((s) => s.crossClientMode);
+
+    // Co-brand cluster: fetch the active client's name + logo so the
+    // sidebar can render its identity. Stays empty until a client is
+    // picked; cross-client mode skips the fetch and shows an "All
+    // clients" pill instead.
+    const { data: activeClient } = useQuery<ClientDetail>({
+        queryKey: ["active-client", activeClientId],
+        queryFn: () =>
+            complianceApi.getClient(activeClientId as number).then((r) => r.data),
+        enabled:
+            Boolean(activeClientId) && !crossClientMode && !!user,
+        staleTime: 60_000,
+    });
 
     useEffect(() => {
         if (!isLoading && !user) router.push("/login");
@@ -245,6 +309,73 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         );
                     })}
                 </nav>
+
+                {/* Active-client co-brand cluster — sits between the nav
+                 * and the user cluster. Click to jump to the client's
+                 * detail/branding page. Hidden when no client is selected. */}
+                {(activeClient || crossClientMode) && (
+                    <div className="border-t border-[var(--border-default)] px-3 pt-3 pb-1">
+                        <p className="microtype px-2 mb-1.5">Active client</p>
+                        {crossClientMode ? (
+                            <div
+                                className="
+                                    flex items-center gap-2.5 px-2 py-2 rounded-md
+                                    bg-[var(--bg-hover)] border border-[var(--border-default)]
+                                "
+                            >
+                                <div className="w-8 h-8 rounded-md bg-[var(--accent-soft)] flex items-center justify-center shrink-0">
+                                    <FiGlobe className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">
+                                        All clients
+                                    </p>
+                                    <p className="text-[11.5px] text-[var(--text-subtle)] truncate">
+                                        Cross-client mode
+                                    </p>
+                                </div>
+                            </div>
+                        ) : activeClient ? (
+                            <Link
+                                href={`/dashboard/compliance/clients/${activeClient.id}`}
+                                className="
+                                    group flex items-center gap-2.5 px-2 py-2 rounded-md
+                                    hover:bg-[var(--bg-hover)] transition-colors duration-150
+                                "
+                                aria-label={`Open ${activeClient.name} details`}
+                            >
+                                {activeClient.logo_url ? (
+                                    <span className="w-8 h-8 rounded-md bg-white border border-[var(--border-default)] flex items-center justify-center overflow-hidden shrink-0">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                            src={activeClient.logo_url}
+                                            alt=""
+                                            className="max-w-full max-h-full object-contain p-0.5"
+                                        />
+                                    </span>
+                                ) : (
+                                    <span className="w-8 h-8 rounded-md bg-[var(--accent)] flex items-center justify-center text-[12px] font-semibold text-white shrink-0 shadow-sm">
+                                        {activeClient.name?.[0]?.toUpperCase() || "C"}
+                                    </span>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">
+                                        {activeClient.name}
+                                    </p>
+                                    {activeClient.industry && (
+                                        <p className="text-[11.5px] text-[var(--text-subtle)] truncate">
+                                            {activeClient.industry}
+                                        </p>
+                                    )}
+                                </div>
+                                <FiChevronRight
+                                    className="w-3.5 h-3.5 text-[var(--text-subtle)] group-hover:text-[var(--text-muted)] shrink-0"
+                                    aria-hidden
+                                />
+                            </Link>
+                        ) : null}
+                    </div>
+                )}
 
                 {/* User cluster */}
                 <div className="border-t border-[var(--border-default)] p-3">

@@ -19,6 +19,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -39,6 +40,11 @@ class Client(Base):
     client_type = Column(String(30), nullable=False)
     industry = Column(String(100), nullable=True)
     primary_contact_email = Column(String(255), nullable=True)
+    # Branding (migration 0031). logo_url stores a data:image/...;base64,...
+    # URL up to ~340 KB — see migration docstring for the trade-off.
+    logo_url = Column(Text, nullable=True)
+    website = Column(String(255), nullable=True)
+    address = Column(Text, nullable=True)
     config_overrides = Column(
         JSONB,
         nullable=False,

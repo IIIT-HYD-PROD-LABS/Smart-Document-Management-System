@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { FiUsers, FiFileText } from "react-icons/fi";
 import { complianceApi } from "@/lib/api/compliance";
 import type { ClientDetail, DashboardAggregates } from "@/types/compliance";
+import BrandingSection from "@/components/compliance/BrandingSection";
 
 /**
  * Client detail page (CLIENT-01).
@@ -147,6 +148,8 @@ export default function ClientDetailPage({
                     accent="var(--text-muted)"
                 />
             </div>
+
+            <BrandingSection client={client} />
 
             <div className="surface-card p-6">
                 <h2 className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)] mb-4">

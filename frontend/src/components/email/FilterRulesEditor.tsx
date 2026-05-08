@@ -15,7 +15,7 @@ interface Props {
 
 const ROUTE_OPTIONS: { value: FilterRouteTo; label: string }[] = [
     { value: "compliance_notice", label: "Compliance" },
-    { value: "bill", label: "Bill" },
+    { value: "bill", label: "Invoice" },
     { value: "dms_only", label: "DMS only" },
     { value: "ignore", label: "Ignore" },
 ];

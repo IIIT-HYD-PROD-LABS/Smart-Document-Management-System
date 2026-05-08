@@ -89,8 +89,8 @@ export default function ConnectGmailButton({ credential, onChange }: Props) {
                             Connect your Gmail
                         </h3>
                         <p className="text-[12.5px] text-[var(--text-muted)] mt-1 leading-relaxed">
-                            We&apos;ll scan for compliance notices and personal
-                            bills from approved senders. Email bodies are read
+                            We&apos;ll scan for compliance notices and vendor
+                            invoices from approved senders. Email bodies are read
                             on-demand and never stored at rest.
                         </p>
                     </div>

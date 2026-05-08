@@ -117,7 +117,7 @@ export default function BillDashboard() {
         } catch (e: unknown) {
             const msg =
                 (e as { response?: { data?: { detail?: string } } })?.response
-                    ?.data?.detail || "Failed to load bills";
+                    ?.data?.detail || "Failed to load invoices";
             toast.error(msg);
         } finally {
             setLoading(false);
@@ -197,7 +197,7 @@ export default function BillDashboard() {
                                 {counts[b]}
                             </div>
                             <div className="mt-1.5 text-[11.5px] text-[var(--text-muted)]">
-                                {b === "paid" ? "this month" : "bills"}
+                                {b === "paid" ? "this month" : "invoices"}
                             </div>
                         </button>
                     );
@@ -244,7 +244,7 @@ export default function BillDashboard() {
             {/* Grid */}
             {loading ? (
                 <div className="text-[13px] text-[var(--text-muted)]">
-                    Loading bills…
+                    Loading invoices…
                 </div>
             ) : bills.length === 0 ? (
                 <div
@@ -254,7 +254,7 @@ export default function BillDashboard() {
                         text-[13px] text-[var(--text-muted)]
                     "
                 >
-                    No bills{bucket ? ` in ${BUCKET_META[bucket].label}` : ""} yet.
+                    No invoices{bucket ? ` in ${BUCKET_META[bucket].label}` : ""} yet.
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -324,7 +324,7 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
             const r = await emailApi.bulkMarkBillsPaid(payload);
             const { ok, failed } = r.data.summary;
             if (failed === 0) {
-                toast.success(`Marked ${ok} bills paid`);
+                toast.success(`Marked ${ok} invoices paid`);
             } else {
                 toast(`Marked ${ok} paid, ${failed} failed`, { icon: "⚠" });
             }
@@ -360,7 +360,7 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
                         Bulk mark paid
                     </h3>
                     <p className="text-[11.5px] text-[var(--text-muted)] mt-0.5">
-                        {bills.length} bill{bills.length !== 1 ? "s" : ""}{" "}
+                        {bills.length} invoice{bills.length !== 1 ? "s" : ""}{" "}
                         selected
                     </p>
                 </div>

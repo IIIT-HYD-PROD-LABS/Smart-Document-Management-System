@@ -48,10 +48,20 @@ export interface Client {
     client_type: ClientType;
     industry: string | null;
     primary_contact_email: string | null;
+    // Branding (migration 0031). logo_url is a `data:image/...;base64,...`
+    // URL when present — see backend/app/compliance/routers/clients.py.
+    logo_url: string | null;
+    website: string | null;
+    address: string | null;
     config_overrides: Record<string, unknown>;
     is_active: boolean;
     created_at: string;
     updated_at: string;
+}
+
+export interface ClientBrandingUpdate {
+    website?: string | null;
+    address?: string | null;
 }
 
 export interface ClientDetail extends Client {

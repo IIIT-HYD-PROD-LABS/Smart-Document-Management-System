@@ -107,6 +107,10 @@ class ClientCreate(BaseModel):
     client_type: Literal["pvt_ltd", "llp", "partnership", "sole_prop", "opc"]
     industry: Optional[str] = Field(None, max_length=100)
     primary_contact_email: Optional[str] = Field(None, max_length=255)
+    # Branding (migration 0031) — optional at create time; tenant can fill
+    # later via the branding endpoints.
+    website: Optional[str] = Field(None, max_length=255)
+    address: Optional[str] = None
 
     @field_validator("primary_contact_email")
     @classmethod
@@ -115,6 +119,38 @@ class ClientCreate(BaseModel):
             return v
         if not _EMAIL_RX.match(v):
             raise ValueError(f"Invalid email format: {v}")
+        return v
+
+    @field_validator("website")
+    @classmethod
+    def _validate_website(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return v
+        if not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError("Website must start with http:// or https://")
+        return v
+
+
+class ClientBrandingUpdate(BaseModel):
+    """PATCH payload for /clients/{id}/branding — text fields only.
+
+    The logo is uploaded via a separate multipart endpoint
+    (POST /clients/{id}/logo) so callers don't need to re-send the file
+    every time the website or address changes. Both fields are
+    independently nullable: passing an empty string clears the value;
+    omitting the field leaves it untouched.
+    """
+
+    website: Optional[str] = Field(None, max_length=255)
+    address: Optional[str] = None
+
+    @field_validator("website")
+    @classmethod
+    def _validate_website(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return v
+        if not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError("Website must start with http:// or https://")
         return v
 
 
@@ -138,6 +174,9 @@ class ClientOut(BaseModel):
     client_type: str
     industry: Optional[str] = None
     primary_contact_email: Optional[str] = None
+    logo_url: Optional[str] = None
+    website: Optional[str] = None
+    address: Optional[str] = None
     config_overrides: dict
     is_active: bool
     created_at: datetime

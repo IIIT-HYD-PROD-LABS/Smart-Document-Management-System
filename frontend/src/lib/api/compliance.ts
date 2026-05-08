@@ -7,6 +7,7 @@ import type {
     Membership,
     ClientDetail,
     Client,
+    ClientBrandingUpdate,
     DashboardAggregates,
     ComplianceNotice,
     NoticeActivity,
@@ -149,6 +150,39 @@ export const complianceApi = {
         api.get<DashboardAggregates>(
             `/compliance/clients/${clientId}/dashboard`,
             withTenant()
+        ),
+
+    // ──── Branding (migration 0031) ────
+    updateClientBranding: (
+        clientId: number,
+        payload: ClientBrandingUpdate,
+    ) =>
+        api.patch<Client>(
+            `/compliance/clients/${clientId}/branding`,
+            payload,
+            withTenant(),
+        ),
+
+    uploadClientLogo: (clientId: number, file: File) => {
+        const form = new FormData();
+        form.append("file", file);
+        return api.post<Client>(
+            `/compliance/clients/${clientId}/logo`,
+            form,
+            {
+                ...withTenant(),
+                headers: {
+                    ...withTenant().headers,
+                    "Content-Type": "multipart/form-data",
+                },
+            },
+        );
+    },
+
+    deleteClientLogo: (clientId: number) =>
+        api.delete<Client>(
+            `/compliance/clients/${clientId}/logo`,
+            withTenant(),
         ),
 
     // ──── Memberships ────

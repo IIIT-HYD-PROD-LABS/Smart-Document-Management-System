@@ -11,6 +11,7 @@ import {
     FiMail,
 } from "react-icons/fi";
 import MarkPaidModal from "@/components/email/MarkPaidModal";
+import InvoiceAISection from "@/components/email/InvoiceAISection";
 import { Bill, SourceEmailView, emailApi } from "@/lib/email-api";
 
 /**
@@ -48,11 +49,11 @@ export default function BillDetailPage() {
             const status = (e as { response?: { status?: number } })?.response
                 ?.status;
             if (status === 404) {
-                toast.error("Bill not found");
+                toast.error("Invoice not found");
             } else {
                 const msg =
                     (e as { response?: { data?: { detail?: string } } })
-                        ?.response?.data?.detail || "Failed to load bill";
+                        ?.response?.data?.detail || "Failed to load invoice";
                 toast.error(msg);
             }
             setBill(null);
@@ -84,7 +85,7 @@ export default function BillDetailPage() {
     if (loading) {
         return (
             <div className="text-[13px] text-[var(--text-muted)]">
-                Loading bill…
+                Loading invoice…
             </div>
         );
     }
@@ -100,7 +101,7 @@ export default function BillDetailPage() {
                     "
                 >
                     <FiArrowLeft className="w-3.5 h-3.5" />
-                    Back to bills
+                    Back to invoices
                 </Link>
                 <div
                     className="
@@ -109,7 +110,7 @@ export default function BillDetailPage() {
                         text-[13px] text-[var(--text-muted)]
                     "
                 >
-                    Bill not found.
+                    Invoice not found.
                 </div>
             </div>
         );
@@ -131,7 +132,7 @@ export default function BillDetailPage() {
                     "
                 >
                     <FiArrowLeft className="w-3.5 h-3.5" />
-                    Back to bills
+                    Back to invoices
                 </Link>
             </div>
 
@@ -221,6 +222,8 @@ export default function BillDetailPage() {
                     </dl>
                 </section>
             )}
+
+            <InvoiceAISection billId={bill.id} />
 
             {/* Action row */}
             <div className="flex flex-wrap gap-2">

@@ -10,7 +10,7 @@ const SUB_NAV = [
     { href: "/dashboard/email/connect", label: "Connect" },
     { href: "/dashboard/email/settings", label: "Settings" },
     { href: "/dashboard/email/activity", label: "Activity" },
-    { href: "/dashboard/email/bills", label: "Bills" },
+    { href: "/dashboard/email/bills", label: "Vendor invoices" },
 ];
 
 /**
@@ -84,8 +84,8 @@ export default function EmailLayout({
                     Gmail
                 </h1>
                 <p className="text-[13px] text-[var(--text-muted)] mt-1">
-                    Connect Gmail to auto-ingest compliance notices and personal
-                    bills.
+                    Connect Gmail to auto-ingest compliance notices and vendor
+                    invoices.
                 </p>
                 <nav
                     className="mt-4 flex items-center gap-1"

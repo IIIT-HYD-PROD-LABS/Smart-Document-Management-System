@@ -59,6 +59,8 @@ from app.compliance.models.response import (  # noqa: F401
     NoticeResponseApproval,
     NoticeEvidenceAttachment,
 )
+# Phase 16 — BYOK AI credentials (one row per compliance_client)
+from app.compliance.models.ai_credential import AICredential  # noqa: F401
 
 __all__ = [
     "Client",

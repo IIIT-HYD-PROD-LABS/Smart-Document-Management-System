@@ -18,6 +18,7 @@ import { ActivityTimeline } from "@/components/compliance/ActivityTimeline";
 import { AttachmentList } from "@/components/compliance/AttachmentList";
 import { FileDropzone } from "@/components/compliance/FileDropzone";
 import { TIER_CONFIG } from "@/components/compliance/RiskTierDot";
+import NoticeAISection from "@/components/compliance/NoticeAISection";
 
 /**
  * Notice detail — enterprise hero + UI-SPEC §2 two-column 40/60 body.
@@ -259,6 +260,7 @@ export default function NoticeDetailPage() {
                 </div>
 
                 <div className="lg:col-span-3 space-y-6">
+                    <NoticeAISection noticeId={notice.id} />
                     <ActivityTimeline noticeId={notice.id} />
                     <AttachmentList noticeId={notice.id} />
                     <FileDropzone noticeId={notice.id} />
