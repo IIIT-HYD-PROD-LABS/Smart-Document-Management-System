@@ -101,7 +101,10 @@ python-dateutil==2.8.2
 
 # ── Testing (not needed in production) ──────────────────────────
 pytest==9.0.3
-# pytest-asyncio < 0.24 crashes pytest 9 collection with
-# "AttributeError: 'Package' object has no attribute 'obj'" because
-# pytest 9 reworked the Package collector. 0.26+ is the safe floor.
-pytest-asyncio>=0.26,<1.0
+# pytest-asyncio < 1.3 has two issues with pytest 9:
+#   - 0.21 - 0.23.x crash collection ("'Package' object has no attribute 'obj'")
+#   - 0.24 - 1.2.x are pinned to pytest <9 in their setup metadata, so a fresh
+#     `pip install` (strict resolver, e.g. Docker build) refuses to install them
+#     alongside pytest==9.0.3 (ResolutionImpossible).
+# 1.3.0 is the first release that declares `pytest<10,>=8.2` and works.
+pytest-asyncio>=1.3,<2.0
