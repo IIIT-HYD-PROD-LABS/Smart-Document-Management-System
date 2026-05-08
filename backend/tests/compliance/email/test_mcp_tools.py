@@ -23,8 +23,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 EXPECTED_TOOLS = {
     "gmail_search",
     "gmail_read_message",
@@ -123,8 +121,6 @@ def test_audit_log_row_written_per_tool_call():
     ):
         # Bypass real DB close in finally — _open_session returns a sentinel object
         # whose .close() is a no-op via getattr fallback. Patch that path:
-        original = tools_module.gmail_list_labels_impl
-
         def _safe(args):
             from app.email.mcp.tools import _audit_call
 
@@ -141,8 +137,8 @@ def test_audit_log_row_written_per_tool_call():
                 )
                 return {
                     "labels": [
-                        {"id": l["id"], "name": l["name"], "type": l.get("type")}
-                        for l in labels
+                        {"id": lbl["id"], "name": lbl["name"], "type": lbl.get("type")}
+                        for lbl in labels
                     ]
                 }
             finally:

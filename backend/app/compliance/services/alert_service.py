@@ -241,7 +241,7 @@ def dispatch_non_notice_alert(
                     counters["queued"] += 1
                 else:
                     counters["failed"] += 1
-            except Exception as exc:
+            except Exception:
                 logger.exception(
                     "dispatch_non_notice_alert: %s sender raised for "
                     "client=%d alert_type=%s",

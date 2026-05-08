@@ -241,8 +241,8 @@ def gmail_list_labels_impl(args: GmailListLabelsArgs) -> dict:
         )
         return {
             "labels": [
-                {"id": l["id"], "name": l["name"], "type": l.get("type")}
-                for l in labels
+                {"id": lbl["id"], "name": lbl["name"], "type": lbl.get("type")}
+                for lbl in labels
             ]
         }
     finally:
