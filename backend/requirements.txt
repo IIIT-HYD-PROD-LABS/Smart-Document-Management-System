@@ -101,4 +101,7 @@ python-dateutil==2.8.2
 
 # ── Testing (not needed in production) ──────────────────────────
 pytest==9.0.3
-pytest-asyncio>=0.21,<1.0
+# pytest-asyncio < 0.24 crashes pytest 9 collection with
+# "AttributeError: 'Package' object has no attribute 'obj'" because
+# pytest 9 reworked the Package collector. 0.26+ is the safe floor.
+pytest-asyncio>=0.26,<1.0

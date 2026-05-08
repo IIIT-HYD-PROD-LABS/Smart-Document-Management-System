@@ -5,8 +5,9 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { adminApi, extractErrorMessage } from "@/lib/api";
 import { LoadingSpinner } from "@/components";
+import DeleteUserModal from "@/components/admin/DeleteUserModal";
 import toast from "react-hot-toast";
-import { FiUsers, FiFileText, FiSearch, FiChevronLeft, FiChevronRight, FiMail, FiCheck, FiX, FiClock } from "react-icons/fi";
+import { FiUsers, FiFileText, FiSearch, FiChevronLeft, FiChevronRight, FiMail, FiCheck, FiX, FiClock, FiTrash2 } from "react-icons/fi";
 
 // ──── Shared types ────
 
@@ -75,6 +76,7 @@ function UsersTab({ user }: { user: { id: number; role: string } }) {
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
+    const [pendingDelete, setPendingDelete] = useState<AdminUser | null>(null);
     const perPage = 20;
     const debounceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -181,6 +183,7 @@ function UsersTab({ user }: { user: { id: number; role: string } }) {
                             <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Provider</th>
                             <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Docs</th>
                             <th className="text-left px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Joined</th>
+                            <th className="text-right px-4 py-3 text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -211,10 +214,21 @@ function UsersTab({ user }: { user: { id: number; role: string } }) {
                                 <td className="px-4 py-3">
                                     <span className="text-xs text-[var(--text-muted)]">{new Date(u.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
                                 </td>
+                                <td className="px-4 py-3 text-right">
+                                    <button
+                                        onClick={() => setPendingDelete(u)}
+                                        disabled={u.id === user.id}
+                                        title={u.id === user.id ? "Cannot delete your own account" : "Delete user"}
+                                        aria-label={`Delete ${u.username}`}
+                                        className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--danger)]"
+                                    >
+                                        <FiTrash2 className="w-4 h-4" />
+                                    </button>
+                                </td>
                             </tr>
                         ))}
                         {users.length === 0 && (
-                            <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">No users found</td></tr>
+                            <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">No users found</td></tr>
                         )}
                     </tbody>
                 </table>
@@ -236,6 +250,15 @@ function UsersTab({ user }: { user: { id: number; role: string } }) {
                     </div>
                 </div>
             )}
+
+            <DeleteUserModal
+                user={pendingDelete}
+                onClose={() => setPendingDelete(null)}
+                onDeleted={() => {
+                    fetchUsers();
+                    fetchStats();
+                }}
+            />
         </>
     );
 }

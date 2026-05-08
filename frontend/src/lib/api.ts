@@ -234,6 +234,9 @@ export const adminApi = {
     updateStatus: (id: number, isActive: boolean) =>
         api.patch(`/admin/users/${id}/status`, { is_active: isActive }),
 
+    deleteUser: (id: number) =>
+        api.delete(`/admin/users/${id}`),
+
     getStats: () =>
         api.get("/admin/stats"),
 

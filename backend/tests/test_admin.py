@@ -133,6 +133,10 @@ class TestNonAdminAccess:
         resp = non_admin_client.get("/api/admin/audit")
         assert resp.status_code == 403
 
+    def test_delete_user_returns_403(self, non_admin_client):
+        resp = non_admin_client.delete("/api/admin/users/2")
+        assert resp.status_code == 403
+
 
 # =========================================================================
 # 2. List users
@@ -518,8 +522,9 @@ class TestAdminStats:
         # Each db.query(...) call returns a new chain
         chains = []
 
-        # 1. total_users: db.query(func.count(User.id)).scalar()
+        # 1. total_users: db.query(func.count(User.id)).filter(deleted_at IS NULL).scalar()
         c1 = MagicMock()
+        c1.filter.return_value = c1
         c1.scalar.return_value = total_users
         chains.append(c1)
 
@@ -529,8 +534,9 @@ class TestAdminStats:
         c2.scalar.return_value = active_users
         chains.append(c2)
 
-        # 3. role_rows: db.query(User.role, func.count(User.id)).group_by(...).all()
+        # 3. role_rows: db.query(User.role, func.count(User.id)).filter(...).group_by(...).all()
         c3 = MagicMock()
+        c3.filter.return_value = c3
         c3.group_by.return_value = c3
         c3.all.return_value = role_rows
         chains.append(c3)
@@ -612,3 +618,141 @@ class TestAdminStats:
         body = resp.json()
         assert body["documents_by_status"]["uploaded"] == 30
         assert body["documents_by_status"]["classified"] == 70
+
+
+# =========================================================================
+# 7. Delete user (soft-delete + anonymize)
+# =========================================================================
+
+
+class TestDeleteUser:
+    """Tests for DELETE /api/admin/users/{user_id}.
+
+    Soft-delete behavior:
+      - PII fields (email, username, full_name, oauth_id, hashed_password) are anonymized
+      - is_active flips to False, deleted_at gets set
+      - Active refresh tokens are revoked
+      - audit_logs.user_id is left intact (the row exists, just anonymized)
+    """
+
+    def _setup_delete_query(self, mock_db, target_user, admin_count=2):
+        """Wire mock_db for the delete_user endpoint.
+
+        The endpoint does:
+          1. db.query(User).filter(...).first()              -> target_user
+          2. (only if target is admin) db.query(...).scalar() -> admin_count
+          3. db.query(RefreshToken).filter(...).update(...)
+          4. db.commit()
+        """
+        user_chain = MagicMock()
+        user_chain.filter.return_value = user_chain
+        user_chain.first.return_value = target_user
+
+        count_chain = MagicMock()
+        count_chain.filter.return_value = count_chain
+        count_chain.scalar.return_value = admin_count
+
+        token_chain = MagicMock()
+        token_chain.filter.return_value = token_chain
+        token_chain.update.return_value = 0
+
+        is_admin_target = target_user is not None and target_user.role == "admin"
+
+        call_count = [0]
+
+        def side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return user_chain
+            if is_admin_target and call_count[0] == 2:
+                return count_chain
+            return token_chain
+
+        mock_db.query.side_effect = side_effect
+
+    def test_delete_succeeds(self, client, mock_db):
+        target = _make_mock_user(
+            user_id=2, email="alice@example.com", username="alice", role="editor"
+        )
+        self._setup_delete_query(mock_db, target)
+
+        resp = client.delete("/api/admin/users/2")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["user_id"] == 2
+        assert "deleted" in body["detail"].lower()
+        mock_db.commit.assert_called_once()
+
+    def test_delete_anonymizes_pii(self, client, mock_db):
+        target = _make_mock_user(
+            user_id=2,
+            email="alice@example.com",
+            username="alice",
+            full_name="Alice Wonderland",
+            role="editor",
+        )
+        # Give the mock an oauth_id and hashed_password to verify they are nulled
+        target.oauth_id = "google-oauth-id-123"
+        target.hashed_password = "$2b$12$bcrypt..."
+        target.deleted_at = None
+        self._setup_delete_query(mock_db, target)
+
+        resp = client.delete("/api/admin/users/2")
+        assert resp.status_code == 200
+
+        # PII overwritten
+        assert target.email != "alice@example.com"
+        assert target.email.startswith("deleted-2-")
+        assert target.email.endswith("@deleted.local")
+        assert target.username != "alice"
+        assert target.username.startswith("deleted_2_")
+        assert target.full_name is None
+        assert target.oauth_id is None
+        assert target.hashed_password is None
+        assert target.is_active is False
+        assert target.deleted_at is not None
+
+    def test_delete_self_rejected(self, client, admin_user, mock_db):
+        # admin_user.id is 1
+        resp = client.delete("/api/admin/users/1")
+        assert resp.status_code == 400
+        assert "own account" in resp.json()["detail"].lower()
+        mock_db.commit.assert_not_called()
+
+    def test_delete_user_not_found_returns_404(self, client, mock_db):
+        self._setup_delete_query(mock_db, target_user=None)
+
+        resp = client.delete("/api/admin/users/999")
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["detail"].lower()
+        mock_db.commit.assert_not_called()
+
+    def test_delete_last_admin_rejected(self, client, mock_db):
+        target = _make_mock_user(user_id=2, role="admin")
+        self._setup_delete_query(mock_db, target, admin_count=1)
+
+        resp = client.delete("/api/admin/users/2")
+        assert resp.status_code == 400
+        assert "last admin" in resp.json()["detail"].lower()
+        mock_db.commit.assert_not_called()
+
+    def test_delete_admin_allowed_when_multiple_admins(self, client, mock_db):
+        target = _make_mock_user(user_id=2, role="admin")
+        self._setup_delete_query(mock_db, target, admin_count=3)
+
+        resp = client.delete("/api/admin/users/2")
+        assert resp.status_code == 200
+        assert target.is_active is False
+
+    def test_delete_revokes_refresh_tokens(self, client, mock_db):
+        target = _make_mock_user(user_id=2, role="editor")
+        self._setup_delete_query(mock_db, target)
+
+        resp = client.delete("/api/admin/users/2")
+        assert resp.status_code == 200
+        # The endpoint must have queried RefreshToken at least once after the user lookup
+        assert mock_db.query.call_count >= 2
+
+    def test_delete_rejects_non_positive_user_id(self, client, mock_db):
+        resp = client.delete("/api/admin/users/0")
+        assert resp.status_code == 422

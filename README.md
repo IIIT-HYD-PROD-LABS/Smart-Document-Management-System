@@ -12,7 +12,7 @@
 - **ML Document Classification** — Automatically categorizes documents into bills, invoices, tax forms, bank statements, UPI receipts, and tickets using a trained Linear SVC model (85.06% accuracy — exceeds 85% target)
 - **OCR Text Extraction** — Extracts text from scanned PDFs and images using Tesseract with adaptive preprocessing (grayscale, blur, thresholding, deskew, morphological ops, multi-PSM retry)
 - **LLM Smart Extraction** — Multi-provider LLM service (Ollama, Gemini, Anthropic, OpenAI, local regex fallback) with category-specific extraction prompts and AI summaries; degraded-mode tracking when only the regex fallback is available
-- **Multi-User & RBAC** — Three-tier role system (admin/editor/viewer), admin panel, document-level sharing with permissions
+- **Multi-User & RBAC** — Three-tier role system (admin/editor/viewer), admin panel with role/status changes and **soft-delete + PII anonymization** (audit-trail-preserving — see Phase 9 audit immutability trigger), document-level sharing with permissions
 - **OAuth SSO** — Google & Microsoft OAuth single sign-on with exchange code flow. Both buttons render unconditionally on `/login` and `/register`; backend gracefully reports "not configured" when OAuth env vars are absent
 - **Async Processing** — Upload returns immediately (HTTP 202). Celery workers handle OCR + classification in the background with real-time status polling
 - **Full-Text Search** — PostgreSQL `tsvector` + GIN indexes; search across all extracted content with category filtering
@@ -54,7 +54,7 @@
 |-------|-----------|
 | Frontend | Next.js 15 (App Router, standalone build), React 19, TypeScript, Tailwind CSS, TanStack Query, Zustand, react-day-picker v9, framer-motion |
 | Backend | FastAPI, SQLAlchemy, Pydantic v2, Uvicorn, structlog |
-| Database | PostgreSQL (Supabase Cloud — session-mode pooler for Phase 9 RLS), Alembic migrations (head: `0024_supabase_security_advisor_fixes`) |
+| Database | PostgreSQL (Supabase Cloud — session-mode pooler for Phase 9 RLS), Alembic migrations (head: `0030_add_user_deleted_at`) |
 | AI/LLM | Multi-provider (Ollama, Gemini, Anthropic, OpenAI, local regex fallback) with degraded-mode tracking |
 | Phase 10 ML | InLegalBERT (deferred), rule-based risk scorer + SHAP-style factors, scikit-learn (LinearSVC + CalibratedClassifierCV + TF-IDF), Tesseract OCR, pdfplumber, python-docx, spaCy NER |
 | Phase 11 alerts | APScheduler (durable), holidays (Indian FY 2025-26), Twilio SMS adapter, WebSocket via FastAPI; SendGrid migration deferred to v2.1 |

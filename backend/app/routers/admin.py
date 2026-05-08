@@ -45,8 +45,8 @@ def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """List all users (admin only)."""
-    query = db.query(User)
+    """List all users (admin only). Soft-deleted users are excluded."""
+    query = db.query(User).filter(User.deleted_at.is_(None))
 
     if search:
         escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -92,6 +92,7 @@ def list_users(
             document_count=doc_count,
             created_at=u.created_at,
             updated_at=u.updated_at,
+            deleted_at=u.deleted_at,
         ))
 
     return AdminUserListResponse(
@@ -111,8 +112,12 @@ def get_user_detail(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Get user detail with document count (admin only)."""
-    user = db.query(User).filter(User.id == user_id).first()
+    """Get user detail with document count (admin only). Soft-deleted users 404."""
+    user = (
+        db.query(User)
+        .filter(User.id == user_id, User.deleted_at.is_(None))
+        .first()
+    )
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
@@ -129,6 +134,7 @@ def get_user_detail(
         document_count=doc_count,
         created_at=user.created_at,
         updated_at=user.updated_at,
+        deleted_at=user.deleted_at,
     )
 
 
@@ -150,14 +156,20 @@ def update_user_role(
             detail="Cannot change your own role",
         )
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (
+        db.query(User)
+        .filter(User.id == user_id, User.deleted_at.is_(None))
+        .first()
+    )
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    # Prevent removing the last active admin
+    # Prevent removing the last active admin (deleted users do not count)
     if user.role == "admin" and payload.role != "admin":
         admin_count = db.query(func.count(User.id)).filter(
-            User.role == "admin", User.is_active == True  # noqa: E712
+            User.role == "admin",
+            User.is_active == True,  # noqa: E712
+            User.deleted_at.is_(None),
         ).scalar()
         if admin_count <= 1:
             raise HTTPException(
@@ -203,14 +215,20 @@ def update_user_status(
             detail="Cannot change your own status",
         )
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (
+        db.query(User)
+        .filter(User.id == user_id, User.deleted_at.is_(None))
+        .first()
+    )
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    # Prevent deactivating the last active admin
+    # Prevent deactivating the last active admin (deleted users do not count)
     if user.role == "admin" and not payload.is_active:
         admin_count = db.query(func.count(User.id)).filter(
-            User.role == "admin", User.is_active == True  # noqa: E712
+            User.role == "admin",
+            User.is_active == True,  # noqa: E712
+            User.deleted_at.is_(None),
         ).scalar()
         if admin_count <= 1:
             raise HTTPException(
@@ -252,6 +270,109 @@ def update_user_status(
     return {"detail": f"User {status_str}", "user_id": user_id}
 
 
+@router.delete("/users/{user_id}")
+@limiter.limit("5/minute")
+def delete_user(
+    request: Request,
+    response: Response,
+    background_tasks: BackgroundTasks,
+    user_id: int = PathParam(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Soft-delete and anonymize a user (admin only).
+
+    The audit_logs immutability trigger (migration 0014) blocks the
+    cascading FK SET NULL that a real ``DELETE FROM users`` would trigger,
+    so we anonymize PII in place, mark ``deleted_at``, revoke refresh
+    tokens, and let FK CASCADE clean up documents + own permissions.
+    Audit history (audit_logs.user_id) is left intact and points at the
+    now-anonymized row, keeping the chain forensically valid.
+    """
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account",
+        )
+
+    user = (
+        db.query(User)
+        .filter(User.id == user_id, User.deleted_at.is_(None))
+        .first()
+    )
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Last-admin guard mirrors update_user_role/update_user_status.
+    if user.role == "admin":
+        admin_count = db.query(func.count(User.id)).filter(
+            User.role == "admin",
+            User.is_active == True,  # noqa: E712
+            User.deleted_at.is_(None),
+        ).scalar()
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete the last admin. Promote another user to admin first.",
+            )
+
+    # Capture original PII for audit BEFORE we overwrite it.
+    original_username = user.username
+    original_email = user.email
+
+    now = datetime.now(timezone.utc)
+    epoch = int(now.timestamp())
+
+    # Anonymize PII; free unique slots (email/username/oauth_id) for re-registration.
+    user.email = f"deleted-{user.id}-{epoch}@deleted.local"
+    user.username = f"deleted_{user.id}_{epoch}"
+    user.full_name = None
+    user.oauth_id = None
+    user.hashed_password = None
+    user.is_active = False
+    user.deleted_at = now
+
+    # Revoke all active refresh tokens (mirrors deactivation path).
+    from app.models.refresh_token import RefreshToken
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user_id,
+        RefreshToken.is_revoked == False,  # noqa: E712
+    ).update(
+        {"is_revoked": True, "revoked_at": now}
+    )
+
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to delete user",
+        )
+
+    logger.info(
+        "user_deleted",
+        user_id=user_id,
+        deleted_by=current_user.id,
+        username_was=original_username,
+    )
+
+    background_tasks.add_task(
+        log_audit_event,
+        user_id=current_user.id,
+        action="user_delete",
+        resource_type="user",
+        resource_id=user_id,
+        details={
+            "username_was": original_username,
+            "email_was": original_email,
+        },
+        ip_address=request.client.host if request.client else None,
+    )
+
+    return {"detail": "User deleted", "user_id": user_id}
+
+
 @router.get("/stats", response_model=AdminStatsResponse)
 @limiter.limit("20/minute")
 def get_admin_stats(
@@ -260,13 +381,18 @@ def get_admin_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Get system-wide statistics (admin only)."""
-    total_users = db.query(func.count(User.id)).scalar()
-    active_users = db.query(func.count(User.id)).filter(User.is_active == True).scalar()  # noqa: E712
+    """Get system-wide statistics (admin only). Soft-deleted users are excluded."""
+    total_users = db.query(func.count(User.id)).filter(User.deleted_at.is_(None)).scalar()
+    active_users = (
+        db.query(func.count(User.id))
+        .filter(User.is_active == True, User.deleted_at.is_(None))  # noqa: E712
+        .scalar()
+    )
 
     # Single GROUP BY instead of one COUNT per role
     role_rows = (
         db.query(User.role, func.count(User.id))
+        .filter(User.deleted_at.is_(None))
         .group_by(User.role)
         .all()
     )

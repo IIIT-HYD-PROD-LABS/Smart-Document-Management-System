@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
 status: Milestone complete
-stopped_at: Completed 15-07-PLAN.md (smoke + manual checklist); Phase 15 v2.0 ready for verifier
-last_updated: "2026-05-07T19:20:25.783Z"
+stopped_at: v2.0.2 admin user-delete + 4-bug audit sweep landed (2026-05-08); migration 0030 head; 502 backend tests passing
+last_updated: "2026-05-08T06:30:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 4

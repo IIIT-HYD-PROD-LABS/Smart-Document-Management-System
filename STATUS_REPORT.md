@@ -1,8 +1,32 @@
 # Smart Document Management System — Status Report
 
 **Organization:** Product Labs, IIIT Hyderabad
-**Last Updated:** 2026-05-06 (v2.0.1 patch)
+**Last Updated:** 2026-05-08 (v2.0.2 admin user-delete + 4-bug fix sweep)
 **Overall Progress:** v1.0 shipped (8/8 phases, March 2026). v2.0 Phase 9 shipped 2026-04-28. v2.0 Phases 10 + 11 + 12 + 13 CODE-COMPLETE 2026-05-05; Phase 10 + Phase 12 + Phase 13 end-to-end smokes PASSED. Two consecutive hardening passes shipped (5-agent end-to-end audit covering Phases 1-13): first pass landed 13 fixes between Phases 11 and 12; second pass landed 5 CRITICAL + 9 HIGH fixes including a regressed APScheduler RLS bypass and a cross-user document leak in Phase 13 unified search. UI polish pass landed IBM Plex typography system + design tokens + refined sidebar grouping + brand mark. **389 backend tests GREEN (non-integration)**. Phase 14 CONTEXT seeded; external-credential blockers documented (GSP empanelment, IT API access). Phase 15 CONTEXT seeded 2026-04-28.
+
+**v2.0.2 patch (2026-05-08) — Admin user-delete + audited bug sweep** — Added admin-driven user removal with audit-trail-preserving soft-delete (the audit_logs immutability trigger from migration 0014 makes a real `DELETE FROM users` impossible — anonymizing in place keeps the chain valid). Same session, an end-to-end audit agent (covering Phases 1-15) surfaced four production issues all fixed:
+1. **CRITICAL — Backend test suite couldn't run.** `pytest 9.0.3` + `pytest-asyncio 0.23.3` collision: `INTERNALERROR ... 'Package' object has no attribute 'obj'` on every collection. The "389 tests green" claim was unverifiable — pytest aborted before collecting anything. Fix: pinned `pytest-asyncio>=0.26,<1.0` in `requirements.txt`. **502 tests now pass** (up from the previous 389 baseline because more tests now run + 11 new admin-delete tests).
+2. **CRITICAL — `/dashboard/upload/page.tsx` hooks ordering.** `if (user?.role === "viewer") return null;` placed BEFORE 5 hooks (`useCallback`, `useEffect`, `useDropzone`). When `user` resolves from undefined → defined during auth hydration, hook count changes and React throws "Rendered more hooks than during the previous render", crashing the upload page. ESLint reported 5 errors here. Fix: moved the early-return AFTER all hooks (render-time guard). Lint is now error-free.
+3. **HIGH — Gmail scanner_task spammed errors every 15 min.** `HttpError` handler only caught 404 (history-id reset). Permanent 401 (revoked tokens) and 403 (Gmail API disabled) re-raised → APScheduler logged a fresh exception every cadence. Fix: added explicit 401/403 catch that flips `gmail_credentials.status = REVOKED`, logs a warning (not exception), and returns without re-raise. Subsequent scans short-circuit at the `STATUS_ACTIVE` guard.
+4. **HIGH — `get_current_user` didn't check `deleted_at`.** A future re-activation of a soft-deleted user (PATCH /status with is_active=true) would re-grant API access despite the user being "deleted." Fix: `if not user.is_active or user.deleted_at is not None` in `app/utils/security.py:get_current_user`.
+
+**Admin user-delete feature (this patch's headline):**
+- `DELETE /api/admin/users/{user_id}` — guarded by `require_admin`, rate-limited 5/min.
+- Guards (mirroring existing role/status endpoints): cannot delete self (400), cannot delete the last active admin (400), 404 when target missing or already-deleted.
+- Action in one transaction: anonymize PII (`email`, `username`, `full_name`, `oauth_id`, `hashed_password`), set `is_active=False`, set `deleted_at=now()`, revoke all active refresh tokens. FK CASCADE handles documents and own document_permissions; `audit_logs.user_id` is left intact (the row exists, just anonymized) — `audit_logs` immutability trigger is never fired.
+- New migration: `0030_add_user_deleted_at` — `deleted_at TIMESTAMPTZ NULL` + partial index `WHERE deleted_at IS NOT NULL`.
+- All listing / lookup queries (admin list, detail, role update, status update, stats) now filter `deleted_at IS NULL`.
+- Frontend: `DeleteUserModal` (mirrors `MarkPaidModal` design contract — same dimensions, header/body/footer rhythm, focus-trap, ESC, Enter-to-confirm, ARIA dialog) with type-to-confirm gating the destructive button. `FiTrash2` icon button per user row, disabled for the admin's own row.
+- 11 new backend tests cover: happy path, PII anonymization, self-delete reject, last-admin reject, multi-admin-allowed, refresh-token revocation, non-admin reject, 404 path, ID validation.
+
+**Verification this patch:**
+- 502 backend tests passing (single full-suite invocation; 107 errors are pre-existing Phase 9 RLS infra cases that need a local Postgres with role-switching, not Supabase pooler — documented limitation).
+- Migration 0030 applied to Supabase: `users.deleted_at TIMESTAMPTZ` + partial index `ix_users_deleted_at WHERE deleted_at IS NOT NULL` confirmed via `inspect()`.
+- Frontend: `tsc --noEmit` clean (no type errors); `next lint` reports 9 pre-existing warnings (no errors); the upload-page hooks-ordering errors flagged by the audit agent are resolved.
+- OpenAPI: `/api/admin/users/{user_id}` exposes both `get` and `delete`; unauth `DELETE` returns 401 (security gate works).
+- All Docker services healthy after restart (backend, celery, compliance-worker, frontend, db, redis).
+
+---
 
 **v2.0.1 patch (2026-05-06)** — End-to-end agent-team review of Phases 1-13 surfaced and fixed three user-facing gaps:
 1. **Compliance report download was unimplemented** (Phase 13 explicitly deferred CSV/PDF/Excel exports to v2.1). Retrofitted 4 CSV export endpoints (`/reports/{penalty-by-authority,notice-volume-by-status,response-time,health-summary}/export`) using stdlib `csv` + `StreamingResponse` (no new deps); added `Download CSV` buttons to the four report cards on `/dashboard/compliance/reports`. Verified end-to-end with browser-driven download (`penalty_by_authority_20260506.csv` produced via real button click).

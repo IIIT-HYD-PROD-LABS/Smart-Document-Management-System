@@ -32,11 +32,19 @@ class User(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    # Soft-delete timestamp. NULL = active record; set = anonymized + retired.
+    # See migration 0030 for why the audit-log immutability trigger forces
+    # soft-delete instead of a real DELETE.
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     documents = relationship("Document", back_populates="owner", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="owner", cascade="all, delete-orphan")
     shared_documents = relationship("DocumentPermission", back_populates="user", foreign_keys="[DocumentPermission.user_id]")
+
+    @property
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"

@@ -27,12 +27,13 @@ export default function UploadPage() {
     const [uploading, setUploading] = useState(false);
     const pollTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-    // Role guard: only editors and admins can upload
+    // Role guard: only editors and admins can upload.
+    // The early return MUST live below all hooks (see render-time guard
+    // at the bottom of this function) — placing it here would change
+    // hook count between renders during auth hydration and crash React.
     useEffect(() => {
         if (user && user.role === "viewer") router.replace("/dashboard");
     }, [user, router]);
-
-    if (user?.role === "viewer") return null;
 
     const updateItem = useCallback((file: File, updates: Partial<UploadItem>) => {
         setUploads((prev) => prev.map((u) => (u.file === file ? { ...u, ...updates } : u)));
@@ -127,6 +128,10 @@ export default function UploadPage() {
             background: "color-mix(in srgb, var(--bg-elevated) 60%, transparent)",
             borderStyle: "dashed",
         };
+
+    // Render-time role guard (replaces the pre-hooks early return that
+    // violated Rules of Hooks). All hooks above unconditionally execute.
+    if (user?.role === "viewer") return null;
 
     return (
         <div>

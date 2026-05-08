@@ -15,6 +15,16 @@
 - bcrypt password hashing (passlib)
 - OAuth SSO: Google and Microsoft with CSRF state parameter
 - Rate limiting: 5 requests/minute on auth endpoints
+- `get_current_user` rejects accounts where `is_active=False` OR `deleted_at IS NOT NULL` — soft-deleted users cannot regain access even if a future admin re-flips `is_active`.
+
+### Account Lifecycle
+
+- **Admin user delete (`DELETE /api/admin/users/{id}`)** — guarded by `require_admin`, rate-limited 5/min. Performs soft-delete with PII anonymization rather than a hard `DELETE FROM users`.
+- **Why soft-delete:** the `audit_logs` immutability trigger (migration 0014) raises EXCEPTION on any UPDATE or DELETE. A real cascade would fire `ON DELETE SET NULL` on `audit_logs.user_id` (an UPDATE), trip the trigger, and abort. Anonymizing the user row keeps `audit_logs` untouched and the audit chain forensically valid.
+- **Anonymization fields:** `email` → `deleted-{id}-{epoch}@deleted.local`, `username` → `deleted_{id}_{epoch}`, `full_name`, `oauth_id`, `hashed_password` → NULL. Frees the unique `email`/`username`/`oauth_id` slots for re-registration.
+- **Cascade behavior:** documents, refresh_tokens, document_permissions (as user), and compliance_memberships are FK-CASCADE-deleted. document_permissions.granted_by gets SET NULL.
+- **Guards:** cannot delete self, cannot delete the last active admin (mirrors update_user_role / update_user_status guards).
+- **Audit trail:** every deletion writes an `audit_logs` row with `action="user_delete"` and the original username/email captured in `details` JSON for forensic recovery.
 
 ### Token Security
 

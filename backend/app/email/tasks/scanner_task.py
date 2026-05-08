@@ -262,6 +262,40 @@ def run_scan(credential_id: int) -> None:
                 else GmailFetchLog.STATUS_SUCCESS_EMPTY
             )
             record_fetch_outcome(db, credential_id, status, msgs_processed)
+        except HttpError as e:
+            # Permanent auth failures (401 invalid_grant, 403 accessNotConfigured /
+            # API disabled / scope revoked) repeat forever otherwise — APScheduler
+            # logs a fresh exception every cadence_minutes. Disable the credential
+            # so subsequent scans short-circuit at the STATUS_ACTIVE check above.
+            status_code = getattr(getattr(e, "resp", None), "status", None)
+            if status_code in (401, 403):
+                logger.warning(
+                    "Gmail credential %s revoked or unauthorized (HTTP %s) — "
+                    "marking REVOKED to stop scheduler retries",
+                    credential_id,
+                    status_code,
+                )
+                cred.status = GmailCredential.STATUS_REVOKED
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                record_fetch_outcome(
+                    db,
+                    credential_id,
+                    GmailFetchLog.STATUS_FETCH_FAILED,
+                    error_message=f"HttpError{status_code}",
+                )
+                return
+            # Other HttpErrors (5xx, 429) are transient — let APScheduler retry.
+            logger.exception("Gmail scan failed for credential %s", credential_id)
+            record_fetch_outcome(
+                db,
+                credential_id,
+                GmailFetchLog.STATUS_FETCH_FAILED,
+                error_message=type(e).__name__,
+            )
+            raise
         except Exception as e:
             logger.exception("Gmail scan failed for credential %s", credential_id)
             record_fetch_outcome(

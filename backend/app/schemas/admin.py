@@ -15,6 +15,7 @@ class AdminUserResponse(BaseModel):
     document_count: int
     created_at: datetime
     updated_at: datetime | None
+    deleted_at: datetime | None = None
 
     class Config:
         from_attributes = True
