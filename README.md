@@ -2,7 +2,7 @@ TaxSync
 
 **AI-powered document management + compliance tracking system** built for IIIT Hyderabad Production Labs. Upload any document — PDFs, scanned images, DOCX — and the system automatically extracts text via OCR, classifies it using machine learning, and makes it searchable. v2.0 layers a multi-tenant **compliance notice tracking** workflow on top: ingest GST/IT/MCA/RBI/SEBI notices, route through a 4-stage approval pipeline, fire deadline alerts, and export per-client compliance reports.
 
-**Current status (2026-05-06):** v1.0 SHIPPED · v2.0 Phases 9-13 CODE-COMPLETE · v2.0.1 patch in production · 389 backend tests GREEN · Vercel deploy: Ready · See [STATUS_REPORT.md](./STATUS_REPORT.md) for the full ship log.
+**Current status (2026-05-08):** v1.0 SHIPPED · v2.0 Phases 9-13 CODE-COMPLETE · v2.0.1 patch in production · v2.1 client-session changes shipped (per-tenant branding + BYOK AI + vendor-invoice rebrand) · 389 backend tests GREEN · Vercel deploy: Ready · See [STATUS_REPORT.md](./STATUS_REPORT.md) for the full ship log.
 
 ---
 
@@ -27,6 +27,12 @@ TaxSync
 - **Cross-entity unified search + analytics** (Phase 13) — single FTS query across `compliance_notices` + `documents` (`tsvector` + GIN trigger). Three analytics endpoints: penalty by authority, notice volume by status, response-time percentiles
 - **CSV report export** (v2.0.1) — Download Generate-summary + the 3 Phase 13 aggregations as CSV from `/dashboard/compliance/reports`. Stdlib `csv` + `StreamingResponse`, charset=utf-8 declared; no new dependencies
 - **Notice file upload pipeline** (Phase 9 + v2.0.1) — `POST /notices/{id}/upload` reuses v1.0 storage AND dispatches the Celery OCR/classification task (parity with the regular doc upload), so notice-attached documents transition `PENDING → COMPLETED` automatically
+
+### v2.1 — Client Branding + BYOK AI (2026-05-08)
+- **Per-tenant client branding** — `compliance_clients` gets `logo_url` (base64 data URL ≤340KB), `website` (https-validated), `address`. New endpoints: `POST /compliance/clients/{id}/logo` (multipart, PNG/JPEG/WEBP only with magic-byte validation, SVG rejected for XSS), `PATCH /compliance/clients/{id}/branding`, `DELETE /compliance/clients/{id}/logo`. Logo + name auto-render in a co-brand cluster bottom-left of the sidebar (above the user cluster) so each tenant sees its own brand alongside TaxSync. Edit at **Compliance → Clients → \<client\> → Branding**.
+- **BYOK AI assistant** (Phase 16) — bring your own Anthropic Claude or Google Gemini key. One row per tenant in `ai_credentials` (Fernet-encrypted via INFRA-06 cipher). Five task surfaces: notice summary + recommended actions, vendor-invoice summary + suggested actions + payment timing. System prompt hard-restricts the AI to Indian regulatory notices, compliance deadlines, vendor invoices, the approval chain, and TaxSync workflow — anything else returns `OUT_OF_SCOPE` (HTTP 422 with friendly toast). Provider adapters use the official `anthropic` SDK and httpx for Gemini's REST API. Settings page at **/dashboard/settings/ai** with Test + Save flow; entry-points on the dashboard quick-action tile, sidebar nav, and per-page AI panels on every notice and invoice. Costs go to the tenant's provider account; TaxSync never bills for AI.
+- **Vendor invoices rebrand** — the email-driven Bills feature relabeled as "Vendor invoices" everywhere user-visible (sidebar nav, dashboard metrics, dashboard quick action, notice page copy). Data model, APIs, and `/api/email/bills/*` paths unchanged — pure UI/copy. Sidebar icon swapped `FiCreditCard` → `FiClipboard`. Reflects the descope of personal/household-bill positioning per 2026-05-08 client guidance.
+- **Dashboard SSG fix** — `dynamic = 'force-dynamic'` on `app/dashboard/layout.tsx` plus `QueryClientProvider` hoisted from `compliance/layout` to `dashboard/layout`. Fixes a pre-existing `next build` break on auth-gated pages and gives the new sidebar `useQuery` a provider above it on every dashboard route.
 
 ---
 
@@ -54,7 +60,7 @@ TaxSync
 |-------|-----------|
 | Frontend | Next.js 15 (App Router, standalone build), React 19, TypeScript, Tailwind CSS, TanStack Query, Zustand, react-day-picker v9, framer-motion |
 | Backend | FastAPI, SQLAlchemy, Pydantic v2, Uvicorn, structlog |
-| Database | PostgreSQL (Supabase Cloud — session-mode pooler for Phase 9 RLS), Alembic migrations (head: `0030_add_user_deleted_at`) |
+| Database | PostgreSQL (Supabase Cloud — session-mode pooler for Phase 9 RLS), Alembic migrations (head: `0032_add_ai_credentials`) |
 | AI/LLM | Multi-provider (Ollama, Gemini, Anthropic, OpenAI, local regex fallback) with degraded-mode tracking |
 | Phase 10 ML | InLegalBERT (deferred), rule-based risk scorer + SHAP-style factors, scikit-learn (LinearSVC + CalibratedClassifierCV + TF-IDF), Tesseract OCR, pdfplumber, python-docx, spaCy NER |
 | Phase 11 alerts | APScheduler (durable), holidays (Indian FY 2025-26), Twilio SMS adapter, WebSocket via FastAPI; SendGrid migration deferred to v2.1 |
@@ -261,6 +267,30 @@ npm run dev
 | POST | `/api/compliance/responses` | Create draft response |
 | GET | `/api/compliance/responses/{id}` | Read response state + version |
 | PATCH | `/api/compliance/responses/{id}/transition` | 4-stage approval transition (Drafter → Reviewer → Legal → CFO) |
+
+### Compliance — Client Branding (v2.1, gated by `CLIENT_MANAGE_TEAM`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| PATCH  | `/api/compliance/clients/{id}/branding` | Update website + address (JSON body, https-prefix validated) |
+| POST   | `/api/compliance/clients/{id}/logo` | Upload logo (multipart, ≤256KB, PNG/JPEG/WEBP only, magic-byte validated, stored as base64 data URL) |
+| DELETE | `/api/compliance/clients/{id}/logo` | Clear the stored logo |
+
+### Compliance — BYOK AI Assistant (v2.1 / Phase 16, all under `/api/compliance/ai`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET    | `/credentials` | Read provider + model + has_key (NEVER returns the key); gated `notice:view` |
+| POST   | `/credentials` | Set / replace provider + model + api_key; gated `client:manage_team` |
+| DELETE | `/credentials` | Disconnect AI; gated `client:manage_team` |
+| POST   | `/credentials/test` | One-token round-trip ping; returns `{ok, latency_ms, detail?}` |
+| POST   | `/notice-summary/{notice_id}` | Markdown summary + key points + deadline_iso |
+| POST   | `/notice-actions/{notice_id}` | `[{label, rationale, urgency}]` action list |
+| POST   | `/invoice-summary/{bill_id}` | Summary + anomalies (vs same-vendor history) |
+| POST   | `/invoice-actions/{bill_id}` | Action list (mark paid / flag duplicate / escalate) |
+| POST   | `/invoice-timing/{bill_id}` | Payment-timing recommendation + rationale + suggested_payment_date |
+
+The AI is **scope-locked** via the system prompt — anything outside Indian regulatory work, vendor invoices, or TaxSync workflow returns the literal `OUT_OF_SCOPE`, mapped to HTTP 422 with a friendly client-side message.
 
 Permission matrix (84-cell): see `backend/app/compliance/services/permission_registry.py` and `backend/tests/test_compliance_endpoints.py`. Roles: `compliance_head`, `legal_team`, `finance_team`, `auditor`, `ca_consultant`, `staff`, `cfo`.
 

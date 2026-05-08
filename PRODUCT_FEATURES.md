@@ -253,6 +253,25 @@ Every action — create, edit, status change, approval, share — is recorded in
 3. Roles enforce themselves automatically across the product.
 4. View the role-permission matrix in the Admin settings panel.
 
+### B13. Client Branding — Logo, Website, Address — **Available**
+
+Every onboarded client (your tenant) can register its own company logo, website, and registered office address. The logo and name then appear in the bottom-left of the sidebar so members of that tenant see their own brand alongside TaxSync (co-brand layout — Linear / Stripe pattern).
+
+**Where to find it:**
+- Sidebar → Compliance → Clients → pick a client → scroll to the **Branding** section.
+- Once saved, the logo + name auto-render in the bottom-left of the sidebar (above the user cluster) for everyone in that tenant.
+
+**How to use it:**
+1. Open the client detail page.
+2. Scroll to the **Branding** card.
+3. Drop or click the logo box — PNG, JPEG, or WEBP, up to 256 KB. SVG is rejected for security (XSS risk).
+4. Enter the website (must start with `http://` or `https://`).
+5. Enter the registered office address (multi-line).
+6. Click **Save**. Logo uploads instantly; website + address save together.
+7. Click **Remove logo** under the uploader to clear it.
+
+**Permission:** any team-management role on that client (compliance head, CA consultant). Read-access is open to anyone in the tenant — they see the logo in the sidebar without needing edit rights.
+
 ---
 
 ## C. Statutory Calendar and Alerts
@@ -305,14 +324,14 @@ A single percentage shows how well a client is doing on compliance, calculated o
 2. View the health score chip at the top.
 3. Click for the breakdown: % responded on time, average response time, overdue count.
 
-### C6. Personal and Household Bill Reminders — **Available**
+### C6. Vendor Invoice Reminders — **Available**
 
-For personal users: get reminders 3 days before, 1 day before, and on the overdue day for any household bill (utilities, telecom, credit card, OTT).
+For each compliance client, get reminders 3 days before, 1 day before, and on the overdue day for any tracked vendor invoice (utilities, telecom, subscription services, recurring vendor bills).
 
 **How to use it:**
-1. Connect Gmail — bills are detected automatically.
-2. Or add a bill manually with biller name, amount, and due date.
-3. Reminders fire on T-3, T-1, and overdue.
+1. Connect Gmail — invoices are detected automatically.
+2. Or add an invoice manually with biller name, amount, and due date.
+3. Reminders fire on T-3, T-1, and the overdue day. Capped at 3 reminders per invoice lifetime.
 
 ---
 
@@ -358,14 +377,14 @@ Emails from gov.in domains and known regulatory senders (GST, Income Tax, MCA, R
 2. Wait for the next scan.
 3. Detected regulatory emails appear as notices on the Compliance dashboard.
 
-### D5. Auto-Detect Personal and Household Bills — **Available**
+### D5. Auto-Detect Vendor Invoices — **Available**
 
-Utility, telecom, credit card, and OTT/SaaS subscription emails are automatically detected and turned into bill records, including biller name, amount, and due date.
+Utility, telecom, subscription, and other recurring vendor emails are automatically detected and turned into vendor-invoice records, including biller name, amount, and due date.
 
 **How to use it:**
 1. Connect Gmail.
 2. Wait for the scan.
-3. Bills appear on the Bill dashboard with due date and amount.
+3. Invoices appear on the **Vendor invoices** dashboard with due date and amount.
 
 ### D6. View Source Email — **Available**
 
@@ -387,62 +406,62 @@ If your Gmail token is revoked or expires, scanning stops and a "Reconnect requi
 
 ---
 
-## E. Bills and Payments
+## E. Vendor Invoices and Payments
 
-A dedicated dashboard for personal and household bills detected from Gmail or added manually.
+A dedicated dashboard for tracking the recurring vendor invoices each client owes — detected from Gmail or added manually. (Repositioned from "Bills" in v2.1 — TaxSync is enterprise-only, no consumer/household bill flavour.)
 
-### E1. Bill Dashboard with Filters — **Available**
+### E1. Vendor Invoice Dashboard with Filters — **Available**
 
-See bills bucketed into Upcoming, Due Soon, Overdue, and Paid. Per-category aggregates show how much you owe for utilities, telecom, etc.
+See invoices bucketed into Upcoming, Due Soon, Overdue, and Paid. Per-category aggregates show how much is owed across utilities, telecom, subscriptions, etc.
 
 **How to use it:**
-1. Click "Bills" in the sidebar.
+1. Sidebar → Email → **Vendor invoices**.
 2. Switch tabs: Upcoming, Due Soon, Overdue, Paid.
 3. View totals per category.
 
-### E2. Pre-Deadline Bill Reminders — **Available**
+### E2. Pre-Deadline Invoice Reminders — **Available**
 
-Reminders fire 3 days before due date, 1 day before, and on the overdue day. Each bill is capped at three reminders so your inbox does not fill up.
+Reminders fire 3 days before due date, 1 day before, and on the overdue day. Each invoice is capped at three reminders lifetime so the inbox does not fill up.
 
 **How to use it:**
-1. No setup needed once a bill exists.
+1. No setup needed once an invoice exists.
 2. Reminders arrive via email and in-app bell.
-3. Click the reminder to open the bill.
+3. Click the reminder to open the invoice.
 
 ### E3. Mark as Paid — **Available**
 
-Once you pay, mark the bill as Paid with the date, reference number, and method. The transition is logged in the audit trail.
+Once paid, mark the invoice as Paid with the date, reference number, and method. The transition is logged in the audit trail and stops further reminders.
 
 **How to use it:**
-1. Open the bill.
-2. Click "Mark as Paid".
+1. Open the invoice.
+2. Click **Mark as Paid**.
 3. Enter payment date, reference, and method.
-4. The bill moves to the Paid bucket.
+4. The invoice moves to the Paid bucket.
 
-### E4. Recurring Bill Detection — **Available**
+### E4. Recurring Invoice Detection — **Available**
 
-When a new bill arrives from the same biller and account, the system links it to the previous one as a recurring series (monthly, quarterly, or annual).
+When a new invoice arrives from the same biller and account, the system links it to the previous one as a recurring series (monthly, quarterly, or annual).
 
 **How to use it:**
-1. Bills auto-link by biller and last 4 of the account number.
-2. Open any bill to see the full series.
+1. Invoices auto-link by biller and last 4 of the account number.
+2. Open any invoice to see the full series.
 3. Spot a missing month? An anomaly alert appears in the bell.
 
 ### E5. Missing-Month Anomaly Detection — **Available**
 
-If a bill that has arrived every month for the last six months suddenly skips a cycle, the system surfaces it as an anomaly so you can check whether the bill is actually due.
+If a recurring invoice has arrived every month for the last six months and suddenly skips a cycle, the system surfaces it as an anomaly so the team can check whether the invoice is actually due.
 
 **How to use it:**
-1. Look for the "Missing bill?" alert in the notification bell.
+1. Look for the "Missing invoice?" alert in the notification bell.
 2. Open the recurring series to confirm.
-3. Add the bill manually if you have the paper copy.
+3. Add the invoice manually if a paper copy exists.
 
 ### E6. Multi-Channel Reminder Delivery — **Available**
 
-Reminders are delivered via email and in-app notification bell. SMS delivery is scaffolded and ships once telecom registration completes.
+Reminders are delivered via email and the in-app notification bell. SMS delivery is scaffolded and ships once telecom registration completes.
 
 **How to use it:**
-1. Use whichever channel you prefer to monitor.
+1. Use whichever channel is preferred for monitoring.
 2. Both update in sync — actioning one clears the other.
 
 ---
@@ -672,6 +691,87 @@ See Section G6.
 
 ---
 
+## J. BYOK AI Assistant — Bring Your Own Key
+
+A built-in AI assistant powered by **your own** Anthropic Claude or Google Gemini API key. Costs go to your provider account; TaxSync never charges for AI. The assistant is hard-prompted to only answer questions about TaxSync work — anything off-topic is refused. Available since 2026-05-08.
+
+### J1. Connect Your AI Provider — **Available**
+
+Pick a provider (Claude or Gemini), pick a model, paste your API key, save. The key is encrypted at rest using the same Fernet cipher that protects Gmail refresh tokens (INFRA-06). The plaintext is never returned to the browser after save.
+
+**Where to find it:**
+- Sidebar → Settings → **AI assistant**
+- OR: Dashboard → Quick actions → **Ask AI** tile (4th tile, violet)
+
+**How to use it:**
+1. Open Settings → AI assistant.
+2. Pick provider — Anthropic Claude or Google Gemini.
+3. The default model auto-fills (`claude-sonnet-4-6` or `gemini-1.5-flash`). Override only if your account has access to a different model.
+4. Paste your API key.
+5. Click **Test** — sends a one-token ping; success shows latency.
+6. Click **Save** — the key is encrypted and stored.
+7. Replacing the key is the same flow; **Disconnect** wipes it.
+
+**Permission:** restricted to admin-grade roles (compliance head, CA consultant). Read access (knowing which AI is connected) is open to anyone in the tenant.
+
+### J2. AI Notice Summary + Recommended Actions — **Available**
+
+On any compliance notice, two on-demand AI buttons:
+- **Summarize** — a 4-6 line digest covering authority, core demand, tax/penalty/interest amounts, deadline, and a one-word risk tier.
+- **Suggest actions** — a list of 3-5 concrete next steps for the compliance team, each with a one-line rationale and an urgency tier (high/medium/low) shown as a coloured stripe.
+
+**Where to find it:**
+- Compliance → Notices → open any notice → **AI assistant** panel at the top of the right column.
+
+**How to use it:**
+1. Open any notice (`/dashboard/compliance/notices/<id>`).
+2. Find the **AI assistant** card in the right column.
+3. Click **Summarize** — wait 2-5 seconds; markdown summary + key-points list + deadline render below.
+4. Click **Suggest actions** — action cards appear, urgency-coloured.
+
+If no AI key is connected, the panel shows **"Connect AI"** as a one-click link to Settings.
+
+### J3. AI Vendor Invoice Summary + Actions + Payment Timing — **Available**
+
+On any vendor invoice, three on-demand AI buttons:
+- **Summarize** — a 2-3 line digest plus an automatic **anomalies** list (amount unusually high vs same-vendor history, missing reference, due-date in the past, recurrence drift).
+- **Suggest actions** — 2-4 next steps (mark paid, flag duplicate, request invoice copy, schedule reminder, etc.) with rationale and urgency.
+- **Payment timing** — a recommendation (pay now / wait until T-1 / pre-pay for early-payment discount) with rationale and an optional suggested payment date, rendered in an accent-tinted box.
+
+**Where to find it:**
+- Sidebar → Email → Vendor invoices → open any invoice → **AI assistant** panel between payment-details and the action row.
+
+**How to use it:**
+1. Open any vendor invoice (`/dashboard/email/bills/<id>`).
+2. Find the **AI assistant** card.
+3. Click any of the three buttons.
+
+### J4. Scope Lock — Strictly TaxSync Work Only — **Available**
+
+The system prompt hard-restricts the AI to:
+1. Indian tax / regulatory notices (GST, Income Tax, MCA, RBI, SEBI)
+2. Compliance deadlines and response drafts
+3. Vendor invoices for the tenant's clients
+4. The drafter → reviewer → legal → CFO chain
+5. TaxSync workflow guidance
+
+Anything else — code, weather, general knowledge, jailbreak prompts, mixed in-scope+out-scope questions — gets refused with a single line. The frontend translates this into a soft toast: **"I can only help with TaxSync compliance and finance work."**
+
+This is defence-in-depth, not a cryptographic boundary — a determined user with their own key could still craft prompts to break out. But the prompt prevents accidental general-purpose usage and limits cost burn from off-topic queries.
+
+**Permission:** any active member of the tenant can run AI tasks (gated by `notice:view`). Only admins can manage the credential.
+
+### J5. Provider Cost Transparency — **Available**
+
+Costs are charged directly to the user's Anthropic or Google account. TaxSync never bills for AI usage. The Settings page shows the connected provider, model, and "last used" timestamp so admins can spot stale credentials.
+
+**How to use it:**
+1. Open Settings → AI assistant.
+2. The connected card shows: provider, model, last-used timestamp.
+3. Check your provider's billing dashboard for actual spend.
+
+---
+
 ## Pending Features (Next Releases)
 
 These features are committed but not yet shipped. Estimated release windows below.
@@ -705,7 +805,7 @@ A quick numerical view.
 
 | Bucket | Count |
 |--------|-------|
-| Available now | 64 features |
+| Available now | 70 features |
 | In Progress | 0 features |
 | Planned (v2.1) | 13 features |
 | Planned (v3.0) | 2 features |
@@ -717,14 +817,15 @@ A quick numerical view.
 | Area | Available |
 |------|-----------|
 | Document Management | 10 |
-| Compliance Notice Management | 12 |
+| Compliance Notice Management | 13 (added B13 Client Branding 2026-05-08) |
 | Statutory Calendar and Alerts | 6 |
 | Email Integration (Gmail) | 7 |
-| Bills and Payments | 6 |
+| Vendor Invoices and Payments | 6 (repositioned from "Bills and Payments" 2026-05-08) |
 | AI Document Intelligence | 6 |
 | Search and Reporting | 6 |
 | Multi-User Access and Security | 8 |
 | Analytics and Reporting | 6 (overlaps included for completeness) |
+| BYOK AI Assistant | 5 (new section J, added 2026-05-08) |
 
 ---
 
@@ -772,4 +873,4 @@ For questions, training, or onboarding support, contact:
 ---
 
 *TaxSync — Smart Document Management and Compliance System*
-*Document version: v2.0.1 — released 8 May 2026*
+*Document version: v2.1 — released 8 May 2026 (adds B13 Client Branding, Section J BYOK AI, Vendor Invoice rebrand)*
