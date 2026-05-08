@@ -193,6 +193,15 @@ class GoogleProvider(AIProvider):
             raise AIAuthError(f"gemini auth failed: {r.text[:200]}")
         if r.status_code == 429:
             raise AIRateLimitError(f"gemini rate-limited: {r.text[:200]}")
+        if r.status_code == 404:
+            # Most common 404 cause: the stored model name was retired
+            # by Google (e.g., gemini-1.5-flash → gemini-2.5-flash).
+            # Surface a user-actionable message instead of a raw dump.
+            raise AIProviderError(
+                f"Model '{self._model}' is not available on Google's API. "
+                "Update the model name in Settings → AI (current generation: "
+                "gemini-2.5-flash, gemini-2.5-pro, gemini-2.5-flash-lite)."
+            )
         if r.status_code >= 400:
             raise AIProviderError(
                 f"gemini http {r.status_code}: {r.text[:300]}"

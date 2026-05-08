@@ -706,7 +706,7 @@ Pick a provider (Claude or Gemini), pick a model, paste your API key, save. The 
 **How to use it:**
 1. Open Settings → AI assistant.
 2. Pick provider — Anthropic Claude or Google Gemini.
-3. The default model auto-fills (`claude-sonnet-4-6` or `gemini-1.5-flash`). Override only if your account has access to a different model.
+3. The default model auto-fills (`claude-sonnet-4-6` or `gemini-2.5-flash`). Override only if your account has access to a different model.
 4. Paste your API key.
 5. Click **Test** — sends a one-token ping; success shows latency.
 6. Click **Save** — the key is encrypted and stored.

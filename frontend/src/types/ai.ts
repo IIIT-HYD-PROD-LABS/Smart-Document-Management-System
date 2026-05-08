@@ -79,10 +79,12 @@ export interface ChatResponse {
 }
 
 // Sensible defaults per provider — surfaced in the Settings page so the
-// user doesn't have to memorise model identifiers.
+// user doesn't have to memorise model identifiers. Update these when a
+// provider retires a default; users with stored credentials are
+// unaffected (the model column is per-row, not derived from this map).
 export const DEFAULT_MODEL: Record<AIProvider, string> = {
     anthropic: "claude-sonnet-4-6",
-    google: "gemini-1.5-flash",
+    google: "gemini-2.5-flash",
 };
 
 export const PROVIDER_LABEL: Record<AIProvider, string> = {
