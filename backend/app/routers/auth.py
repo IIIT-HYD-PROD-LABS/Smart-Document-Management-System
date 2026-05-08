@@ -296,6 +296,58 @@ def get_auth_providers(request: Request, response: Response):
     return {"providers": providers}
 
 
+@router.get("/oauth/diag")
+@limiter.limit("30/minute")
+def oauth_diag(request: Request, response: Response):
+    """Public, no-auth diagnostic for OAuth setup.
+
+    Returns the exact redirect URIs the backend will send to each
+    provider, plus a hint of which client ID is configured (first 12
+    chars only, since the full client_id is already public anyway —
+    it's visible in every OAuth URL).
+
+    Use case: someone setting up TaxSync hits `redirect_uri_mismatch`,
+    they don't know what URI to add to Google Cloud Console, and
+    grepping the source is friction. Hitting this endpoint or
+    /oauth-setup on the frontend tells them exactly what to paste.
+    """
+    from app.services.oauth_service import _get_backend_url
+
+    backend = _get_backend_url()
+    frontend = (settings.FRONTEND_URL or "http://localhost:3000").rstrip("/")
+
+    def _hint(client_id: str) -> str | None:
+        return f"{client_id[:12]}…" if client_id else None
+
+    return {
+        "backend_url": backend,
+        "frontend_url": frontend,
+        "providers": {
+            "google": {
+                "configured": bool(settings.GOOGLE_CLIENT_ID),
+                "client_id_hint": _hint(settings.GOOGLE_CLIENT_ID),
+                "redirect_uris": [
+                    f"{backend}/api/auth/callback/google",
+                    f"{backend}/api/email/gmail/oauth/callback",
+                ],
+                "console_url": "https://console.cloud.google.com/apis/credentials",
+            },
+            "microsoft": {
+                "configured": bool(settings.MICROSOFT_CLIENT_ID),
+                "client_id_hint": _hint(settings.MICROSOFT_CLIENT_ID),
+                "redirect_uris": [
+                    f"{backend}/api/auth/callback/microsoft",
+                ],
+                "console_url": (
+                    "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/"
+                    "ApplicationsListBlade"
+                ),
+            },
+        },
+        "javascript_origins": [frontend, backend],
+    }
+
+
 @router.get("/oauth/google")
 @limiter.limit(settings.RATE_LIMIT_AUTH)
 def google_auth_url(request: Request, response: Response):

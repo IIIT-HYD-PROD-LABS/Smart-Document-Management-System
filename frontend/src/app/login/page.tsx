@@ -175,6 +175,19 @@ function LoginInner() {
                                     </button>
                                 )}
                             </div>
+                            <p className="text-center text-[11.5px] text-[var(--text-subtle)] mt-3">
+                                Hitting{" "}
+                                <code className="font-mono text-[10.5px]">
+                                    redirect_uri_mismatch
+                                </code>
+                                ?{" "}
+                                <Link
+                                    href="/oauth-setup"
+                                    className={`text-[var(--text-secondary)] hover:text-[var(--accent)] underline-offset-2 hover:underline transition-colors rounded-sm ${focusRing}`}
+                                >
+                                    OAuth setup help
+                                </Link>
+                            </p>
                         </>
                     )}
                 </div>
