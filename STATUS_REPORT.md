@@ -26,6 +26,26 @@ Production-incident-driven session. Started with a Supabase pooler outage (rotat
 
 **Operational note (out of band):** A Supabase Supavisor `ECIRCUITBREAKER` was triggered earlier in the session by repeated bad-credential connection attempts from the backend healthcheck loop. Recovery procedure documented in auto-memory: stop the backend container before rotating credentials, then `docker compose up -d --force-recreate backend` to load the new env. Memory `project_supabase_config.md` and `project_perf_listener_fix.md` updated with the full recipe.
 
+**Phase 17c — Agent-team review sweep (2026-05-09, commit `8f81ef3`):**
+
+Spawned 3 parallel review agents on the 11-commit session diff: `code-reviewer`, `security-auditor`, plus a follow-up `security-auditor` pass on the UserMenu commit. Combined verdict: 2 HIGH + 4 MEDIUM real findings (plus several INFO items already mitigated). All HIGH and MEDIUM closed in `8f81ef3`.
+
+Findings closed:
+- **HIGH (latent crash)** — `backend/app/compliance/middleware/tenant_context.py` had been writing `_tenant_state` and `_tenant_dirty` as attributes on the psycopg2 connection object (a C extension type with no `__dict__`). The original `except: pass` swallowed the AttributeError silently — meaning the dedup cache had been a no-op the whole time (the perf gain came purely from collapsing 3 SET round-trips into 1). Setting `_tenant_dirty` BEFORE the try/except in this session's earlier commit then surfaced the AttributeError as a hard request-killing crash mid-tenant-context-set. Moved cache state to `conn.connection.info` / `connection_record.info` (SQLAlchemy's pool-record dict, persistent across checkouts). Dedup now actually works; combined-SET reduction still the dominant win.
+- **HIGH (frontend)** — `frontend/src/app/dashboard/compliance/clients/page.tsx` `useQueries` queryFn was calling `setActiveClientId(m.client_id)` for every membership during fan-out, mutating global Zustand tenant state non-deterministically on page visit. Removed the side-effect; selection now happens only on the Link `onClick`. Also gated the `useQueries.enabled` flag on `user?.role === "admin"` so non-admins don't trigger backend `GET /clients/{id}` for every membership before the render guard short-circuits.
+- **MEDIUM** — `frontend/src/app/dashboard/model-evaluation/page.tsx` had no frontend admin guard. Backend `require_admin` returned 403, but the page rendered for non-admins anyway. Added the same `useEffect` redirect + render-time `return null` pattern used in `/dashboard/admin` and `/compliance/clients/page.tsx`.
+- **MEDIUM** — `frontend/src/components/UserMenu.tsx` outside-click handler used `mousedown`, which races with Link `click` on touch devices. Switched to `click`. Added focus management: on open, focus the first `menuitem`; on Escape close, return focus to the trigger button (WCAG 2.4.3). Verified live via `document.activeElement` probe.
+- **MEDIUM** — `frontend/src/app/dashboard/compliance/page.tsx` `setStatusFilter` cast a plain `string | undefined` to `NoticeFilters["status"]` at the call site, hiding any typo from TypeScript. Typed `workflowStages[].statusFilter` against the same union so typos are build-time errors. Also replaced the disabled `<button>` for Overdue (dead UX) with a plain `<div>`, so AT users see a presentational tile rather than a button with no action.
+
+Findings deferred (already mitigated per agent or out-of-scope):
+- INFO — `tenant_context.py` "wrong cache for transaction-pooled connections": the agent assumed pgbouncer transaction mode. Our deployment uses Supavisor session mode (port 5432 per `docker-compose.override.yml`); the listener now documents this requirement explicitly.
+- INFO — UserMenu `focusout` close on screen-reader tab-past: covered by the focus-management fix (focus leaving the menu via Escape returns to trigger; Tab past last item is a minor a11y nit, not a security finding).
+- MEDIUM — `/compliance/clients/me` returns expired memberships in JSON: tracked as a follow-up; defense-in-depth, doesn't change the tenant-isolation outcome of this patch.
+
+Verified live via Playwright across 12 pages: zero console errors anywhere; filter card `aria-pressed` toggles correctly; UserMenu opens with focus on first menuitem; ESC closes and returns focus to trigger; backend serves `/api/health` 200 with no `AttributeError` after restart.
+
+---
+
 **Phase 17b — UserMenu popover, sidebar collapsed to 3 groups (2026-05-09, commit `852fe4d`):**
 
 User feedback after Phase 4: "Profile section should not be in the sidebar; click on the profile area to open it. Admin too — only admin uses it." Implemented via a new `UserMenu` popover that opens upward from the user cluster at the bottom of the sidebar.
