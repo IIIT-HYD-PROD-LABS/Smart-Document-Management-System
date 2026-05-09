@@ -8,10 +8,12 @@ import {
     FiGlobe,
     FiPlus,
     FiSearch,
+    FiBriefcase,
 } from "react-icons/fi";
 import Link from "next/link";
 import { complianceApi } from "@/lib/api/compliance";
 import { useCurrentClient } from "@/stores/currentClientStore";
+import { useAuth } from "@/context/AuthContext";
 import {
     ROLES_ELIGIBLE_FOR_CROSS_CLIENT,
     type Membership,
@@ -39,6 +41,15 @@ export function ClientSwitcher() {
         setCrossClientMode,
         setEligibleForCrossClient,
     } = useCurrentClient();
+    const { user } = useAuth();
+
+    // Tenant-isolation hardening (Phase 4 / 2026-05-09): only the platform
+    // admin (users.role === 'admin') gets the multi-org switcher and the
+    // cross-client toggle. Every other user is pinned to their single
+    // membership and never sees that other organizations exist. Even if a
+    // non-admin somehow has multiple memberships, they only see the first
+    // one (the SaaS contract assumes one org per non-admin user).
+    const isPlatformAdmin = user?.role === "admin";
 
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -49,14 +60,30 @@ export function ClientSwitcher() {
         queryFn: () => complianceApi.listMyMemberships().then((r) => r.data),
     });
 
-    // Determine eligibility for cross-client mode (any membership has eligible role)
+    // Determine eligibility for cross-client mode. Cross-client view is
+    // platform-admin only — the previous compliance_role gate (allowing
+    // ca_consultant / compliance_head / cfo to flip the toggle) leaked org
+    // existence to non-admin users in the multi-tenant SaaS deployment.
     useEffect(() => {
         if (!memberships) return;
-        const eligible = memberships.some((m) =>
-            ROLES_ELIGIBLE_FOR_CROSS_CLIENT.includes(m.compliance_role)
-        );
+        const eligible =
+            isPlatformAdmin &&
+            memberships.some((m) =>
+                ROLES_ELIGIBLE_FOR_CROSS_CLIENT.includes(m.compliance_role)
+            );
         setEligibleForCrossClient(eligible);
-    }, [memberships, setEligibleForCrossClient]);
+    }, [memberships, setEligibleForCrossClient, isPlatformAdmin]);
+
+    // Auto-pin activeClientId to the user's single membership when they
+    // have exactly one. Non-admin users always end up here (the contract
+    // assumes one org per non-admin user) and admins with one membership
+    // get the same convenience.
+    useEffect(() => {
+        if (!memberships || memberships.length === 0) return;
+        if (memberships.length === 1 && activeClientId === null) {
+            setActiveClientId(memberships[0].client_id);
+        }
+    }, [memberships, activeClientId, setActiveClientId]);
 
     // Validate persisted activeClientId against fresh memberships on mount.
     // If the user no longer has access (auditor expired, membership revoked),
@@ -122,6 +149,40 @@ export function ClientSwitcher() {
         },
         [setActiveClientId, setCrossClientMode]
     );
+
+    // Tenant isolation: non-admin users (and admins with a single
+    // membership) get a static pill instead of the dropdown — they should
+    // never see that other organizations exist. The dropdown is gated to
+    // platform admins with multiple memberships only.
+    const showSwitcherDropdown =
+        isPlatformAdmin && (memberships?.length ?? 0) > 1;
+
+    if (!showSwitcherDropdown) {
+        return (
+            <div
+                className="
+                    inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-[13px]
+                    bg-[var(--bg-elevated)] border border-[var(--border-default)]
+                    text-[var(--text-primary)]
+                "
+                aria-label="Your organization"
+                title={
+                    activeClient?.name ??
+                    (activeClientId ? `Org #${activeClientId}` : "Your organization")
+                }
+            >
+                <FiBriefcase className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                <span className="truncate max-w-[180px]">
+                    {activeClient?.name ??
+                        (activeClientId
+                            ? `Org #${activeClientId}`
+                            : isLoading
+                                ? "Loading…"
+                                : "Your organization")}
+                </span>
+            </div>
+        );
+    }
 
     return (
         <div className="relative" ref={dropdownRef}>
