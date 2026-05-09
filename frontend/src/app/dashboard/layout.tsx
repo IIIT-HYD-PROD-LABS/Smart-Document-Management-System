@@ -37,6 +37,7 @@ import {
     FiClipboard,
     FiGlobe,
     FiCpu,
+    FiUser,
 } from "react-icons/fi";
 
 /**
@@ -60,47 +61,42 @@ type NavGroup = {
     items: NavItem[];
 };
 
+// Single-tenant deployment model: each customer gets their own deployment
+// with their own org, so cross-client navigation (Clients list,
+// Cross-entity search) is intentionally not surfaced in the sidebar.
+// Routes still exist for direct admin access; the multi-tenant RLS
+// machinery underneath stays intact.
 const NAV_GROUPS: NavGroup[] = [
     {
         label: "Core",
         items: [
             { href: "/dashboard", icon: FiHome, label: "Overview", roles: ["admin", "editor", "viewer"] },
-            { href: "/dashboard/search", icon: FiSearch, label: "Search", roles: ["admin", "editor", "viewer"] },
         ],
     },
     {
-        label: "Documents",
+        label: "Workspace",
         items: [
-            { href: "/dashboard/upload", icon: FiUpload, label: "Upload", roles: ["admin", "editor"] },
+            // Documents page exposes Upload / Shared / Search as inline
+            // action buttons so the four document workflows live on one page.
             { href: "/dashboard/documents", icon: FiFileText, label: "Documents", roles: ["admin", "editor", "viewer"] },
-            { href: "/dashboard/shared", icon: FiShare2, label: "Shared", roles: ["admin", "editor", "viewer"] },
             { href: "/dashboard/analytics", icon: FiBarChart2, label: "Analytics", roles: ["admin", "editor", "viewer"] },
-        ],
-    },
-    {
-        label: "Email",
-        items: [
-            { href: "/dashboard/email/connect", icon: FiMail, label: "Connect", roles: ["admin", "editor"] },
-            { href: "/dashboard/email/settings", icon: FiSettings, label: "Settings", roles: ["admin", "editor"] },
-            { href: "/dashboard/email/activity", icon: FiInbox, label: "Activity", roles: ["admin", "editor", "viewer"] },
-            { href: "/dashboard/email/bills", icon: FiClipboard, label: "Vendor invoices", roles: ["admin", "editor", "viewer"] },
         ],
     },
     {
         label: "Compliance",
         items: [
             { href: "/dashboard/compliance", icon: FiShield, label: "Notices", roles: ["admin", "editor", "viewer"] },
-            { href: "/dashboard/compliance/clients", icon: FiBriefcase, label: "Clients", roles: ["admin", "editor"] },
             { href: "/dashboard/compliance/review", icon: FiUserCheck, label: "Review queue", roles: ["admin", "editor"] },
             { href: "/dashboard/compliance/calendar", icon: FiCalendar, label: "Calendar", roles: ["admin", "editor", "viewer"] },
-            { href: "/dashboard/compliance/search", icon: FiBookOpen, label: "Cross-entity", roles: ["admin", "editor", "viewer"] },
             { href: "/dashboard/compliance/audit", icon: FiActivity, label: "Audit log", roles: ["admin", "editor", "viewer"] },
             { href: "/dashboard/compliance/reports", icon: FiBarChart2, label: "Reports", roles: ["admin", "editor", "viewer"] },
         ],
     },
     {
-        label: "Settings",
+        label: "Profile",
         items: [
+            { href: "/dashboard/profile", icon: FiUser, label: "Account", roles: ["admin", "editor", "viewer"] },
+            { href: "/dashboard/email", icon: FiMail, label: "Email center", roles: ["admin", "editor", "viewer"] },
             { href: "/dashboard/settings/ai", icon: FiCpu, label: "AI assistant", roles: ["admin", "editor", "viewer"] },
         ],
     },
@@ -108,6 +104,7 @@ const NAV_GROUPS: NavGroup[] = [
         label: "Admin",
         items: [
             { href: "/dashboard/admin", icon: FiShield, label: "Admin", roles: ["admin"] },
+            { href: "/dashboard/compliance/clients", icon: FiBriefcase, label: "Clients", roles: ["admin"] },
             { href: "/dashboard/model-evaluation", icon: FiBarChart2, label: "Model eval", roles: ["admin"] },
         ],
     },

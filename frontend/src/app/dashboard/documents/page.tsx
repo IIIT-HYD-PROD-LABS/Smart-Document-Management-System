@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
 import { ConfidenceBadge, StatusBadge, CategoryBadge, LoadingSpinner } from "@/components";
-import { FiFileText, FiTrash2, FiFilter, FiCheckSquare, FiSquare, FiX, FiMail } from "react-icons/fi";
+import { FiFileText, FiTrash2, FiFilter, FiCheckSquare, FiSquare, FiX, FiMail, FiUpload, FiShare2, FiSearch } from "react-icons/fi";
+import Link from "next/link";
 import toast from "react-hot-toast";
 
 const categories = ["all", "bills", "upi", "tickets", "tax", "bank", "invoices", "unknown"];
@@ -104,6 +105,50 @@ export default function DocumentsPage() {
                         {docs.length} document{docs.length !== 1 ? "s" : ""} in your library
                     </p>
                 </div>
+            </div>
+
+            {/* Workspace action row — Upload, Shared, Search consolidated here
+                so the document workflows live on one page (Phase 17 IA reset). */}
+            <div className="grid grid-cols-3 gap-3 mb-6" role="group" aria-label="Document workspace actions">
+                <Link
+                    href="/dashboard/upload"
+                    className="group flex items-center gap-3 px-4 py-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] hover:border-[var(--accent-edge)] hover:bg-[var(--accent-soft)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]"
+                    aria-label="Upload a new document"
+                >
+                    <span className="w-9 h-9 rounded-md bg-[var(--accent-soft)] flex items-center justify-center shrink-0 group-hover:bg-[var(--accent)] transition-colors">
+                        <FiUpload className="w-4 h-4 text-[var(--accent)] group-hover:text-white transition-colors" />
+                    </span>
+                    <div className="min-w-0">
+                        <p className="text-[13.5px] font-semibold text-[var(--text-primary)] tracking-tight">Upload</p>
+                        <p className="text-[11.5px] text-[var(--text-muted)] truncate">PDF, image, or scan</p>
+                    </div>
+                </Link>
+                <Link
+                    href="/dashboard/shared"
+                    className="group flex items-center gap-3 px-4 py-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] hover:border-[var(--accent-edge)] hover:bg-[var(--accent-soft)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]"
+                    aria-label="Open documents shared with you"
+                >
+                    <span className="w-9 h-9 rounded-md bg-[var(--accent-soft)] flex items-center justify-center shrink-0 group-hover:bg-[var(--accent)] transition-colors">
+                        <FiShare2 className="w-4 h-4 text-[var(--accent)] group-hover:text-white transition-colors" />
+                    </span>
+                    <div className="min-w-0">
+                        <p className="text-[13.5px] font-semibold text-[var(--text-primary)] tracking-tight">Shared</p>
+                        <p className="text-[11.5px] text-[var(--text-muted)] truncate">Documents shared with you</p>
+                    </div>
+                </Link>
+                <Link
+                    href="/dashboard/search"
+                    className="group flex items-center gap-3 px-4 py-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] hover:border-[var(--accent-edge)] hover:bg-[var(--accent-soft)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]"
+                    aria-label="Search across all documents"
+                >
+                    <span className="w-9 h-9 rounded-md bg-[var(--accent-soft)] flex items-center justify-center shrink-0 group-hover:bg-[var(--accent)] transition-colors">
+                        <FiSearch className="w-4 h-4 text-[var(--accent)] group-hover:text-white transition-colors" />
+                    </span>
+                    <div className="min-w-0">
+                        <p className="text-[13.5px] font-semibold text-[var(--text-primary)] tracking-tight">Search</p>
+                        <p className="text-[11.5px] text-[var(--text-muted)] truncate">Find by name, content, tag</p>
+                    </div>
+                </Link>
             </div>
 
             {/* Bulk action bar */}
