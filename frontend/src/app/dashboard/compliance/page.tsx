@@ -145,14 +145,16 @@ export default function ComplianceDashboardPage() {
 
     // Workflow funnel: turns the by_status map into action-oriented buckets
     // so the page reads as "what needs attention" rather than just "list of
-    // notices". Each card is also a filter shortcut into the table below.
+    // notices". Each interactive card is a filter shortcut into the table
+    // below. statusFilter is typed against NoticeFilters["status"] (a
+    // NoticeStatus enum union) so a typo here is a build-time error.
     const workflowStages: Array<{
         key: string;
         label: string;
         sub: string;
         count: number;
         tone: "neutral" | "info" | "warn" | "danger";
-        statusFilter?: string;
+        statusFilter?: NoticeFilters["status"];
     }> = [
         {
             key: "new",
@@ -184,14 +186,14 @@ export default function ComplianceDashboardPage() {
             sub: "Past response deadline",
             count: overdue,
             tone: "danger",
+            // statusFilter intentionally omitted — there is no derived
+            // "overdue" predicate in NoticeFilters, so this card renders
+            // as a non-interactive presentational tile, not a button.
         },
     ];
 
-    const setStatusFilter = (status: string | undefined) => {
-        setFilters((prev) => ({
-            ...prev,
-            status: (status ?? "") as NoticeFilters["status"],
-        }));
+    const setStatusFilter = (status: NoticeFilters["status"] | undefined) => {
+        setFilters((prev) => ({ ...prev, status: status ?? "" }));
         setPage(1);
     };
 
@@ -251,38 +253,14 @@ export default function ComplianceDashboardPage() {
                                 warn: "text-[var(--warning)]",
                                 danger: "text-[var(--danger)]",
                             }[stage.tone];
+                            const isInteractive = stage.statusFilter !== undefined;
                             const filterActive =
-                                stage.statusFilter !== undefined &&
-                                filters.status === stage.statusFilter;
-                            const isOverdueAndZero =
-                                stage.key === "overdue" && stage.count === 0;
-                            return (
-                                <button
-                                    key={stage.key}
-                                    type="button"
-                                    onClick={() =>
-                                        stage.statusFilter !== undefined &&
-                                        setStatusFilter(
-                                            filterActive ? undefined : stage.statusFilter
-                                        )
-                                    }
-                                    disabled={stage.statusFilter === undefined}
-                                    aria-pressed={filterActive}
-                                    className={`
-                                        text-left p-4 rounded-lg border bg-[var(--bg-surface)]
-                                        ${toneRing}
-                                        ${stage.statusFilter !== undefined
-                                            ? "cursor-pointer hover:bg-[var(--bg-hover)]"
-                                            : isOverdueAndZero
-                                                ? "opacity-70"
-                                                : ""}
-                                        ${filterActive ? "ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--bg-page)]" : ""}
-                                        transition-colors duration-150
-                                        focus-visible:outline-none focus-visible:ring-2
-                                        focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
-                                        focus-visible:ring-offset-[var(--bg-page)]
-                                    `}
-                                >
+                                isInteractive && filters.status === stage.statusFilter;
+
+                            // Card content (shared between button + div renderers
+                            // so the visual is identical).
+                            const inner = (
+                                <>
                                     <div className="flex items-center justify-between">
                                         <span className={`text-[11px] font-medium uppercase tracking-wider ${toneLabel}`}>
                                             {stage.label}
@@ -294,11 +272,51 @@ export default function ComplianceDashboardPage() {
                                     <p className="text-[11.5px] text-[var(--text-muted)] mt-2 leading-snug">
                                         {stage.sub}
                                     </p>
-                                    {stage.statusFilter !== undefined && (
+                                    {isInteractive && (
                                         <p className="text-[10.5px] text-[var(--text-subtle)] mt-2 uppercase tracking-wider">
                                             {filterActive ? "Filter active — click to clear" : "Click to filter"}
                                         </p>
                                     )}
+                                </>
+                            );
+
+                            const baseClasses = `
+                                text-left p-4 rounded-lg border bg-[var(--bg-surface)]
+                                ${toneRing}
+                                transition-colors duration-150
+                            `;
+
+                            // Non-interactive cards (Overdue) render as plain
+                            // divs — no disabled <button>, no fake hover. The
+                            // count + tone communicate severity on their own.
+                            if (!isInteractive) {
+                                return (
+                                    <div key={stage.key} className={baseClasses}>
+                                        {inner}
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <button
+                                    key={stage.key}
+                                    type="button"
+                                    onClick={() =>
+                                        setStatusFilter(
+                                            filterActive ? undefined : stage.statusFilter
+                                        )
+                                    }
+                                    aria-pressed={filterActive}
+                                    className={`
+                                        ${baseClasses}
+                                        cursor-pointer hover:bg-[var(--bg-hover)]
+                                        ${filterActive ? "ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--bg-page)]" : ""}
+                                        focus-visible:outline-none focus-visible:ring-2
+                                        focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
+                                        focus-visible:ring-offset-[var(--bg-page)]
+                                    `}
+                                >
+                                    {inner}
                                 </button>
                             );
                         })}

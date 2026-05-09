@@ -45,6 +45,9 @@ export default function ClientsListPage() {
         }
     }, [authLoading, user, router]);
 
+    // Used by the row-click handler further down. Removed from the
+    // useQueries queryFn (where it caused non-deterministic global
+    // mutation on page visit) — selection now happens on user intent.
     const setActiveClientId = useCurrentClient((s) => s.setActiveClientId);
 
     const { data: memberships, isLoading, error } = useQuery<Membership[]>({
@@ -52,20 +55,26 @@ export default function ClientsListPage() {
         queryFn: () => complianceApi.listMyMemberships().then((r) => r.data),
     });
 
-    // Fan-out fetch the actual client names — listMyMemberships returns
-    // only ids, but the user expects names. The detail-page useEffect
-    // sets the active client BEFORE its own getClient fires; here we do
-    // the same just in time for each row's query so a fresh-page-load
-    // shows real names instead of "Client #206".
+    // Fan-out fetch the actual client names so each row shows a real
+    // name instead of "Client #206". Two hardenings vs the prior
+    // implementation:
+    //   1. setActiveClientId is NOT called here — it used to fire inside
+    //      the queryFn for every membership, mutating the global Zustand
+    //      tenant state in non-deterministic order on page visit. The
+    //      Link's onClick (further down) handles selection on user
+    //      intent only.
+    //   2. enabled is gated on user.role === "admin". The render-guard
+    //      below is sufficient for visual isolation, but we don't want
+    //      non-admins to fire backend GETs for org metadata at all.
+    const isAdmin = user?.role === "admin";
     const clientQueries = useQueries({
         queries: (memberships ?? []).map((m) => ({
             queryKey: ["client", m.client_id],
             queryFn: async () => {
-                setActiveClientId(m.client_id);
                 const { data } = await complianceApi.getClient(m.client_id);
                 return data;
             },
-            enabled: Boolean(memberships),
+            enabled: Boolean(memberships) && isAdmin,
             staleTime: 60_000,
         })),
     });

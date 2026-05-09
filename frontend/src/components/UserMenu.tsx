@@ -67,14 +67,18 @@ export function UserMenu({
 }) {
     const [open, setOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
 
     const isAdmin = user.role === "admin";
     const displayName =
         user.full_name?.trim() || user.username || user.email || "User";
     const initial = displayName.charAt(0).toUpperCase();
 
-    // Outside-click + Escape close. Same pattern as ClientSwitcher
-    // (WCAG 2.1.1 keyboard accessibility).
+    // Outside-click + Escape close. WCAG 2.1.1 keyboard accessibility.
+    // Uses `click` (not `mousedown`) so a Link inside the menu still
+    // gets its onClick before the document handler closes the menu —
+    // important on touch devices where mousedown-then-click can race.
     useEffect(() => {
         if (!open) return;
         const handleClick = (e: MouseEvent) => {
@@ -86,14 +90,30 @@ export function UserMenu({
             }
         };
         const handleKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") setOpen(false);
+            if (e.key === "Escape") {
+                setOpen(false);
+                // Return focus to the trigger so keyboard users don't
+                // get stranded after dismissing the popover.
+                triggerRef.current?.focus();
+            }
         };
-        document.addEventListener("mousedown", handleClick);
+        document.addEventListener("click", handleClick);
         document.addEventListener("keydown", handleKey);
         return () => {
-            document.removeEventListener("mousedown", handleClick);
+            document.removeEventListener("click", handleClick);
             document.removeEventListener("keydown", handleKey);
         };
+    }, [open]);
+
+    // When the menu opens, move focus to the first menuitem so screen
+    // reader + keyboard navigation lands inside the popover instead of
+    // staying on the trigger.
+    useEffect(() => {
+        if (!open || !menuRef.current) return;
+        const first = menuRef.current.querySelector<HTMLElement>(
+            '[role="menuitem"]'
+        );
+        first?.focus();
     }, [open]);
 
     const handleSignOut = async () => {
@@ -104,6 +124,7 @@ export function UserMenu({
     return (
         <div ref={containerRef} className="relative">
             <button
+                ref={triggerRef}
                 type="button"
                 onClick={() => setOpen((v) => !v)}
                 aria-haspopup="menu"
@@ -154,6 +175,7 @@ export function UserMenu({
 
             {open && (
                 <div
+                    ref={menuRef}
                     role="menu"
                     aria-label="Account menu"
                     className="

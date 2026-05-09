@@ -105,9 +105,27 @@ def register_tenant_listener(engine) -> None:
         # WAN-perf hardening: when the same tenant tuple has already been
         # SET on this connection, skip the redundant round-trip. Cleared on
         # checkin so the next request starts blank.
-        dbapi = conn.connection.driver_connection
-        if getattr(dbapi, "_tenant_state", None) == new_state:
+        #
+        # IMPORTANT: this dedup assumes Supavisor SESSION-mode pooling
+        # (Supabase pooler port 5432). It is NOT safe under transaction-
+        # mode pooling (port 6543), where set_config(..., is_local=false)
+        # values do not persist across transactions and `_tenant_state`
+        # would falsely match. The override file enforces port 5432; if
+        # the deployment ever flips to 6543, this listener must change.
+        # State on conn.connection.info (PoolProxiedConnection dict that
+        # mirrors connection_record.info and persists across checkouts).
+        # The previous attribute-on-psycopg2-conn approach raised
+        # AttributeError silently inside `except: pass`, so dedup never
+        # actually worked. Combined-SET round-trip reduction is what
+        # delivered the perf gain; this fix makes dedup work too.
+        info = conn.connection.info
+        if info.get("_tenant_state") == new_state:
             return
+        # Mark dirty BEFORE issuing the SQL so checkin cleanup always
+        # runs after any attempt — even one that raised mid-execute. Was
+        # a security-auditor finding: order matters for fail-closed
+        # tenant context across a connection that gets recycled.
+        info["_tenant_dirty"] = True
         try:
             # Combined into ONE round trip (was 3 separate executes).
             # set_config(name, value, is_local=false) → session-scoped,
@@ -119,12 +137,20 @@ def register_tenant_listener(engine) -> None:
                 "set_config('app.user_id', %s, false)",
                 new_state,
             )
-            dbapi._tenant_state = new_state
-            dbapi._tenant_dirty = True
-        except Exception:
-            # Listener errors must never crash the request — RLS will
-            # fail-closed (no rows) rather than permitting cross-tenant access.
-            pass
+            info["_tenant_state"] = new_state
+        except Exception as exc:
+            # Invalidate the cache so the next call cannot match the
+            # shortcut against state Postgres no longer has — fail-open
+            # to a re-attempt rather than silently skip. Cleanup will
+            # still run on checkin because _tenant_dirty was set above.
+            info["_tenant_state"] = None
+            # Log but do not re-raise: RLS still fail-closes when the
+            # tenant context is missing, and we don't want a transient
+            # listener failure to crash an otherwise-valid request.
+            import logging
+            logging.getLogger(__name__).warning(
+                "tenant_context listener failed to set session state: %r", exc
+            )
 
     @sa_event.listens_for(engine, "checkin")
     def _clear_tenant_on_checkin(dbapi_connection, connection_record):
@@ -144,8 +170,10 @@ def register_tenant_listener(engine) -> None:
         # WAN-perf hardening: skip cleanup when this connection never wrote
         # any tenant state during the just-finished request (e.g. /api/health,
         # pool pre_ping). _tenant_dirty is set by before_cursor_execute when
-        # SET was issued. If it never ran, the session is already clean.
-        if not getattr(dbapi_connection, "_tenant_dirty", False):
+        # SET was issued. State lives on connection_record.info (the same
+        # dict the per-cursor handler reads via conn.connection.info).
+        info = connection_record.info
+        if not info.get("_tenant_dirty"):
             return
         try:
             cur = dbapi_connection.cursor()
@@ -159,8 +187,8 @@ def register_tenant_listener(engine) -> None:
             cur.close()
             if not getattr(dbapi_connection, "autocommit", True):
                 dbapi_connection.commit()
-            dbapi_connection._tenant_state = None
-            dbapi_connection._tenant_dirty = False
+            info["_tenant_state"] = None
+            info["_tenant_dirty"] = False
         except Exception:
             try:
                 if not getattr(dbapi_connection, "autocommit", True):

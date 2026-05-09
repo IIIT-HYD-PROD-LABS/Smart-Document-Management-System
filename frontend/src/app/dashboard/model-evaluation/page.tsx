@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { mlApi } from "@/lib/api";
 import { LoadingSpinner } from "@/components";
+import { useAuth } from "@/context/AuthContext";
 import { FiBarChart2 } from "react-icons/fi";
 
 interface CategoryMetrics {
@@ -41,9 +43,20 @@ function accuracyBgColor(value: number): string {
 }
 
 export default function ModelEvaluationPage() {
+    const { user, isLoading: authLoading } = useAuth();
+    const router = useRouter();
     const [report, setReport] = useState<EvaluationReport | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Admin-only route. Backend require_admin gate already returns 403,
+    // but the page should not render at all for non-admins (matches the
+    // pattern in /dashboard/admin/page.tsx and /compliance/clients/page.tsx).
+    useEffect(() => {
+        if (!authLoading && user && user.role !== "admin") {
+            router.replace("/dashboard");
+        }
+    }, [authLoading, user, router]);
 
     useEffect(() => {
         const fetchReport = async () => {
@@ -62,6 +75,10 @@ export default function ModelEvaluationPage() {
         };
         fetchReport();
     }, []);
+
+    // Render-time guard so non-admins don't see metrics for the brief
+    // window before the redirect fires. Placed AFTER all hooks.
+    if (!authLoading && user && user.role !== "admin") return null;
 
     if (loading) {
         return (
