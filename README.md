@@ -2,7 +2,7 @@ TaxSync
 
 **AI-powered document management + compliance tracking system** built for IIIT Hyderabad Production Labs. Upload any document — PDFs, scanned images, DOCX — and the system automatically extracts text via OCR, classifies it using machine learning, and makes it searchable. v2.0 layers a multi-tenant **compliance notice tracking** workflow on top: ingest GST/IT/MCA/RBI/SEBI notices, route through a 4-stage approval pipeline, fire deadline alerts, and export per-client compliance reports.
 
-**Current status (2026-05-08):** v1.0 SHIPPED · v2.0 Phases 9-13 CODE-COMPLETE · v2.0.1 patch in production · v2.1 client-session changes shipped (per-tenant branding + BYOK AI + vendor-invoice rebrand) · 389 backend tests GREEN · Vercel deploy: Ready · See [STATUS_REPORT.md](./STATUS_REPORT.md) for the full ship log.
+**Current status (2026-05-09):** v1.0 SHIPPED · v2.0 Phases 9-13 CODE-COMPLETE · v2.0.1 patch in production · v2.1 shipped (per-tenant branding + BYOK AI + vendor-invoice rebrand) · **v2.1.1 IA reset shipped 2026-05-09**: sidebar consolidated 19→14 items, new Profile section, Documents page is now a hub for Upload/Shared/Search, tenant-listener batching cuts WAN round-trips and roughly halves `/api/health` latency, dashboard active-client query deduped via shared queryKey · 502+ backend tests GREEN · CI green on `main` · See [STATUS_REPORT.md](./STATUS_REPORT.md) for the full ship log.
 
 ---
 
