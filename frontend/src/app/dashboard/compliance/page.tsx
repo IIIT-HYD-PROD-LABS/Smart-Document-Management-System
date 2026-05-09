@@ -135,6 +135,7 @@ export default function ComplianceDashboardPage() {
     const distinctAuthorities = dashboard
         ? Object.keys(dashboard.by_authority ?? {}).length
         : 0;
+    const byStatus = dashboard?.by_status ?? {};
     const byRiskTier = dashboard?.by_risk_tier ?? {};
     const unscored = byRiskTier.unscored ?? totalNotices;
     const scoredTotal = RISK_CONFIG.reduce(
@@ -142,20 +143,72 @@ export default function ComplianceDashboardPage() {
         0
     );
 
+    // Workflow funnel: turns the by_status map into action-oriented buckets
+    // so the page reads as "what needs attention" rather than just "list of
+    // notices". Each card is also a filter shortcut into the table below.
+    const workflowStages: Array<{
+        key: string;
+        label: string;
+        sub: string;
+        count: number;
+        tone: "neutral" | "info" | "warn" | "danger";
+        statusFilter?: string;
+    }> = [
+        {
+            key: "new",
+            label: "New",
+            sub: "Just arrived — needs triage",
+            count: byStatus.received ?? 0,
+            tone: "info",
+            statusFilter: "received",
+        },
+        {
+            key: "in_review",
+            label: "In review",
+            sub: "Being worked right now",
+            count: byStatus.under_review ?? 0,
+            tone: "neutral",
+            statusFilter: "under_review",
+        },
+        {
+            key: "drafted",
+            label: "Awaiting submission",
+            sub: "Response drafted, not filed",
+            count: byStatus.response_drafted ?? 0,
+            tone: "warn",
+            statusFilter: "response_drafted",
+        },
+        {
+            key: "overdue",
+            label: "Overdue",
+            sub: "Past response deadline",
+            count: overdue,
+            tone: "danger",
+        },
+    ];
+
+    const setStatusFilter = (status: string | undefined) => {
+        setFilters((prev) => ({
+            ...prev,
+            status: (status ?? "") as NoticeFilters["status"],
+        }));
+        setPage(1);
+    };
+
     return (
         <div className="space-y-6">
             {/* ── Hero header ─────────────────────────────────────── */}
             <header className="space-y-2">
-                <p className="microtype">Compliance · Notices</p>
+                <p className="microtype">Compliance · Notice workflow</p>
                 <div className="flex items-end justify-between gap-4 flex-wrap">
                     <div>
                         <h1 className="text-[28px] leading-[1.15] font-semibold text-[var(--text-primary)] tracking-tight">
-                            Notice classification
+                            Compliance notices
                         </h1>
                         <p className="text-[14px] text-[var(--text-muted)] mt-1.5 max-w-2xl">
                             {crossClientMode
-                                ? "Cross-client view — notices across every client you have access to."
-                                : "Track notices through their authority, status, risk, and deadline lifecycle for the active client."}
+                                ? "Every regulator notice across the clients you have access to. Triage, draft a response, and track the audit chain end-to-end."
+                                : "Every regulator notice for this organization, end-to-end: receive, triage, draft a response, file it, and keep the audit trail. The cards below show what needs attention next."}
                         </p>
                     </div>
                     {tenantSelected && (
@@ -180,6 +233,77 @@ export default function ComplianceDashboardPage() {
                 <NoTenantSelected />
             ) : (
                 <>
+                    {/* ── Workflow funnel — what needs attention next ─── */}
+                    <section
+                        aria-label="Notice workflow status"
+                        className="grid grid-cols-2 lg:grid-cols-4 gap-3"
+                    >
+                        {workflowStages.map((stage) => {
+                            const toneRing = {
+                                neutral: "border-[var(--border-default)]",
+                                info: "border-[color:color-mix(in_srgb,var(--accent)_35%,transparent)]",
+                                warn: "border-[color:color-mix(in_srgb,var(--warning)_40%,transparent)]",
+                                danger: "border-[color:color-mix(in_srgb,var(--danger)_40%,transparent)]",
+                            }[stage.tone];
+                            const toneLabel = {
+                                neutral: "text-[var(--text-secondary)]",
+                                info: "text-[var(--accent)]",
+                                warn: "text-[var(--warning)]",
+                                danger: "text-[var(--danger)]",
+                            }[stage.tone];
+                            const filterActive =
+                                stage.statusFilter !== undefined &&
+                                filters.status === stage.statusFilter;
+                            const isOverdueAndZero =
+                                stage.key === "overdue" && stage.count === 0;
+                            return (
+                                <button
+                                    key={stage.key}
+                                    type="button"
+                                    onClick={() =>
+                                        stage.statusFilter !== undefined &&
+                                        setStatusFilter(
+                                            filterActive ? undefined : stage.statusFilter
+                                        )
+                                    }
+                                    disabled={stage.statusFilter === undefined}
+                                    aria-pressed={filterActive}
+                                    className={`
+                                        text-left p-4 rounded-lg border bg-[var(--bg-surface)]
+                                        ${toneRing}
+                                        ${stage.statusFilter !== undefined
+                                            ? "cursor-pointer hover:bg-[var(--bg-hover)]"
+                                            : isOverdueAndZero
+                                                ? "opacity-70"
+                                                : ""}
+                                        ${filterActive ? "ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--bg-page)]" : ""}
+                                        transition-colors duration-150
+                                        focus-visible:outline-none focus-visible:ring-2
+                                        focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
+                                        focus-visible:ring-offset-[var(--bg-page)]
+                                    `}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <span className={`text-[11px] font-medium uppercase tracking-wider ${toneLabel}`}>
+                                            {stage.label}
+                                        </span>
+                                        <span className="font-mono tabular-nums text-[22px] font-semibold text-[var(--text-primary)] leading-none">
+                                            {dashboardQ.isLoading ? "—" : stage.count.toLocaleString("en-IN")}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11.5px] text-[var(--text-muted)] mt-2 leading-snug">
+                                        {stage.sub}
+                                    </p>
+                                    {stage.statusFilter !== undefined && (
+                                        <p className="text-[10.5px] text-[var(--text-subtle)] mt-2 uppercase tracking-wider">
+                                            {filterActive ? "Filter active — click to clear" : "Click to filter"}
+                                        </p>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </section>
+
                     {/* ── Risk distribution + quick stats ─────────────── */}
                     <section
                         className="surface-card p-5"
