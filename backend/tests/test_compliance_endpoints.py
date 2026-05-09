@@ -27,7 +27,7 @@ ROLE_PERMISSION_MATRIX = [
     ("compliance_head", "client:manage_team", True),
     ("compliance_head", "report:view", True),
     ("compliance_head", "report:export", True),
-    ("compliance_head", "audit:view", False),
+    ("compliance_head", "audit:view", True),
     ("compliance_head", "escalation:trigger", True),
 
     # LEGAL_TEAM: 4 permissions allowed (Phase 10 added notice:review)
@@ -87,7 +87,7 @@ ROLE_PERMISSION_MATRIX = [
     ("ca_consultant", "client:manage_team", True),
     ("ca_consultant", "report:view", True),
     ("ca_consultant", "report:export", True),
-    ("ca_consultant", "audit:view", False),
+    ("ca_consultant", "audit:view", True),
     ("ca_consultant", "escalation:trigger", False),
 
     # STAFF: 4 permissions allowed
