@@ -158,7 +158,10 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     // picked; cross-client mode skips the fetch and shows an "All
     // clients" pill instead.
     const { data: activeClient } = useQuery<ClientDetail>({
-        queryKey: ["active-client", activeClientId],
+        // Shared queryKey with ClientSwitcher and the clients/[id] route so
+        // React Query dedups — was emitting two GET /api/compliance/clients/{id}
+        // per page render before this alignment.
+        queryKey: ["client", activeClientId],
         queryFn: () =>
             complianceApi.getClient(activeClientId as number).then((r) => r.data),
         enabled:
