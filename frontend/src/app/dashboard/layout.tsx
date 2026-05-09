@@ -12,32 +12,21 @@ import {
 import { LoadingSpinner } from "@/components";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import AIChatFloating from "@/components/AIChatFloating";
+import { UserMenu } from "@/components/UserMenu";
 import { useCurrentClient } from "@/stores/currentClientStore";
 import { complianceApi } from "@/lib/api/compliance";
 import type { ClientDetail } from "@/types/compliance";
 import {
     FiHome,
-    FiUpload,
-    FiSearch,
     FiBarChart2,
-    FiLogOut,
     FiFileText,
     FiShield,
-    FiShare2,
     FiMenu,
     FiX,
-    FiBriefcase,
     FiUserCheck,
     FiCalendar,
     FiActivity,
-    FiBookOpen,
-    FiMail,
-    FiSettings,
-    FiInbox,
-    FiClipboard,
     FiGlobe,
-    FiCpu,
-    FiUser,
 } from "react-icons/fi";
 
 /**
@@ -61,11 +50,11 @@ type NavGroup = {
     items: NavItem[];
 };
 
-// Single-tenant deployment model: each customer gets their own deployment
-// with their own org, so cross-client navigation (Clients list,
-// Cross-entity search) is intentionally not surfaced in the sidebar.
-// Routes still exist for direct admin access; the multi-tenant RLS
-// machinery underneath stays intact.
+// Phase 17 sidebar IA: only daily-use task navigation lives in the
+// sidebar. Profile (Account, Email center, AI assistant) and Admin
+// (Admin panel, Organizations, Model eval) live in the UserMenu popover
+// off the user cluster at the bottom of the sidebar -- one click away
+// without cluttering the daily nav.
 const NAV_GROUPS: NavGroup[] = [
     {
         label: "Core",
@@ -90,22 +79,6 @@ const NAV_GROUPS: NavGroup[] = [
             { href: "/dashboard/compliance/calendar", icon: FiCalendar, label: "Calendar", roles: ["admin", "editor", "viewer"] },
             { href: "/dashboard/compliance/audit", icon: FiActivity, label: "Audit log", roles: ["admin", "editor", "viewer"] },
             { href: "/dashboard/compliance/reports", icon: FiBarChart2, label: "Reports", roles: ["admin", "editor", "viewer"] },
-        ],
-    },
-    {
-        label: "Profile",
-        items: [
-            { href: "/dashboard/profile", icon: FiUser, label: "Account", roles: ["admin", "editor", "viewer"] },
-            { href: "/dashboard/email", icon: FiMail, label: "Email center", roles: ["admin", "editor", "viewer"] },
-            { href: "/dashboard/settings/ai", icon: FiCpu, label: "AI assistant", roles: ["admin", "editor", "viewer"] },
-        ],
-    },
-    {
-        label: "Admin",
-        items: [
-            { href: "/dashboard/admin", icon: FiShield, label: "Admin", roles: ["admin"] },
-            { href: "/dashboard/compliance/clients", icon: FiBriefcase, label: "Clients", roles: ["admin"] },
-            { href: "/dashboard/model-evaluation", icon: FiBarChart2, label: "Model eval", roles: ["admin"] },
         ],
     },
 ];
@@ -360,38 +333,17 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     })}
                 </nav>
 
-                {/* User + Sign-out + subtle "Powered by TaxSync".
-                 * Active client identity moved to the top brand block;
-                 * this footer is just the human + the platform mark. */}
+                {/* User cluster — click to open the account popover with
+                 * Profile (Account, Email, AI) and Admin (when role
+                 * permits). Sign out lives in the popover too. */}
                 <div className="border-t border-[var(--border-default)] p-3">
-                    <div className="flex items-center gap-2.5 px-2 py-2 mb-1 rounded-md hover:bg-[var(--bg-hover)] transition-colors">
-                        <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-[12px] font-semibold text-white shrink-0 shadow-sm">
-                            {user.username?.[0]?.toUpperCase() || "U"}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">
-                                {user.username}
-                            </p>
-                            <div className="flex items-center gap-1.5 text-[11.5px] text-[var(--text-subtle)]">
-                                <span className="truncate">{user.email}</span>
-                            </div>
-                        </div>
-                        {user.role && (
-                            <span className="microtype shrink-0 px-1.5 py-0.5 rounded bg-[var(--bg-hover)] border border-[var(--border-default)] text-[var(--text-muted)]">
-                                {user.role}
-                            </span>
-                        )}
-                    </div>
-                    <button
-                        onClick={async () => {
+                    <UserMenu
+                        user={user}
+                        onSignOut={async () => {
                             await logout();
                             router.push("/login");
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[var(--text-muted)] hover:text-[var(--danger)] rounded-md hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
-                    >
-                        <FiLogOut className="w-3.5 h-3.5" />
-                        Sign out
-                    </button>
+                    />
                     <Link
                         href="/dashboard"
                         className="
