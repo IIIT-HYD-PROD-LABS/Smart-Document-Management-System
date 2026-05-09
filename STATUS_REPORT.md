@@ -26,6 +26,15 @@ Production-incident-driven session. Started with a Supabase pooler outage (rotat
 
 **Operational note (out of band):** A Supabase Supavisor `ECIRCUITBREAKER` was triggered earlier in the session by repeated bad-credential connection attempts from the backend healthcheck loop. Recovery procedure documented in auto-memory: stop the backend container before rotating credentials, then `docker compose up -d --force-recreate backend` to load the new env. Memory `project_supabase_config.md` and `project_perf_listener_fix.md` updated with the full recipe.
 
+**Phase 17b — UserMenu popover, sidebar collapsed to 3 groups (2026-05-09, commit `852fe4d`):**
+
+User feedback after Phase 4: "Profile section should not be in the sidebar; click on the profile area to open it. Admin too — only admin uses it." Implemented via a new `UserMenu` popover that opens upward from the user cluster at the bottom of the sidebar.
+
+- New `frontend/src/components/UserMenu.tsx` (one component, ~280 lines). Trigger reuses the existing user-cluster styling plus a rotating chevron. Popover renders three sections: identity strip header, Personal (Account / Email center / AI assistant), Admin (only when `users.role === 'admin'`: Admin / Organizations / Model eval), and Sign out as its own bottom strip. Outside-click and Escape both close. `aria-haspopup`, `aria-expanded`, `role="menu"` + `menuitem` throughout; chevron rotation wrapped in `motion-safe:` per `ui-ux-pro-max` `prefers-reduced-motion` guidance.
+- `frontend/src/app/dashboard/layout.tsx`: `NAV_GROUPS` trimmed from 5 groups / 14 items to **3 groups / 8 items** (Core / Workspace / Compliance only). The previous user cluster and standalone Sign out button replaced with `<UserMenu />`. 12 now-unused `react-icons` imports cleaned out.
+- Renamed the admin "Clients" link to "Organizations" inside the menu so the multi-tenant SaaS terminology matches the sidebar header pill.
+- Verified live via Playwright: `aside nav h2` list returns exactly `["Core", "Workspace", "Compliance"]`; UserMenu popover items return `[Account, Email center, AI assistant, Admin, Organizations, Model eval, Sign out]`; ESC press correctly closes the menu and flips `aria-expanded` to `false`; zero console errors.
+
 **Phase 4 — tenant-isolation hardening (2026-05-09 same session, three more commits):**
 
 5. **`feat(compliance): workflow-oriented hero with status filter cards`** (`b6e62d7`) — `frontend/src/app/dashboard/compliance/page.tsx`. The compliance landing page header was "Notice classification" — jargon. Replaced with "Compliance notices" + a plain-English subtitle naming the workflow stages (receive, triage, draft, file, audit). Added a 4-card status row above the existing risk distribution: New / In review / Awaiting submission / Overdue, each pulling counts from `DashboardAggregates.by_status` and `.overdue`. Each card except Overdue is a status-filter shortcut into the table below. Visual treatment per `ui-ux-pro-max` "Data-Dense Dashboard" guidance.
