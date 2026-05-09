@@ -97,23 +97,30 @@ def register_tenant_listener(engine) -> None:
         if client_id is None and not cross_mode and user_id is None:
             return
 
+        new_state = (
+            str(client_id) if client_id is not None else "",
+            "true" if cross_mode else "false",
+            str(user_id) if user_id is not None else "",
+        )
+        # WAN-perf hardening: when the same tenant tuple has already been
+        # SET on this connection, skip the redundant round-trip. Cleared on
+        # checkin so the next request starts blank.
+        dbapi = conn.connection.driver_connection
+        if getattr(dbapi, "_tenant_state", None) == new_state:
+            return
         try:
-            # set_config(name, value, is_local=false) → session-scoped, persists
-            # across commits within the connection. The connection-checkin
-            # cleanup (below) clears these before the connection returns to
-            # the pool so the next request starts clean.
+            # Combined into ONE round trip (was 3 separate executes).
+            # set_config(name, value, is_local=false) → session-scoped,
+            # cleaned up on checkin so the next request starts clean.
             cursor.execute(
-                "SELECT set_config('app.current_client_id', %s, false)",
-                (str(client_id) if client_id is not None else "",),
+                "SELECT "
+                "set_config('app.current_client_id', %s, false), "
+                "set_config('app.cross_client_mode', %s, false), "
+                "set_config('app.user_id', %s, false)",
+                new_state,
             )
-            cursor.execute(
-                "SELECT set_config('app.cross_client_mode', %s, false)",
-                ("true" if cross_mode else "false",),
-            )
-            cursor.execute(
-                "SELECT set_config('app.user_id', %s, false)",
-                (str(user_id) if user_id is not None else "",),
-            )
+            dbapi._tenant_state = new_state
+            dbapi._tenant_dirty = True
         except Exception:
             # Listener errors must never crash the request — RLS will
             # fail-closed (no rows) rather than permitting cross-tenant access.
@@ -134,14 +141,26 @@ def register_tenant_listener(engine) -> None:
         SELECT 1 fails intermittently. This was the root cause of the
         /api/health 200/503 flap.
         """
+        # WAN-perf hardening: skip cleanup when this connection never wrote
+        # any tenant state during the just-finished request (e.g. /api/health,
+        # pool pre_ping). _tenant_dirty is set by before_cursor_execute when
+        # SET was issued. If it never ran, the session is already clean.
+        if not getattr(dbapi_connection, "_tenant_dirty", False):
+            return
         try:
             cur = dbapi_connection.cursor()
-            cur.execute("SELECT set_config('app.current_client_id', '', false)")
-            cur.execute("SELECT set_config('app.cross_client_mode', 'false', false)")
-            cur.execute("SELECT set_config('app.user_id', '', false)")
+            # Combined into ONE round trip (was 3 separate executes).
+            cur.execute(
+                "SELECT "
+                "set_config('app.current_client_id', '', false), "
+                "set_config('app.cross_client_mode', 'false', false), "
+                "set_config('app.user_id', '', false)"
+            )
             cur.close()
             if not getattr(dbapi_connection, "autocommit", True):
                 dbapi_connection.commit()
+            dbapi_connection._tenant_state = None
+            dbapi_connection._tenant_dirty = False
         except Exception:
             try:
                 if not getattr(dbapi_connection, "autocommit", True):
