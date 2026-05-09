@@ -90,7 +90,18 @@ def get_active_membership(
     sending X-Client-Id: * does not grant cross-client access by header alone.
     """
     if client_id is None:
-        # Cross-client mode — accept the highest-privilege eligible membership
+        # Cross-client mode — defense in depth (Phase 4 / 2026-05-09).
+        # Tenant-isolation contract for the multi-tenant SaaS: only the
+        # platform admin (users.role == 'admin') is allowed to see across
+        # organizations. The previous compliance_role-only gate let an
+        # editor or viewer with a senior compliance_role (ca_consultant
+        # often added in error) curl their way to cross-tenant data even
+        # though the UI hid the toggle.
+        if current_user.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cross-client mode requires platform admin role",
+            )
         now = datetime.now(timezone.utc)
         candidates = (
             db.query(ClientMembership)

@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { FiBriefcase, FiPlus } from "react-icons/fi";
 import { complianceApi } from "@/lib/api/compliance";
+import { useAuth } from "@/context/AuthContext";
 import { useCurrentClient } from "@/stores/currentClientStore";
 import {
     COMPLIANCE_ROLE_LABELS,
@@ -17,12 +20,31 @@ import {
  * Renders the user's memberships as a list. Empty state per UI-SPEC copy:
  * heading "No clients yet" + body + primary CTA "Onboard first client".
  *
+ * **Phase 4 tenant-isolation guard (2026-05-09):** route-restricted to
+ * `users.role === 'admin'`. The page enumerates client names via a
+ * fan-out `getClient` and would otherwise leak the existence of other
+ * organizations to non-admin users with multiple memberships. Sidebar
+ * already hides the link from non-admins; this is the URL-tampering
+ * defense.
+ *
  * Note: this page lists memberships (one per client the user has access to);
  * clicking a row navigates to the client detail page. The full client name is
  * fetched on the detail page — here we show "Client #{id}" as a stable label
  * (a future enhancement is a /clients?ids=... batch endpoint).
  */
 export default function ClientsListPage() {
+    const { user, isLoading: authLoading } = useAuth();
+    const router = useRouter();
+
+    // Admin-only route. Non-admins (editor/viewer) get redirected to the
+    // dashboard. We wait for auth to finish loading before deciding so a
+    // valid admin doesn't get a one-frame redirect on hard refresh.
+    useEffect(() => {
+        if (!authLoading && user && user.role !== "admin") {
+            router.replace("/dashboard");
+        }
+    }, [authLoading, user, router]);
+
     const setActiveClientId = useCurrentClient((s) => s.setActiveClientId);
 
     const { data: memberships, isLoading, error } = useQuery<Membership[]>({
@@ -52,6 +74,11 @@ export default function ClientsListPage() {
         const m = memberships?.[i];
         if (m && q.data) clientById.set(m.client_id, q.data as Client);
     });
+
+    // Render-time guard so non-admins don't see org names for the brief
+    // window before the useEffect redirect fires. Placed AFTER all hooks
+    // to keep React's hook-count contract intact.
+    if (!authLoading && user && user.role !== "admin") return null;
 
     if (isLoading) {
         return (
