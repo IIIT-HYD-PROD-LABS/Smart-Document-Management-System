@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TaxSync · Deployment</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="page">
+
+<nav class="topic-nav">
+    <a href="index.html">⌂ Index</a>
+    <a href="01-architecture.html">01 Architecture</a>
+    <a href="02-frontend.html">02 Frontend</a>
+    <a href="03-backend.html">03 Backend</a>
+    <a href="04-database-schema.html">04 DB Schema</a>
+    <a href="05-security.html">05 Security</a>
+    <a href="06-deployment.html" class="cur">06 Deployment</a>
+    <a href="07-ml-ai.html">07 ML / AI</a>
+    <a href="08-compliance-workflow.html">08 Compliance</a>
+    <a href="09-api-reference.html">09 API Ref</a>
+    <a href="10-auth-deep-dive.html">10 Auth</a>
+</nav>
+
+<header class="title-strip">
+    <div class="logo" style="background:var(--c5)">DEP</div>
+    <div>
+        <h1>HOW <span class="accent">DEPLOYMENT</span> WORKS</h1>
+        <div class="tagline">Docker Compose locally · Vercel for frontend · VPS/EC2 + Supabase for backend · Alembic migrations on every release</div>
+    </div>
+    <div class="remember">
+        <h4>★ REMEMBER</h4>
+        <ul>
+            <li>5 services per stack</li>
+            <li>Supabase = session-mode pooler</li>
+            <li>SECRET_KEY ≥ 32 chars</li>
+            <li>DEBUG=false hides /docs</li>
+            <li>Healthchecks gate startup</li>
+        </ul>
+    </div>
+</header>
+
+<div class="grid">
+
+    <!-- 1 COMPOSE TOPOLOGY -->
+    <section class="panel c1 span-6">
+        <h2><span class="num">1</span> DOCKER COMPOSE TOPOLOGY</h2>
+<pre class="ascii">
+┌─────────────────────────────────────────────────────┐
+│ smartdocs-frontend  :3000   Next.js 15 standalone   │
+└──────────────┬──────────────────────────────────────┘
+               │ NEXT_PUBLIC_API_URL
+               ▼
+┌─────────────────────────────────────────────────────┐
+│ smartdocs-backend   :8000   FastAPI + Uvicorn       │
+│ healthcheck: GET /api/health                        │
+│ vols: uploads · models · datasets · audit_failures  │
+└──────┬──────────────┬──────────────────┬────────────┘
+       │              │                  │
+       ▼              ▼                  ▼
+ smartdocs-db    smartdocs-redis    smartdocs-celery
+   :5432           :6379              (default queue)
+   pg16-alpine     redis7 +pwd        2 worker proc
+   512M cap        256M cap           1G cap
+
+                                  smartdocs-compliance-worker
+                                  compliance queue
+                                  2.5G cap · HF cache</pre>
+    </section>
+
+    <!-- 2 START -->
+    <section class="panel c2 span-6">
+        <h2><span class="num">2</span> ZERO-TO-RUN</h2>
+<pre class="ascii">
+$ git clone …
+$ cd Smart-Document-Management-System
+$ cp backend/.env.example .env       # repo root
+$ vim .env                            # set SECRET_KEY + DATABASE_URL
+$ docker compose up --build
+
+# tail
+$ docker compose logs -f backend
+$ docker compose exec backend python -m app.scripts.create_admin
+$ docker compose exec backend alembic upgrade head</pre>
+        <ul class="tight">
+            <li>Docker Compose reads <code>.env</code> from <span class="warn">repo root</span>, not <code>backend/.env</code></li>
+            <li>First user to register becomes admin automatically</li>
+        </ul>
+    </section>
+
+    <!-- 3 ENV VARS REQUIRED -->
+    <section class="panel c3 span-6">
+        <h2><span class="num">3</span> REQUIRED ENV</h2>
+        <table>
+            <tr><th>Var</th><th>Required</th><th>Notes</th></tr>
+            <tr><td><code>SECRET_KEY</code></td><td>✓</td><td>≥32 chars, ≥10 unique</td></tr>
+            <tr><td><code>DATABASE_URL</code></td><td>✓</td><td>Supabase pooler port 5432 (session mode) for RLS</td></tr>
+            <tr><td><code>REDIS_PASSWORD</code></td><td>✓</td><td>Random secret</td></tr>
+            <tr><td><code>ALLOWED_ORIGINS</code></td><td>✓ prod</td><td>JSON array; <span class="warn">never <code>*</code></span></td></tr>
+            <tr><td><code>FRONTEND_URL</code></td><td>✓</td><td>Used in OAuth redirect target</td></tr>
+            <tr><td><code>DEBUG</code></td><td>—</td><td><code>false</code> in prod (hides /docs, sets HSTS)</td></tr>
+            <tr><td><code>LLM_PROVIDER</code></td><td>—</td><td><code>local</code> default; OK without keys</td></tr>
+            <tr><td><code>GOOGLE_*</code> / <code>MICROSOFT_*</code></td><td>—</td><td>OAuth optional</td></tr>
+            <tr><td><code>USE_S3</code> + AWS keys</td><td>—</td><td>Else local FS</td></tr>
+            <tr><td><code>AUDIT_FAILURES_PATH</code></td><td>—</td><td>Default <code>/var/log/smartdocs/audit_failures.jsonl</code></td></tr>
+        </table>
+    </section>
+
+    <!-- 4 SUPABASE -->
+    <section class="panel c4 span-6">
+        <h2><span class="num">4</span> SUPABASE GOTCHAS</h2>
+        <ul>
+            <li><span class="warn">Use port 5432 (session mode)</span> not 6543 (transaction mode)</li>
+            <li>Phase 9 RLS uses <code>set_config(..., is_local=true)</code> + <code>SET ROLE</code> — both are tx-local. Transaction pooling discards them between requests.</li>
+            <li>Password expiry: rotate every 90 days; update <code>DATABASE_URL</code> + redeploy backend + workers</li>
+            <li>Some DDL (CREATE ROLE, FORCE RLS) needs <code>postgres</code> super — run locally first</li>
+            <li>Supabase Advisor flagged → migration 0024 fixes</li>
+        </ul>
+    </section>
+
+    <!-- 5 PROD TOPOLOGY -->
+    <section class="panel c5 span-6">
+        <h2><span class="num">5</span> PRODUCTION TOPOLOGY</h2>
+<pre class="ascii">
+[ Vercel ] ◄─── Next.js (standalone build · CDN)
+   │
+   │  fetch
+   ▼
+[ VPS / EC2 ] ──► FastAPI + uvicorn + 2 celery workers
+                │ Docker Compose minus the db service
+                │ TLS terminated by nginx / Caddy / ALB
+                ▼
+[ Supabase ] ◄─── Postgres (managed) · session-mode pooler
+                  RLS · audit-trigger preserved across hosts
+[ Upstash ] ◄─── Redis (managed) — optional</pre>
+        <p class="dim">Local compose still works; remove <code>db</code> service and point <code>DATABASE_URL</code> at Supabase.</p>
+    </section>
+
+    <!-- 6 FRONTEND DEPLOY -->
+    <section class="panel c6 span-6">
+        <h2><span class="num">6</span> FRONTEND ON VERCEL</h2>
+        <ul class="tight">
+            <li><code>vercel.json</code> at repo root</li>
+            <li>Standalone output via Next.js 15</li>
+            <li><code>NEXT_PUBLIC_API_URL</code> set per environment</li>
+            <li>Preview deploys per PR</li>
+            <li><code>dynamic = "force-dynamic"</code> on dashboard layout — prevents SSG break</li>
+            <li>Edge middleware redirects unauth users to /login</li>
+        </ul>
+    </section>
+
+    <!-- 7 BUILD PIPELINE -->
+    <section class="panel c1 span-6">
+        <h2><span class="num">7</span> BUILD PIPELINE</h2>
+<pre class="ascii">
+1. push to main
+2. .github/workflows           CI:
+     ├ backend tests (pytest)  · 502+ green
+     ├ frontend build          · next build
+     └ lint + ruff             · pip check
+3. on green:
+     ├ frontend → Vercel (auto)
+     └ backend  → manual:
+            ssh prod-host
+            git pull
+            docker compose up -d --build backend celery_worker compliance_worker
+            docker compose exec backend alembic upgrade head</pre>
+    </section>
+
+    <!-- 8 HEALTHCHECKS -->
+    <section class="panel c2 span-6">
+        <h2><span class="num">8</span> HEALTHCHECKS</h2>
+        <table>
+            <tr><th>Service</th><th>Probe</th></tr>
+            <tr><td>db</td><td><code>pg_isready</code> every 10 s</td></tr>
+            <tr><td>redis</td><td><code>redis-cli ping</code> every 10 s</td></tr>
+            <tr><td>backend</td><td><code>GET /api/health</code> 15 s · 30 s start</td></tr>
+            <tr><td>celery</td><td><code>celery inspect ping</code> 30 s</td></tr>
+            <tr><td>compliance_worker</td><td>same · 60 s start (HF cache)</td></tr>
+        </table>
+        <p class="dim"><code>/api/health</code> reports <code>{database, redis}</code> connection state; returns 503 if either is down.</p>
+    </section>
+
+    <!-- 9 LOGGING -->
+    <section class="panel c4 span-4">
+        <h2><span class="num">9</span> LOGGING</h2>
+        <ul class="tight">
+            <li>structlog JSON output</li>
+            <li>correlation-id via <code>asgi-correlation-id</code></li>
+            <li>Docker log driver: json-file, 10 MB × 3 rotate</li>
+            <li>Audit dead-letter at <code>/var/log/smartdocs/</code> (named volume)</li>
+            <li>Celery workers log to stdout</li>
+        </ul>
+    </section>
+
+    <!-- 10 BACKUP -->
+    <section class="panel c5 span-4">
+        <h2><span class="num">10</span> BACKUP &amp; DR</h2>
+        <ul class="tight">
+            <li>Postgres → Supabase point-in-time restore</li>
+            <li>Uploads → Docker named volume <code>backend_uploads</code> (or S3)</li>
+            <li>Audit JSONL volume <code>audit_failures</code> — DO NOT prune</li>
+            <li>BERT models in <code>/app/models/hf_cache</code> survive worker restart</li>
+            <li>Refresh tokens re-issued on next login if DB lost</li>
+        </ul>
+    </section>
+
+    <!-- 11 OBSERVABILITY -->
+    <section class="panel c6 span-4">
+        <h2><span class="num">11</span> OBSERVABILITY</h2>
+        <ul class="tight">
+            <li>Sentry plug-in points (TODO)</li>
+            <li>Celery flower behind admin (not exposed)</li>
+            <li>Vercel analytics for FE</li>
+            <li>Supabase Query Performance + Logs</li>
+            <li>Tenant listener emits <code>tenant_listener_set</code> debug</li>
+        </ul>
+    </section>
+
+    <!-- 12 DEPLOY CHECKLIST -->
+    <section class="panel c7 span-12">
+        <h2><span class="num">12</span> PRE-DEPLOY CHECKLIST</h2>
+        <table>
+            <tr><th>Step</th><th>Check</th></tr>
+            <tr><td>1. <code>SECRET_KEY</code></td><td>≥32 chars, ≥10 unique, rotated since last incident</td></tr>
+            <tr><td>2. <code>DATABASE_URL</code></td><td>Session mode (5432), password fresh</td></tr>
+            <tr><td>3. <code>ALLOWED_ORIGINS</code></td><td>Exact frontend URL, no wildcard</td></tr>
+            <tr><td>4. <code>DEBUG=false</code></td><td>Hides /docs, enables HSTS</td></tr>
+            <tr><td>5. <code>alembic upgrade head</code></td><td>Currently <code>0032_add_ai_credentials</code></td></tr>
+            <tr><td>6. OAuth redirect URIs</td><td>Match <code>FRONTEND_URL</code> in console.cloud.google.com + entra.microsoft.com</td></tr>
+            <tr><td>7. <code>USE_S3</code> if shared workers</td><td>Local FS doesn't survive multi-host</td></tr>
+            <tr><td>8. Audit dead-letter volume</td><td>Mounted &amp; writable</td></tr>
+            <tr><td>9. Healthcheck green</td><td><code>GET /api/health</code> returns 200</td></tr>
+            <tr><td>10. Smoke: register · upload · search</td><td>Manual UI test on prod URL</td></tr>
+        </table>
+    </section>
+
+</div>
+
+<div class="protip">
+    <div class="badge">PRO<br>TIP</div>
+    <div>
+        <h3>UPGRADE ORDER</h3>
+        <ul>
+            <li>1. Run <code>alembic upgrade head</code> first — schema must lead code</li>
+            <li>2. Roll out new backend + workers</li>
+            <li>3. Roll out new frontend last (it consumes the API)</li>
+            <li>4. Verify <code>/api/health</code> 200 before tearing down old containers</li>
+            <li>5. NEVER skip workers — they share the codebase</li>
+        </ul>
+    </div>
+    <div class="footer-quote">"Schema before code. Code before clients.<br>Rolling back? Reverse the order."</div>
+</div>
+
+</div>
+</body>
+</html>

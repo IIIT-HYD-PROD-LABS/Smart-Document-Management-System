@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>TaxSync — Product Features</title>
+    <style>
+@page {
+    size: A4;
+    margin: 22mm 18mm 22mm 18mm;
+
+    @top-right {
+        content: "TaxSync Product Features";
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 9pt;
+        color: #6b7280;
+    }
+    @bottom-center {
+        content: counter(page) " / " counter(pages);
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 9pt;
+        color: #6b7280;
+    }
+    @bottom-left {
+        content: "v2.0.1";
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 9pt;
+        color: #6b7280;
+    }
+}
+
+@page :first {
+    margin: 0;
+    @top-right { content: none; }
+    @bottom-center { content: none; }
+    @bottom-left { content: none; }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: #111827;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Cover page */
+.cover {
+    page-break-after: always;
+    height: 297mm;
+    width: 210mm;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f172a 100%);
+    color: #f8fafc;
+    position: relative;
+    overflow: hidden;
+}
+.cover::before {
+    content: "";
+    position: absolute;
+    top: -150px;
+    right: -150px;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.25), transparent 70%);
+}
+.cover::after {
+    content: "";
+    position: absolute;
+    bottom: -100px;
+    left: -100px;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.18), transparent 70%);
+}
+.cover-header {
+    padding: 30mm 25mm 0 25mm;
+    position: relative;
+    z-index: 1;
+}
+.cover-brand {
+    font-size: 14pt;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 8mm;
+}
+.cover-title {
+    font-size: 44pt;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0 0 6mm 0;
+    color: #f8fafc;
+}
+.cover-subtitle {
+    font-size: 16pt;
+    font-weight: 400;
+    color: #cbd5e1;
+    line-height: 1.4;
+    max-width: 140mm;
+}
+.cover-meta {
+    padding: 0 25mm 30mm 25mm;
+    position: relative;
+    z-index: 1;
+}
+.cover-divider {
+    width: 80mm;
+    height: 2px;
+    background: linear-gradient(90deg, #6366f1, transparent);
+    margin-bottom: 10mm;
+}
+.cover-meta-row {
+    display: flex;
+    gap: 20mm;
+    margin-bottom: 6mm;
+}
+.cover-meta-item .label {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #94a3b8;
+    margin-bottom: 2mm;
+}
+.cover-meta-item .value {
+    font-size: 11pt;
+    color: #f1f5f9;
+    font-weight: 500;
+}
+.cover-tagline {
+    font-size: 9pt;
+    color: #64748b;
+    margin-top: 8mm;
+    font-style: italic;
+}
+
+/* Document body */
+.doc { padding: 0; }
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 600;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+}
+
+h1 {
+    font-size: 24pt;
+    margin: 0 0 6mm 0;
+    padding-bottom: 4mm;
+    border-bottom: 2px solid #1e293b;
+    page-break-before: always;
+    page-break-after: avoid;
+}
+.doc > h1:first-of-type { page-break-before: avoid; }
+
+h2 {
+    font-size: 16pt;
+    margin: 9mm 0 4mm 0;
+    color: #1e293b;
+    page-break-after: avoid;
+    page-break-before: always;
+}
+.doc > h2:first-of-type { page-break-before: avoid; }
+
+h3 {
+    font-size: 12.5pt;
+    margin: 6mm 0 3mm 0;
+    color: #334155;
+    page-break-after: avoid;
+}
+
+h4 {
+    font-size: 10.5pt;
+    margin: 4mm 0 2mm 0;
+    color: #475569;
+    page-break-after: avoid;
+}
+
+p {
+    margin: 0 0 3mm 0;
+    text-align: justify;
+}
+
+strong { color: #0f172a; font-weight: 600; }
+em { color: #334155; }
+
+a { color: #4f46e5; text-decoration: none; }
+
+ul, ol {
+    margin: 0 0 4mm 0;
+    padding-left: 6mm;
+}
+ul li, ol li { margin-bottom: 1.5mm; }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 4mm 0 5mm 0;
+    font-size: 9.5pt;
+    page-break-inside: avoid;
+}
+thead {
+    background: #1e293b;
+    color: #f1f5f9;
+}
+thead th {
+    text-align: left;
+    padding: 2.5mm 3mm;
+    font-weight: 600;
+    font-size: 9pt;
+    letter-spacing: 0.02em;
+    border-bottom: 2px solid #0f172a;
+}
+tbody td {
+    padding: 2mm 3mm;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+}
+tbody tr:nth-child(even) { background: #f8fafc; }
+tbody td strong { color: #0f172a; }
+
+code {
+    font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    font-size: 9pt;
+    background: #f1f5f9;
+    color: #0f172a;
+    padding: 0.5mm 1.5mm;
+    border-radius: 2px;
+    border: 1px solid #e2e8f0;
+}
+pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 4mm;
+    border-radius: 3px;
+    overflow-x: auto;
+    margin: 3mm 0 5mm 0;
+    page-break-inside: avoid;
+    font-size: 8.5pt;
+    line-height: 1.5;
+    white-space: pre;
+}
+pre code {
+    background: transparent;
+    border: none;
+    color: inherit;
+    padding: 0;
+    font-size: inherit;
+}
+
+blockquote {
+    border-left: 3px solid #6366f1;
+    padding: 2mm 4mm;
+    margin: 3mm 0;
+    background: #f8fafc;
+    color: #334155;
+    font-style: italic;
+}
+
+hr {
+    border: 0;
+    border-top: 1px solid #e2e8f0;
+    margin: 8mm 0;
+}
+
+/* Status pill: "**Available**", "**Planned**" etc are bolded inline -
+   no extra markup needed beyond the strong styling above. */
+
+table, pre, blockquote { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+    
+<section class="cover">
+    <div class="cover-header">
+        <div class="cover-brand">TaxSync</div>
+        <h1 class="cover-title">Product Features<br/>Overview</h1>
+        <p class="cover-subtitle">
+            Smart Document and Compliance Platform built for Indian
+            tax practitioners, CA firms, finance teams, and individuals
+            managing regulatory paperwork.
+        </p>
+    </div>
+    <div class="cover-meta">
+        <div class="cover-divider"></div>
+        <div class="cover-meta-row">
+            <div class="cover-meta-item">
+                <div class="label">Product Version</div>
+                <div class="value">v2.0.1</div>
+            </div>
+            <div class="cover-meta-item">
+                <div class="label">Document Revision</div>
+                <div class="value">v2.1</div>
+            </div>
+            <div class="cover-meta-item">
+                <div class="label">Document Date</div>
+                <div class="value">8 May 2026</div>
+            </div>
+        </div>
+        <div class="cover-meta-row">
+            <div class="cover-meta-item">
+                <div class="label">Available Now</div>
+                <div class="value">70 features</div>
+            </div>
+            <div class="cover-meta-item">
+                <div class="label">Coverage</div>
+                <div class="value">10 product areas</div>
+            </div>
+            <div class="cover-meta-item">
+                <div class="label">Audience</div>
+                <div class="value">Stakeholders &middot; CA firms &middot; Product owners</div>
+            </div>
+        </div>
+        <p class="cover-tagline">
+            Prepared for IIIT Hyderabad Product Labs and CA firm clients.
+        </p>
+    </div>
+</section>
+
+    <article class="doc"><h1>TaxSync — Product Features Overview</h1>
+<p><strong>Version:</strong> v2.0.1 (May 2026 release)
+<strong>Date:</strong> 8 May 2026
+<strong>Audience:</strong> Stakeholders, CA firm partners, product owners, and team leads
+<strong>Prepared for:</strong> IIIT Hyderabad Product Labs and CA firm clients</p>
+<hr />
+<h2>Executive Summary</h2>
+<p>TaxSync is a smart document and compliance platform built for Indian tax practitioners, CA firms, finance teams, and individuals managing regulatory paperwork. It combines an intelligent document library with end-to-end compliance notice management — from intake (manual upload or automatic Gmail capture), through classification and risk scoring, to drafting, approval, and tracking.</p>
+<p>The platform is currently shipping its v2.0 release. The core document management product is mature and in everyday use; the compliance management layer (notices, deadlines, alerts, approval workflows, Gmail-driven intake, household bill tracking) is feature-complete except for one block of work that depends on government portal access still being negotiated. This document lists every feature available today, explains how to use each one in plain language, and shows what is on the roadmap next.</p>
+<hr />
+<h2>How to Read This Document</h2>
+<p>Each feature has a status pill:</p>
+<ul>
+<li><strong>Available</strong> — live in the product right now, you can use it today</li>
+<li><strong>In Progress</strong> — partially shipped, broader rollout next release</li>
+<li><strong>Planned</strong> — committed to a future release with an estimated window</li>
+<li><strong>Blocked</strong> — depends on an external decision (regulator, government portal access)</li>
+</ul>
+<p>Features are grouped by user need (what you want to do), not by internal release waves.</p>
+<hr />
+<h2>A. Document Management</h2>
+<p>Upload, organise, find, share, and track every document — invoices, contracts, bank statements, tax papers, insurance, real estate.</p>
+<h3>A1. Upload Any Document — <strong>Available</strong></h3>
+<p>Drag and drop or browse to upload PDF, Word, JPEG, PNG, or TIFF files up to 16 MB. The system handles single uploads or batches.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Click the upload button on the Documents page.</li>
+<li>Drag your file into the upload area, or click to browse.</li>
+<li>Wait a few seconds — you will see processing progress.</li>
+<li>Once complete, the document appears in your library with category, summary, and key fields filled in.</li>
+</ol>
+<h3>A2. Automatic Text Reading from Scans and PDFs — <strong>Available</strong></h3>
+<p>Even if your document is a phone-camera photograph or scanned image, TaxSync reads the text inside, including blurred or skewed scans. PDFs with embedded text are read directly. The result is searchable, indexable text.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Upload your document — no extra setting required.</li>
+<li>Open the document detail page.</li>
+<li>View the extracted text in the preview pane.</li>
+<li>Search the full text using the search bar.</li>
+</ol>
+<h3>A3. Auto-Categorisation into 7 Document Types — <strong>Available</strong></h3>
+<p>Documents are automatically sorted into Invoices, Tax, Bank, Bills, Insurance, Real Estate, and Other. This works with about 85% accuracy and can be corrected manually if needed.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Upload any document.</li>
+<li>Open the document — note the auto-assigned category badge.</li>
+<li>If the category is wrong, click &quot;Edit&quot; and select the correct one.</li>
+<li>Filter your library by category from the sidebar.</li>
+</ol>
+<h3>A4. Smart Extraction of Vendor, Date, and Amount — <strong>Available</strong></h3>
+<p>The system pulls out structured data from your documents: vendor or party names, dates, amounts, account numbers. You can see these in the document detail page without having to read the full file.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open any uploaded document.</li>
+<li>View the &quot;Key Fields&quot; panel on the right.</li>
+<li>Edit any field if the extraction is imperfect.</li>
+<li>Use these fields to filter, sort, or report.</li>
+</ol>
+<h3>A5. AI-Generated Document Summaries — <strong>Available</strong></h3>
+<p>Every document gets a short, plain-English summary so you can scan a stack of documents in seconds without opening each one.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Upload a document.</li>
+<li>Wait a moment for the summary to generate.</li>
+<li>Read the summary on the document card or detail page.</li>
+</ol>
+<h3>A6. Document Sharing with Roles — <strong>Available</strong></h3>
+<p>Share any document with a teammate as Viewer (read-only), Editor (can update), or Admin (full control). Permissions are enforced strictly across the platform.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open any document.</li>
+<li>Click &quot;Share&quot;.</li>
+<li>Enter the teammate's email and choose a role.</li>
+<li>They get access immediately when they sign in.</li>
+</ol>
+<h3>A7. Version Control with Rollback — <strong>Available</strong></h3>
+<p>Every change to a document is stored as a new version. You can see version history and restore an earlier copy at any time.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open a document.</li>
+<li>Click the &quot;Versions&quot; tab.</li>
+<li>Pick the version you want.</li>
+<li>Click &quot;Restore&quot; to make it the current version.</li>
+</ol>
+<h3>A8. Document Preview in Browser — <strong>Available</strong></h3>
+<p>Open any PDF or image directly in the browser without downloading. Page navigation, zoom, and print controls are built in.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Click any document tile.</li>
+<li>The preview opens in your browser.</li>
+<li>Use page controls to navigate or download a copy if needed.</li>
+</ol>
+<h3>A9. Full-Text Search Across the Library — <strong>Available</strong></h3>
+<p>Search across the contents of every document — not just file names. Typos are forgiven (fuzzy matching). Filter further by category, date range, amount, or vendor.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Type anything into the search bar at the top of the Documents page.</li>
+<li>Add filters from the sidebar (date range, category, amount).</li>
+<li>Click any matching result to open it.</li>
+</ol>
+<h3>A10. Document Analytics Dashboard — <strong>Available</strong></h3>
+<p>See how your library is growing over time, which categories you have most of, and recent uploads at a glance.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Click &quot;Analytics&quot; in the sidebar.</li>
+<li>View document count, monthly uploads, and category breakdown.</li>
+<li>Hover charts for exact numbers.</li>
+</ol>
+<hr />
+<h2>B. Compliance Notice Management</h2>
+<p>End-to-end tracking of regulatory notices from GST, Income Tax, MCA, RBI, and SEBI — built for CA firms managing many clients.</p>
+<h3>B1. Multi-Client Tracking — <strong>Available</strong></h3>
+<p>CA firms and consultants can manage many client entities, each with its own GSTIN, PAN, or CIN. Switch between clients with one click. Senior roles (Compliance Head, CA Consultant, CFO) can also see a combined cross-client view.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>From the top bar, open the client switcher.</li>
+<li>Pick a specific client — the dashboard refilters instantly.</li>
+<li>Or pick &quot;All Clients&quot; to see a combined view (senior roles only).</li>
+<li>Add new clients via the onboarding wizard from the Clients page.</li>
+</ol>
+<h3>B2. Compliance Notice Intake — <strong>Available</strong></h3>
+<p>Add a new notice three ways: drag-and-drop a PDF/JPG/PNG, fill in metadata manually, or let the Gmail integration capture it automatically.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Click &quot;New Notice&quot; on the Compliance page.</li>
+<li>Upload the notice file (any format).</li>
+<li>Fill in: notice number, authority, date issued, deadline, penalty amount.</li>
+<li>Save — the notice appears in the dashboard.</li>
+</ol>
+<h3>B3. Auto-Classification by Authority — <strong>Available</strong></h3>
+<p>For Gmail-imported notices, the system identifies which authority sent it (GST, Income Tax, MCA, RBI, SEBI) using sender domain and email content. The notice is created with the right authority pre-filled. (Higher-accuracy AI classification across 40+ sub-types is a v2.1 upgrade.)</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Connect Gmail (see Section D).</li>
+<li>Wait for the next scan cycle (every 15 minutes).</li>
+<li>Detected regulatory emails appear as notices automatically.</li>
+<li>Review and confirm or correct the auto-assigned authority.</li>
+</ol>
+<h3>B4. Risk Scoring with Explainable Factors — <strong>Available</strong></h3>
+<p>Every notice receives a risk score from 0 to 100 with a tier label: Critical, High, Medium, or Low. The top 3 factors driving the score are shown in plain English so you understand why.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open any notice.</li>
+<li>View the risk badge at the top of the page.</li>
+<li>Click the &quot;Why this score?&quot; link.</li>
+<li>Read the top 3 factors (e.g. &quot;Penalty over Rs. 5L&quot;, &quot;Deadline within 7 days&quot;, &quot;Senior authority&quot;).</li>
+</ol>
+<h3>B5. Status Workflow — <strong>Available</strong></h3>
+<p>Move notices through five clear stages: Received, Under Review, Response Drafted, Submitted, and finally Resolved or Dismissed. Each transition is logged with who did it and when.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open a notice.</li>
+<li>Click the status dropdown at the top.</li>
+<li>Pick the next stage.</li>
+<li>Add an optional note — the activity timeline updates.</li>
+</ol>
+<h3>B6. Linked Notices — <strong>Available</strong></h3>
+<p>Many regulatory matters span multiple notices: a Show-Cause leads to an Assessment Order, then a Demand. Link them so you see the full chain.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open a notice.</li>
+<li>Click &quot;Link related notice&quot;.</li>
+<li>Search and select the parent or child notice.</li>
+<li>View the chain in the notice detail page.</li>
+</ol>
+<h3>B7. 4-Stage Approval Workflow for Responses — <strong>Available</strong></h3>
+<p>Notice responses pass through up to four approval stages: Drafter, Reviewer, Legal, then CFO. Each stage has its own users and permissions. A notice cannot reach Submitted unless every required stage has approved.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open a notice and click &quot;Draft Response&quot;.</li>
+<li>Type or paste the response into the editor.</li>
+<li>Save — the response goes to the Reviewer.</li>
+<li>Each stage approves or sends it back; once CFO approves, mark as Submitted.</li>
+</ol>
+<h3>B8. Auto-Escalation for Critical Notices — <strong>Available</strong></h3>
+<p>When a notice scores Critical, the Compliance Head is notified immediately and a record is added to the activity timeline.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>No setup needed — escalation is automatic.</li>
+<li>Compliance Head sees the alert in the in-app notification bell and email.</li>
+<li>Open the notice and view the escalation entry in the activity timeline.</li>
+</ol>
+<h3>B9. Bulk Status Updates — <strong>Available</strong></h3>
+<p>Move many notices through the same stage in one go. Useful for closing a batch of resolved matters.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Go to the Compliance dashboard.</li>
+<li>Tick the checkboxes next to multiple notices.</li>
+<li>Click &quot;Bulk update status&quot;.</li>
+<li>Pick the new status — all selected notices move together; failures (if any) are listed clearly.</li>
+</ol>
+<h3>B10. Auditor Read-Only Access (Time-Bound) — <strong>Available</strong></h3>
+<p>External auditors get read-only access to notices, audit trails, and reports for a fixed window. After the expiry date their access turns off automatically. A countdown banner shows them how many days remain.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>As Compliance Head, go to the Team page.</li>
+<li>Invite an auditor by email; set the access end date.</li>
+<li>They can sign in and view (not edit) until that date.</li>
+<li>After the date, their access auto-disables.</li>
+</ol>
+<h3>B11. Immutable Audit Trail — <strong>Available</strong></h3>
+<p>Every action — create, edit, status change, approval, share — is recorded in a tamper-proof log that even administrators cannot alter or delete. Auditors and regulators can review the full history.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open any notice.</li>
+<li>Click the &quot;Audit Trail&quot; tab.</li>
+<li>See every action, who performed it, and exactly when.</li>
+<li>Export when an auditor asks (export polish coming in v2.1).</li>
+</ol>
+<h3>B12. Permission Matrix for 7 Compliance Roles — <strong>Available</strong></h3>
+<p>12 distinct permissions are mapped across 7 roles: Compliance Head, CA Consultant, CFO, Drafter, Reviewer, Legal Team, Finance Team — plus Auditor (time-bound). Each role can do exactly what they should and nothing else.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>As Admin, open the Team page.</li>
+<li>Assign roles to teammates.</li>
+<li>Roles enforce themselves automatically across the product.</li>
+<li>View the role-permission matrix in the Admin settings panel.</li>
+</ol>
+<h3>B13. Client Branding — Logo, Website, Address — <strong>Available</strong></h3>
+<p>Every onboarded client (your tenant) can register its own company logo, website, and registered office address. The logo and name then appear in the bottom-left of the sidebar so members of that tenant see their own brand alongside TaxSync (co-brand layout — Linear / Stripe pattern).</p>
+<p><strong>Where to find it:</strong></p>
+<ul>
+<li>Sidebar → Compliance → Clients → pick a client → scroll to the <strong>Branding</strong> section.</li>
+<li>Once saved, the logo + name auto-render in the bottom-left of the sidebar (above the user cluster) for everyone in that tenant.</li>
+</ul>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open the client detail page.</li>
+<li>Scroll to the <strong>Branding</strong> card.</li>
+<li>Drop or click the logo box — PNG, JPEG, or WEBP, up to 256 KB. SVG is rejected for security (XSS risk).</li>
+<li>Enter the website (must start with <code>http://</code> or <code>https://</code>).</li>
+<li>Enter the registered office address (multi-line).</li>
+<li>Click <strong>Save</strong>. Logo uploads instantly; website + address save together.</li>
+<li>Click <strong>Remove logo</strong> under the uploader to clear it.</li>
+</ol>
+<p><strong>Permission:</strong> any team-management role on that client (compliance head, CA consultant). Read-access is open to anyone in the tenant — they see the logo in the sidebar without needing edit rights.</p>
+<hr />
+<h2>C. Statutory Calendar and Alerts</h2>
+<p>Never miss a deadline — pre-loaded Indian statutory dates plus reminder alerts.</p>
+<h3>C1. 37 Pre-Loaded FY 2025-26 Statutory Deadlines — <strong>Available</strong></h3>
+<p>GSTR-1, GSTR-3B, GSTR-9, TDS quarterly returns, Advance Tax instalments, Income Tax Return filings, MCA returns — all pre-loaded for the current financial year.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open the Compliance Calendar.</li>
+<li>View the month — every statutory deadline is visible.</li>
+<li>Filter to show only the obligations applicable to a specific client.</li>
+</ol>
+<h3>C2. Holiday-Aware Deadline Shifting — <strong>Available</strong></h3>
+<p>When a deadline falls on a Sunday or a gazetted holiday, the system shifts it to the next working day automatically. Penalty calculations also account for this.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Add or pick any deadline.</li>
+<li>The system shows the original and adjusted date.</li>
+<li>Reminders fire on the adjusted date, not the calendar date.</li>
+</ol>
+<h3>C3. Real-Time In-App Notifications — <strong>Available</strong></h3>
+<p>A notification bell at the top of the product lights up the moment something requires attention — new notice, status change, deadline approaching, escalation. The bell stays in sync without you having to refresh.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Look at the bell icon at the top right.</li>
+<li>A red dot indicates new notifications.</li>
+<li>Click to view them.</li>
+<li>Click any notification to jump to the relevant notice or bill.</li>
+</ol>
+<h3>C4. Email Alerts — <strong>Available</strong></h3>
+<p>Email reminders fire for new notices and approaching deadlines (T-7, T-3, T-1 days) using your registered email address.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Make sure your profile email is correct.</li>
+<li>No setup needed — email alerts fire automatically.</li>
+<li>Check your inbox; act on the alert link.</li>
+</ol>
+<h3>C5. Compliance Health Score — <strong>Available</strong></h3>
+<p>A single percentage shows how well a client is doing on compliance, calculated over a rolling 90-day window. Higher means fewer overdue notices and faster response times.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open the Compliance dashboard.</li>
+<li>View the health score chip at the top.</li>
+<li>Click for the breakdown: % responded on time, average response time, overdue count.</li>
+</ol>
+<h3>C6. Vendor Invoice Reminders — <strong>Available</strong></h3>
+<p>For each compliance client, get reminders 3 days before, 1 day before, and on the overdue day for any tracked vendor invoice (utilities, telecom, subscription services, recurring vendor bills).</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Connect Gmail — invoices are detected automatically.</li>
+<li>Or add an invoice manually with biller name, amount, and due date.</li>
+<li>Reminders fire on T-3, T-1, and the overdue day. Capped at 3 reminders per invoice lifetime.</li>
+</ol>
+<hr />
+<h2>D. Email Integration (Gmail)</h2>
+<p>Connect Gmail once and the product continuously imports compliance notices and bills.</p>
+<h3>D1. One-Click Gmail Connect — <strong>Available</strong></h3>
+<p>Sign in with your Google account once. Connection is secure (OAuth 2.0) and you can disconnect any time from the settings page.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open the Email page in TaxSync.</li>
+<li>Click &quot;Connect Gmail&quot;.</li>
+<li>A Google sign-in page opens — pick your account and approve.</li>
+<li>You return to TaxSync; the connection shows as Active.</li>
+</ol>
+<h3>D2. Continuous Background Scanning — <strong>Available</strong></h3>
+<p>The product checks your Gmail for new compliance and bill emails every 15 minutes. The cadence is configurable from 5 minutes to 24 hours per credential.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Once connected, no further action is needed.</li>
+<li>New notices and bills appear automatically on their dashboards.</li>
+<li>Adjust the scan frequency from the Email Settings page if needed.</li>
+</ol>
+<h3>D3. Filter Rules — <strong>Available</strong></h3>
+<p>Decide what happens to incoming emails: route to compliance notices, route to bills, save as a document only, or ignore. Rules match by sender pattern, subject pattern, or Gmail label. Sensible defaults for gov.in and known billers come pre-seeded.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open Email Settings.</li>
+<li>Click &quot;Filter Rules&quot;.</li>
+<li>Add a rule: sender or subject pattern, then choose where to route.</li>
+<li>Save — the next scan applies the rule.</li>
+</ol>
+<h3>D4. Auto-Detect Indian Regulatory Emails — <strong>Available</strong></h3>
+<p>Emails from gov.in domains and known regulatory senders (GST, Income Tax, MCA, RBI, SEBI) automatically create a compliance notice with the right authority pre-filled.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Connect Gmail.</li>
+<li>Wait for the next scan.</li>
+<li>Detected regulatory emails appear as notices on the Compliance dashboard.</li>
+</ol>
+<h3>D5. Auto-Detect Vendor Invoices — <strong>Available</strong></h3>
+<p>Utility, telecom, subscription, and other recurring vendor emails are automatically detected and turned into vendor-invoice records, including biller name, amount, and due date.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Connect Gmail.</li>
+<li>Wait for the scan.</li>
+<li>Invoices appear on the <strong>Vendor invoices</strong> dashboard with due date and amount.</li>
+</ol>
+<h3>D6. View Source Email — <strong>Available</strong></h3>
+<p>For any notice or bill that came from Gmail, click &quot;View source email&quot; to fetch the original email body on demand. The email is shown in the browser session only — never stored — for privacy.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open any Gmail-sourced notice or bill.</li>
+<li>Click &quot;View source email&quot;.</li>
+<li>The body opens in a panel; refreshing the page discards it.</li>
+</ol>
+<h3>D7. Connection Health Monitoring — <strong>Available</strong></h3>
+<p>If your Gmail token is revoked or expires, scanning stops and a &quot;Reconnect required&quot; banner appears. After two consecutive scan failures you are alerted via email.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Sign in to TaxSync.</li>
+<li>If a banner shows &quot;Reconnect required&quot;, click it.</li>
+<li>Re-authorise Google — scanning resumes automatically.</li>
+</ol>
+<hr />
+<h2>E. Vendor Invoices and Payments</h2>
+<p>A dedicated dashboard for tracking the recurring vendor invoices each client owes — detected from Gmail or added manually. (Repositioned from &quot;Bills&quot; in v2.1 — TaxSync is enterprise-only, no consumer/household bill flavour.)</p>
+<h3>E1. Vendor Invoice Dashboard with Filters — <strong>Available</strong></h3>
+<p>See invoices bucketed into Upcoming, Due Soon, Overdue, and Paid. Per-category aggregates show how much is owed across utilities, telecom, subscriptions, etc.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Sidebar → Email → <strong>Vendor invoices</strong>.</li>
+<li>Switch tabs: Upcoming, Due Soon, Overdue, Paid.</li>
+<li>View totals per category.</li>
+</ol>
+<h3>E2. Pre-Deadline Invoice Reminders — <strong>Available</strong></h3>
+<p>Reminders fire 3 days before due date, 1 day before, and on the overdue day. Each invoice is capped at three reminders lifetime so the inbox does not fill up.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>No setup needed once an invoice exists.</li>
+<li>Reminders arrive via email and in-app bell.</li>
+<li>Click the reminder to open the invoice.</li>
+</ol>
+<h3>E3. Mark as Paid — <strong>Available</strong></h3>
+<p>Once paid, mark the invoice as Paid with the date, reference number, and method. The transition is logged in the audit trail and stops further reminders.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open the invoice.</li>
+<li>Click <strong>Mark as Paid</strong>.</li>
+<li>Enter payment date, reference, and method.</li>
+<li>The invoice moves to the Paid bucket.</li>
+</ol>
+<h3>E4. Recurring Invoice Detection — <strong>Available</strong></h3>
+<p>When a new invoice arrives from the same biller and account, the system links it to the previous one as a recurring series (monthly, quarterly, or annual).</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Invoices auto-link by biller and last 4 of the account number.</li>
+<li>Open any invoice to see the full series.</li>
+<li>Spot a missing month? An anomaly alert appears in the bell.</li>
+</ol>
+<h3>E5. Missing-Month Anomaly Detection — <strong>Available</strong></h3>
+<p>If a recurring invoice has arrived every month for the last six months and suddenly skips a cycle, the system surfaces it as an anomaly so the team can check whether the invoice is actually due.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Look for the &quot;Missing invoice?&quot; alert in the notification bell.</li>
+<li>Open the recurring series to confirm.</li>
+<li>Add the invoice manually if a paper copy exists.</li>
+</ol>
+<h3>E6. Multi-Channel Reminder Delivery — <strong>Available</strong></h3>
+<p>Reminders are delivered via email and the in-app notification bell. SMS delivery is scaffolded and ships once telecom registration completes.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Use whichever channel is preferred for monitoring.</li>
+<li>Both update in sync — actioning one clears the other.</li>
+</ol>
+<hr />
+<h2>F. AI Document Intelligence</h2>
+<p>The intelligence layer underpinning classification, extraction, summaries, and risk.</p>
+<h3>F1. Auto-Classification Across 7 Document Categories — <strong>Available</strong></h3>
+<p>Approximately 85% accurate auto-categorisation of any uploaded document into one of seven common categories. Manual override available.</p>
+<p><strong>How to use it:</strong> see Section A3.</p>
+<h3>F2. 6 AI Providers with Automatic Fallback — <strong>Available</strong></h3>
+<p>The product talks to multiple AI providers under the hood. If one is slow or unavailable, the next is used automatically. You never see an error from a provider outage.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>No user action needed — fallback is silent and automatic.</li>
+<li>Extraction and summaries simply keep working.</li>
+</ol>
+<h3>F3. Smart Extraction (Dates, Amounts, Vendors) — <strong>Available</strong></h3>
+<p>Pulls structured fields from invoices, receipts, and tax notices.</p>
+<p><strong>How to use it:</strong> see Section A4.</p>
+<h3>F4. AI-Generated Summaries — <strong>Available</strong></h3>
+<p>Plain-English one-paragraph summaries for any document.</p>
+<p><strong>How to use it:</strong> see Section A5.</p>
+<h3>F5. Risk Scoring for Compliance Notices — <strong>Available</strong></h3>
+<p>0-100 risk score with tier label and three explainable factors per notice.</p>
+<p><strong>How to use it:</strong> see Section B4.</p>
+<h3>F6. Human Review Queue for Low-Confidence Classifications — <strong>Available</strong></h3>
+<p>When the AI is not confident enough, the notice is routed to a human review queue instead of auto-assigning a category. (Active learning improvement comes in v2.1.)</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>As Compliance Head, open the &quot;Review Queue&quot; page.</li>
+<li>Review pending items.</li>
+<li>Confirm or correct each — the system learns from your decision.</li>
+</ol>
+<hr />
+<h2>G. Search and Reporting</h2>
+<p>Find anything fast, run reports, export to spreadsheets.</p>
+<h3>G1. Full-Text Search Across All Documents — <strong>Available</strong></h3>
+<p>Search anywhere in document content, not just file names.</p>
+<p><strong>How to use it:</strong> see Section A9.</p>
+<h3>G2. Cross-Entity Unified Search — <strong>Available</strong></h3>
+<p>A single search box searches both documents and compliance notices. Results show the type (Document or Notice) so you know where to click.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Type into the global search.</li>
+<li>Results appear with type badges.</li>
+<li>Click anything — it opens in its native page.</li>
+</ol>
+<h3>G3. Fuzzy Matching — <strong>Available</strong></h3>
+<p>Typos and partial words still find their target.</p>
+<p><strong>How to use it:</strong> type whatever you remember; the system handles small mistakes.</p>
+<h3>G4. Filter by Authority, Status, Risk, Date — <strong>Available</strong></h3>
+<p>Compliance lists can be filtered on any combination of authority, status, risk tier, deadline window, and amount.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open the Compliance dashboard.</li>
+<li>Use the filter chips at the top.</li>
+<li>Combine filters as needed.</li>
+<li>Save the URL to share or revisit later.</li>
+</ol>
+<h3>G5. Pre-Built Reports — <strong>Available</strong></h3>
+<p>Penalty by Authority, Notice Volume by Status, Response Time Percentiles, Compliance Health Summary — all available out of the box.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Click &quot;Reports&quot; in the Compliance sidebar.</li>
+<li>Pick a report.</li>
+<li>Adjust date range and client filter.</li>
+<li>View charts and tables.</li>
+</ol>
+<h3>G6. CSV Export — <strong>Available</strong></h3>
+<p>Every report and list exports to CSV for use in Excel or Google Sheets.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open any report or list.</li>
+<li>Click &quot;Export CSV&quot;.</li>
+<li>The file downloads to your computer.</li>
+</ol>
+<hr />
+<h2>H. Multi-User Access and Security</h2>
+<p>Access controls for teams, encryption for sensitive data.</p>
+<h3>H1. Email and Password Sign-In — <strong>Available</strong></h3>
+<p>Standard email and password registration with industry-grade password storage.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Click &quot;Sign Up&quot;.</li>
+<li>Enter email and password.</li>
+<li>Verify email if prompted.</li>
+<li>Sign in.</li>
+</ol>
+<h3>H2. Sign In with Google or Microsoft — <strong>Available</strong></h3>
+<p>One-click sign-in with a Google or Microsoft account. No separate password to remember.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Click &quot;Sign in with Google&quot; or &quot;Sign in with Microsoft&quot;.</li>
+<li>Approve the access prompt.</li>
+<li>You are signed in.</li>
+</ol>
+<h3>H3. 7 Compliance Roles plus Auditor — <strong>Available</strong></h3>
+<p>Compliance Head, CA Consultant, CFO, Drafter, Reviewer, Legal Team, Finance Team — plus Auditor for time-bound external access.</p>
+<p><strong>How to use it:</strong> see Section B12.</p>
+<h3>H4. Cross-Client View for Senior Roles — <strong>Available</strong></h3>
+<p>Compliance Head, CA Consultant, and CFO can view all clients in one combined dashboard. Other roles see only the active client.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>As a senior role, open the client switcher.</li>
+<li>Pick &quot;All Clients&quot;.</li>
+<li>Dashboards now aggregate across all your clients.</li>
+</ol>
+<h3>H5. Admin User Management — <strong>Available</strong></h3>
+<p>Admins invite teammates, assign roles, and revoke access from a dedicated Team page.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open the Team page.</li>
+<li>Click &quot;Invite Member&quot;.</li>
+<li>Enter email and role.</li>
+<li>They receive an invite link by email.</li>
+</ol>
+<h3>H6. Auto-Logout and Session Management — <strong>Available</strong></h3>
+<p>Sessions refresh automatically on activity and end after a period of inactivity for security.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>No setup needed.</li>
+<li>Inactive sessions sign out automatically.</li>
+<li>Sign back in to resume.</li>
+</ol>
+<h3>H7. Encrypted Sensitive Fields — <strong>Available</strong></h3>
+<p>GSTIN, PAN, penalty amounts, and similar fields are encrypted in storage so they cannot be read even if the database is breached.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>No user action — encryption is always on for sensitive fields.</li>
+</ol>
+<h3>H8. Production Security Hardening — <strong>Available</strong></h3>
+<p>The platform applies industry standards: rate limiting on login attempts, secure HTTP headers, and CSRF protection on every action.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>No user action — these defences are always on.</li>
+</ol>
+<hr />
+<h2>I. Analytics and Reporting</h2>
+<p>Dashboards for documents, compliance, and bills.</p>
+<h3>I1. Documents Dashboard — <strong>Available</strong></h3>
+<p>Total document count, monthly uploads trend, category breakdown.</p>
+<p><strong>How to use it:</strong> see Section A10.</p>
+<h3>I2. Compliance Dashboard with Risk Distribution — <strong>Available</strong></h3>
+<p>A pie chart of notices by risk tier (Critical / High / Medium / Low), monthly volume, and a status snapshot.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open the Compliance Dashboard.</li>
+<li>View the risk distribution pie.</li>
+<li>Click any slice to filter the notice list.</li>
+</ol>
+<h3>I3. Compliance Health Score (Rolling 90 Days) — <strong>Available</strong></h3>
+<p>A single percentage at the top of every client view.</p>
+<p><strong>How to use it:</strong> see Section C5.</p>
+<h3>I4. Per-Authority Penalty Totals — <strong>Available</strong></h3>
+<p>How much have you been hit with from GST vs Income Tax vs MCA?</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open Reports &gt; Penalty by Authority.</li>
+<li>Pick the date range.</li>
+<li>View the bar chart with per-authority totals.</li>
+</ol>
+<h3>I5. Notice Response Time Analytics — <strong>Available</strong></h3>
+<p>Median, 75th percentile, and 90th percentile response times across all notices.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open Reports &gt; Response Time.</li>
+<li>Pick date range and client.</li>
+<li>View the percentile chart.</li>
+</ol>
+<h3>I6. CSV Export of Every Report — <strong>Available</strong></h3>
+<p>See Section G6.</p>
+<hr />
+<h2>J. BYOK AI Assistant — Bring Your Own Key</h2>
+<p>A built-in AI assistant powered by <strong>your own</strong> Anthropic Claude or Google Gemini API key. Costs go to your provider account; TaxSync never charges for AI. The assistant is hard-prompted to only answer questions about TaxSync work — anything off-topic is refused. Available since 2026-05-08.</p>
+<h3>J1. Connect Your AI Provider — <strong>Available</strong></h3>
+<p>Pick a provider (Claude or Gemini), pick a model, paste your API key, save. The key is encrypted at rest using the same Fernet cipher that protects Gmail refresh tokens (INFRA-06). The plaintext is never returned to the browser after save.</p>
+<p><strong>Where to find it:</strong></p>
+<ul>
+<li>Sidebar → Settings → <strong>AI assistant</strong></li>
+<li>OR: Dashboard → Quick actions → <strong>Ask AI</strong> tile (4th tile, violet)</li>
+</ul>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open Settings → AI assistant.</li>
+<li>Pick provider — Anthropic Claude or Google Gemini.</li>
+<li>The default model auto-fills (<code>claude-sonnet-4-6</code> or <code>gemini-2.5-flash</code>). Override only if your account has access to a different model.</li>
+<li>Paste your API key.</li>
+<li>Click <strong>Test</strong> — sends a one-token ping; success shows latency.</li>
+<li>Click <strong>Save</strong> — the key is encrypted and stored.</li>
+<li>Replacing the key is the same flow; <strong>Disconnect</strong> wipes it.</li>
+</ol>
+<p><strong>Permission:</strong> restricted to admin-grade roles (compliance head, CA consultant). Read access (knowing which AI is connected) is open to anyone in the tenant.</p>
+<h3>J2. AI Notice Summary + Recommended Actions — <strong>Available</strong></h3>
+<p>On any compliance notice, two on-demand AI buttons:</p>
+<ul>
+<li><strong>Summarize</strong> — a 4-6 line digest covering authority, core demand, tax/penalty/interest amounts, deadline, and a one-word risk tier.</li>
+<li><strong>Suggest actions</strong> — a list of 3-5 concrete next steps for the compliance team, each with a one-line rationale and an urgency tier (high/medium/low) shown as a coloured stripe.</li>
+</ul>
+<p><strong>Where to find it:</strong></p>
+<ul>
+<li>Compliance → Notices → open any notice → <strong>AI assistant</strong> panel at the top of the right column.</li>
+</ul>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open any notice (<code>/dashboard/compliance/notices/&lt;id&gt;</code>).</li>
+<li>Find the <strong>AI assistant</strong> card in the right column.</li>
+<li>Click <strong>Summarize</strong> — wait 2-5 seconds; markdown summary + key-points list + deadline render below.</li>
+<li>Click <strong>Suggest actions</strong> — action cards appear, urgency-coloured.</li>
+</ol>
+<p>If no AI key is connected, the panel shows <strong>&quot;Connect AI&quot;</strong> as a one-click link to Settings.</p>
+<h3>J3. AI Vendor Invoice Summary + Actions + Payment Timing — <strong>Available</strong></h3>
+<p>On any vendor invoice, three on-demand AI buttons:</p>
+<ul>
+<li><strong>Summarize</strong> — a 2-3 line digest plus an automatic <strong>anomalies</strong> list (amount unusually high vs same-vendor history, missing reference, due-date in the past, recurrence drift).</li>
+<li><strong>Suggest actions</strong> — 2-4 next steps (mark paid, flag duplicate, request invoice copy, schedule reminder, etc.) with rationale and urgency.</li>
+<li><strong>Payment timing</strong> — a recommendation (pay now / wait until T-1 / pre-pay for early-payment discount) with rationale and an optional suggested payment date, rendered in an accent-tinted box.</li>
+</ul>
+<p><strong>Where to find it:</strong></p>
+<ul>
+<li>Sidebar → Email → Vendor invoices → open any invoice → <strong>AI assistant</strong> panel between payment-details and the action row.</li>
+</ul>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open any vendor invoice (<code>/dashboard/email/bills/&lt;id&gt;</code>).</li>
+<li>Find the <strong>AI assistant</strong> card.</li>
+<li>Click any of the three buttons.</li>
+</ol>
+<h3>J4. Scope Lock — Strictly TaxSync Work Only — <strong>Available</strong></h3>
+<p>The system prompt hard-restricts the AI to:</p>
+<ol>
+<li>Indian tax / regulatory notices (GST, Income Tax, MCA, RBI, SEBI)</li>
+<li>Compliance deadlines and response drafts</li>
+<li>Vendor invoices for the tenant's clients</li>
+<li>The drafter → reviewer → legal → CFO chain</li>
+<li>TaxSync workflow guidance</li>
+</ol>
+<p>Anything else — code, weather, general knowledge, jailbreak prompts, mixed in-scope+out-scope questions — gets refused with a single line. The frontend translates this into a soft toast: <strong>&quot;I can only help with TaxSync compliance and finance work.&quot;</strong></p>
+<p>This is defence-in-depth, not a cryptographic boundary — a determined user with their own key could still craft prompts to break out. But the prompt prevents accidental general-purpose usage and limits cost burn from off-topic queries.</p>
+<p><strong>Permission:</strong> any active member of the tenant can run AI tasks (gated by <code>notice:view</code>). Only admins can manage the credential.</p>
+<h3>J5. Provider Cost Transparency — <strong>Available</strong></h3>
+<p>Costs are charged directly to the user's Anthropic or Google account. TaxSync never bills for AI usage. The Settings page shows the connected provider, model, and &quot;last used&quot; timestamp so admins can spot stale credentials.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open Settings → AI assistant.</li>
+<li>The connected card shows: provider, model, last-used timestamp.</li>
+<li>Check your provider's billing dashboard for actual spend.</li>
+</ol>
+<hr />
+<h2>Pending Features (Next Releases)</h2>
+<p>These features are committed but not yet shipped. Estimated release windows below.</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Status</th>
+<th>Target Release</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Direct integration with GST, Income Tax, MCA portals (auto-fetch notices)</td>
+<td>Blocked</td>
+<td>Pending regulatory access decisions</td>
+</tr>
+<tr>
+<td>Higher-accuracy AI classification across 40+ notice sub-types</td>
+<td>Planned</td>
+<td>v2.1 (2026 Q3)</td>
+</tr>
+<tr>
+<td>AI-drafted response generation from notice templates</td>
+<td>Planned</td>
+<td>v2.1 (2026 Q3)</td>
+</tr>
+<tr>
+<td>20+ pre-built response templates with variable substitution</td>
+<td>Planned</td>
+<td>v2.1 (2026 Q3)</td>
+</tr>
+<tr>
+<td>Evidence package PDF merge with auto table-of-contents</td>
+<td>Planned</td>
+<td>v2.1 (2026 Q3)</td>
+</tr>
+<tr>
+<td>GSTR-2A/2B vs GSTR-3B reconciliation report</td>
+<td>Planned</td>
+<td>v2.1 (2026 Q3)</td>
+</tr>
+<tr>
+<td>Searchable regulation library (GST Act, IT Act, Companies Act, FEMA, SEBI)</td>
+<td>Planned</td>
+<td>v2.1 (2026 Q3)</td>
+</tr>
+<tr>
+<td>Larger-scale search (Elasticsearch) for very high notice volumes</td>
+<td>Planned</td>
+<td>v2.1 (2026 Q3)</td>
+</tr>
+<tr>
+<td>SMS alerts</td>
+<td>Planned</td>
+<td>v2.1 — pending DLT registration</td>
+</tr>
+<tr>
+<td>Per-user alert preferences (T-7 / T-3 / T-1 customisation)</td>
+<td>Planned</td>
+<td>v2.1 (2026 Q3)</td>
+</tr>
+<tr>
+<td>Calendar export to Google Calendar / Outlook (.ics)</td>
+<td>Planned</td>
+<td>v2.1 (2026 Q3)</td>
+</tr>
+<tr>
+<td>Severity-weighted compliance score</td>
+<td>Planned</td>
+<td>v2.1 (2026 Q3)</td>
+</tr>
+<tr>
+<td>Outlook, Yahoo, and other (IMAP) email integrations</td>
+<td>Planned</td>
+<td>v2.1 (2026 Q3)</td>
+</tr>
+<tr>
+<td>Public AI chat (&quot;Ask AI about my notices&quot;)</td>
+<td>Planned</td>
+<td>v3.0 (2027)</td>
+</tr>
+<tr>
+<td>Outbound email replies via AI drafting</td>
+<td>Planned</td>
+<td>v3.0 (2027)</td>
+</tr>
+<tr>
+<td>Native mobile apps (iOS / Android)</td>
+<td>Out of Scope</td>
+<td>Web-first sufficient</td>
+</tr>
+<tr>
+<td>WhatsApp Business notifications</td>
+<td>Out of Scope</td>
+<td>Email + SMS sufficient</td>
+</tr>
+<tr>
+<td>Multi-language (Hindi, regional) interface</td>
+<td>Out of Scope</td>
+<td>English standard for compliance</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>Feature Scorecard</h2>
+<p>A quick numerical view.</p>
+<table>
+<thead>
+<tr>
+<th>Bucket</th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Available now</td>
+<td>70 features</td>
+</tr>
+<tr>
+<td>In Progress</td>
+<td>0 features</td>
+</tr>
+<tr>
+<td>Planned (v2.1)</td>
+<td>13 features</td>
+</tr>
+<tr>
+<td>Planned (v3.0)</td>
+<td>2 features</td>
+</tr>
+<tr>
+<td>Blocked (external dependency)</td>
+<td>1 feature group (government portal direct integration)</td>
+</tr>
+<tr>
+<td>Out of Scope</td>
+<td>3 features (mobile, WhatsApp, multi-language)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Available-feature breakdown by area:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Available</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Document Management</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Compliance Notice Management</td>
+<td>13 (added B13 Client Branding 2026-05-08)</td>
+</tr>
+<tr>
+<td>Statutory Calendar and Alerts</td>
+<td>6</td>
+</tr>
+<tr>
+<td>Email Integration (Gmail)</td>
+<td>7</td>
+</tr>
+<tr>
+<td>Vendor Invoices and Payments</td>
+<td>6 (repositioned from &quot;Bills and Payments&quot; 2026-05-08)</td>
+</tr>
+<tr>
+<td>AI Document Intelligence</td>
+<td>6</td>
+</tr>
+<tr>
+<td>Search and Reporting</td>
+<td>6</td>
+</tr>
+<tr>
+<td>Multi-User Access and Security</td>
+<td>8</td>
+</tr>
+<tr>
+<td>Analytics and Reporting</td>
+<td>6 (overlaps included for completeness)</td>
+</tr>
+<tr>
+<td>BYOK AI Assistant</td>
+<td>5 (new section J, added 2026-05-08)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>Glossary</h2>
+<p>Plain definitions of unavoidable terms.</p>
+<ul>
+<li><strong>GSTIN</strong> — A unique 15-character ID issued to a business under Goods and Services Tax. Like a tax-ID for a specific GST registration.</li>
+<li><strong>PAN</strong> — Permanent Account Number. A 10-character ID from Income Tax that identifies a person or entity.</li>
+<li><strong>CIN</strong> — Corporate Identification Number, a 21-character code for a company registered with the MCA.</li>
+<li><strong>GST</strong> — Goods and Services Tax. The federal indirect tax in India.</li>
+<li><strong>TDS</strong> — Tax Deducted at Source. Tax withheld at the time of payment (salary, contractor fees, rent over a threshold, etc.).</li>
+<li><strong>ITR</strong> — Income Tax Return. Annual filing with the Income Tax department.</li>
+<li><strong>MCA</strong> — Ministry of Corporate Affairs. Regulator for companies (filings like ROC).</li>
+<li><strong>RBI</strong> — Reserve Bank of India. Banking and forex regulator.</li>
+<li><strong>SEBI</strong> — Securities and Exchange Board of India. Capital markets regulator.</li>
+<li><strong>GSP</strong> — GST Suvidha Provider. An authorised intermediary that connects software to the GST portal.</li>
+<li><strong>DLT Registration</strong> — A telecom-regulator process required before a brand can send SMS in India.</li>
+<li><strong>Notice</strong> — A formal communication from a regulator demanding information, payment, or response by a deadline.</li>
+<li><strong>Show-Cause Notice</strong> — A notice asking the recipient to explain why a proposed action (penalty, demand) should not be taken.</li>
+<li><strong>Compliance Head</strong> — The senior in-house owner of regulatory matters. Typically approves the most serious responses.</li>
+<li><strong>CA Consultant</strong> — A Chartered Accountant external to the client, often managing many clients across many GSTINs.</li>
+<li><strong>CFO</strong> — Chief Financial Officer. Final approver on responses with material financial impact.</li>
+<li><strong>Drafter</strong> — The team member who writes the first version of a response.</li>
+<li><strong>Reviewer</strong> — The peer who reviews a draft before it goes to Legal.</li>
+<li><strong>Legal Team</strong> — The team responsible for legal accuracy and regulation citations in a response.</li>
+<li><strong>Finance Team</strong> — Reviewers of tax-specific notices and reconciliation data.</li>
+<li><strong>Auditor</strong> — An external party with time-bound, read-only access for inspection or assurance work.</li>
+<li><strong>Audit Trail</strong> — A tamper-proof, timestamped record of who did what, when.</li>
+<li><strong>Risk Tier</strong> — A label (Critical, High, Medium, Low) summarising how urgent a notice is.</li>
+<li><strong>OAuth</strong> — A standard authorisation flow used to connect your Google or Microsoft account safely without sharing your password.</li>
+<li><strong>OCR</strong> — Optical Character Recognition. Reading text from images and scanned documents.</li>
+</ul>
+<hr />
+<h2>Contact and Support</h2>
+<p>For questions, training, or onboarding support, contact:</p>
+<ul>
+<li><strong>Project Lead:</strong> Sravan (TaxSync, Product Labs, IIIT Hyderabad)</li>
+<li><strong>Email:</strong> munnasrav45@gmail.com</li>
+<li><strong>Documentation:</strong> README.md and user-facing help in the app</li>
+<li><strong>Status updates:</strong> STATUS_REPORT.md</li>
+</ul>
+<hr />
+<p><em>TaxSync — Smart Document Management and Compliance System</em>
+<em>Document version: v2.1 — released 8 May 2026 (adds B13 Client Branding, Section J BYOK AI, Vendor Invoice rebrand)</em></p>
+</article>
+</body>
+</html>

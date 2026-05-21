@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TaxSync · Database Schema</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="page">
+
+<nav class="topic-nav">
+    <a href="index.html">⌂ Index</a>
+    <a href="01-architecture.html">01 Architecture</a>
+    <a href="02-frontend.html">02 Frontend</a>
+    <a href="03-backend.html">03 Backend</a>
+    <a href="04-database-schema.html" class="cur">04 DB Schema</a>
+    <a href="05-security.html">05 Security</a>
+    <a href="06-deployment.html">06 Deployment</a>
+    <a href="07-ml-ai.html">07 ML / AI</a>
+    <a href="08-compliance-workflow.html">08 Compliance</a>
+    <a href="09-api-reference.html">09 API Ref</a>
+    <a href="10-auth-deep-dive.html">10 Auth</a>
+</nav>
+
+<header class="title-strip">
+    <div class="logo" style="background:var(--c3)">DB</div>
+    <div>
+        <h1>HOW THE <span class="accent">DATABASE</span> WORKS</h1>
+        <div class="tagline">PostgreSQL 16 · SQLAlchemy 2.0 · Alembic head <code>0032</code> · RLS · FTS · audit trigger</div>
+    </div>
+    <div class="remember">
+        <h4>★ REMEMBER</h4>
+        <ul>
+            <li>One DB · multi-tenant via RLS</li>
+            <li>Audit log = immutable (DB trigger)</li>
+            <li>FTS = tsvector + GIN + trigger</li>
+            <li>32 numbered Alembic revisions</li>
+            <li>Session-mode pooler in prod</li>
+        </ul>
+    </div>
+</header>
+
+<div class="grid">
+
+    <!-- 1 ERD V1 -->
+    <section class="panel c1 span-6">
+        <h2><span class="num">1</span> V1.0 CORE TABLES</h2>
+<pre class="ascii">
+  ┌────────────┐ 1   ∞ ┌────────────────┐
+  │   users    │───────│   documents    │
+  │  id (PK)   │       │ id (PK)        │
+  │  email UQ  │       │ user_id FK     │
+  │  role      │       │ category enum  │
+  │  hashed_pwd│       │ status  enum   │
+  │  oauth_id  │       │ celery_task_id │
+  │  deleted_at│       │ search_vector  │
+  └─────┬──────┘       │ ai_summary     │
+        │              └────┬───────────┘
+        │  1∞               │ 1∞
+        ▼                   ▼
+  ┌─────────────┐    ┌────────────────────┐
+  │refresh_tokens│   │document_permissions │
+  │ token UQ     │   │ document_id FK     │
+  │ is_revoked   │   │ user_id FK         │
+  │ replaced_by  │   │ permission         │
+  │ expires_at   │   └────────────────────┘
+  └──────────────┘
+          ┌────────────────────┐
+          │   audit_logs       │   (immutable trigger)
+          │ user_id FK / action│
+          └────────────────────┘</pre>
+    </section>
+
+    <!-- 2 ERD V2 -->
+    <section class="panel c2 span-6">
+        <h2><span class="num">2</span> V2.0 COMPLIANCE TABLES</h2>
+<pre class="ascii">
+   compliance_clients ──┬──► compliance_memberships ── users
+       (tenant root)    │
+                        ├──► compliance_client_registrations
+                        ├──► compliance_notices
+                        │       ├─ parent_notice_id (self-FK)
+                        │       ├─ document_id  → v1.0 documents
+                        │       ├─ notice_type_id
+                        │       ├─ search_vector tsvector
+                        │       ├─ risk_tier · risk_score
+                        │       └─► compliance_notice_activity
+                        │          compliance_notice_tags
+                        │          compliance_responses
+                        │          compliance_response_drafts (versioned)
+                        │
+                        └──► ai_credentials  (one row per tenant)
+
+   compliance_review_queue   (low-confidence triage)
+   compliance_regulatory_calendar (FY 25-26 seeds)
+   compliance_alerts        (APScheduler jobstore: apscheduler_jobs)
+   compliance_notice_types  (taxonomy)
+   compliance_audit_log     (append-only trigger)</pre>
+    </section>
+
+    <!-- 3 USER TABLE -->
+    <section class="panel c3 span-4">
+        <h2><span class="num">3</span> users</h2>
+        <table>
+            <tr><th>Column</th><th>Type</th></tr>
+            <tr><td>id</td><td>int PK</td></tr>
+            <tr><td>email</td><td>varchar(255) UQ</td></tr>
+            <tr><td>username</td><td>varchar(100) UQ</td></tr>
+            <tr><td>hashed_password</td><td>varchar(255) NULL</td></tr>
+            <tr><td>role</td><td>admin | editor | viewer</td></tr>
+            <tr><td>auth_provider</td><td>local | google | microsoft</td></tr>
+            <tr><td>oauth_id</td><td>varchar(255) UQ NULL</td></tr>
+            <tr><td>is_active</td><td>boolean</td></tr>
+            <tr><td>deleted_at</td><td>timestamptz NULL <span class="warn">soft-del</span></td></tr>
+            <tr><td>created_at / updated_at</td><td>timestamptz</td></tr>
+        </table>
+    </section>
+
+    <!-- 4 DOCUMENT TABLE -->
+    <section class="panel c4 span-4">
+        <h2><span class="num">4</span> documents</h2>
+        <table>
+            <tr><th>Column</th><th>Note</th></tr>
+            <tr><td>id</td><td>PK</td></tr>
+            <tr><td>user_id</td><td>FK users</td></tr>
+            <tr><td>filename / original_filename</td><td>storage + display</td></tr>
+            <tr><td>file_path / s3_url</td><td>one or the other</td></tr>
+            <tr><td>category</td><td>enum 6 + unknown</td></tr>
+            <tr><td>status</td><td>pending → processing → done/failed</td></tr>
+            <tr><td>confidence_score</td><td>float (ML)</td></tr>
+            <tr><td>celery_task_id</td><td>polling handle</td></tr>
+            <tr><td>extracted_text</td><td>text · feeds FTS</td></tr>
+            <tr><td>search_vector</td><td>tsvector · GIN index</td></tr>
+            <tr><td>ai_summary / ai_extracted_fields</td><td>LLM output</td></tr>
+            <tr><td>highlighted_text</td><td>JSON spans</td></tr>
+            <tr><td>notice_id</td><td>Phase 9 FK</td></tr>
+            <tr><td>source_email_id</td><td>Phase 15 FK</td></tr>
+            <tr><td>source</td><td>manual / portal / gmail / imap</td></tr>
+        </table>
+    </section>
+
+    <!-- 5 COMPLIANCE NOTICE -->
+    <section class="panel c5 span-4">
+        <h2><span class="num">5</span> compliance_notices</h2>
+        <table>
+            <tr><th>Column</th><th>Note</th></tr>
+            <tr><td>id</td><td>PK</td></tr>
+            <tr><td>client_id</td><td>FK · RLS pivot</td></tr>
+            <tr><td>parent_notice_id</td><td>self-FK chain</td></tr>
+            <tr><td>document_id</td><td>FK → documents</td></tr>
+            <tr><td>notice_number</td><td>indexed</td></tr>
+            <tr><td>authority</td><td>GST / IT / MCA / RBI / SEBI</td></tr>
+            <tr><td>status</td><td>6-state machine</td></tr>
+            <tr><td>response_deadline / hearing_date / compliance_date / appeal_deadline</td><td>4 dates</td></tr>
+            <tr><td>tax_demand · interest · penalty · total_liability</td><td>Numeric(18,2) INR</td></tr>
+            <tr><td>risk_score / risk_tier</td><td>Phase 10 ML</td></tr>
+            <tr><td>ner_extracted_fields</td><td>JSONB</td></tr>
+            <tr><td>search_vector</td><td>tsvector trigger</td></tr>
+            <tr><td>source</td><td>manual / portal / gmail / imap</td></tr>
+        </table>
+    </section>
+
+    <!-- 6 RLS -->
+    <section class="panel c6 span-6">
+        <h2><span class="num">6</span> ROW LEVEL SECURITY (RLS)</h2>
+<pre class="ascii">
+ALTER TABLE compliance_notices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE compliance_notices FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_isolation ON compliance_notices
+  USING (
+    client_id = current_setting('app.current_client_id')::int
+    OR current_setting('app.cross_client_mode')::bool
+  );
+
+-- migration 0019: fail-closed
+CREATE POLICY deny_when_empty ON compliance_notices
+  AS RESTRICTIVE TO app_runtime
+  USING (current_setting('app.current_client_id', true) IS NOT NULL);</pre>
+        <ul class="tight">
+            <li>RLS is set per table in migration <code>0015_compliance_rls_policies</code></li>
+            <li>0017 creates the <code>app_runtime</code> role (no BYPASSRLS)</li>
+            <li>0018 fixes a cross-client self-recursion</li>
+            <li>0019 makes empty tenant fail-closed (zero rows)</li>
+            <li>0024 closes Supabase advisor flags</li>
+        </ul>
+    </section>
+
+    <!-- 7 AUDIT IMMUTABILITY -->
+    <section class="panel c7 span-6">
+        <h2><span class="num">7</span> AUDIT IMMUTABILITY (DB TRIGGER)</h2>
+<pre class="ascii">
+-- migration 0014 — defense in depth
+CREATE FUNCTION reject_audit_mutation() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'audit_logs is append-only';
+END
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER audit_logs_no_update
+  BEFORE UPDATE OR DELETE ON audit_logs
+  FOR EACH ROW EXECUTE FUNCTION reject_audit_mutation();
+
+-- migration 0017 — revoke even app_migrator role
+REVOKE UPDATE, DELETE ON audit_logs FROM app_runtime;</pre>
+        <p class="dim">Even a compromised application cannot tamper. Forces soft-delete on <code>users</code> (migration 0030 added <code>deleted_at</code>).</p>
+    </section>
+
+    <!-- 8 FTS -->
+    <section class="panel c1 span-6">
+        <h2><span class="num">8</span> FULL-TEXT SEARCH</h2>
+<pre class="ascii">
+-- migration 0003 (documents) + 0023 (compliance_notices)
+ALTER TABLE documents ADD COLUMN search_vector tsvector;
+
+CREATE INDEX ix_documents_fts ON documents USING GIN (search_vector);
+
+CREATE FUNCTION docs_fts_trigger() RETURNS trigger AS $$
+BEGIN
+  NEW.search_vector :=
+       to_tsvector('english', coalesce(NEW.original_filename,'')) ||
+       to_tsvector('english', coalesce(NEW.extracted_text,''));
+  RETURN NEW;
+END
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER docs_fts BEFORE INSERT OR UPDATE
+  ON documents FOR EACH ROW EXECUTE FUNCTION docs_fts_trigger();</pre>
+        <p class="dim">tsvector populated by trigger only — never written from Python. GIN index makes <code>@@ to_tsquery(...)</code> O(log n).</p>
+    </section>
+
+    <!-- 9 ALEMBIC -->
+    <section class="panel c2 span-6">
+        <h2><span class="num">9</span> ALEMBIC TIMELINE (selected)</h2>
+        <table>
+            <tr><th>Rev</th><th>What</th></tr>
+            <tr><td>097ce…</td><td>initial — users, documents, refresh_tokens</td></tr>
+            <tr><td>0003</td><td>FTS tsvector + GIN + trgm</td></tr>
+            <tr><td>0007</td><td>OAuth fields</td></tr>
+            <tr><td>0010</td><td>audit_logs</td></tr>
+            <tr><td>0013</td><td>compliance foundation (10 tables)</td></tr>
+            <tr><td>0014</td><td>audit immutability trigger</td></tr>
+            <tr><td>0015</td><td>compliance RLS policies</td></tr>
+            <tr><td>0017</td><td>DB roles + REVOKE</td></tr>
+            <tr><td>0019</td><td>RLS fail-closed empty tenant</td></tr>
+            <tr><td>0020</td><td>Phase 10 ML columns + review_queue</td></tr>
+            <tr><td>0021</td><td>Phase 11 alert tables</td></tr>
+            <tr><td>0022</td><td>Phase 12 response workflow</td></tr>
+            <tr><td>0023</td><td>Phase 13 search_vector on notices</td></tr>
+            <tr><td>0026</td><td>apscheduler_jobs table</td></tr>
+            <tr><td>0030</td><td>users.deleted_at (soft-del)</td></tr>
+            <tr><td>0031</td><td>client branding fields</td></tr>
+            <tr><td><span class="h">0032</span></td><td>ai_credentials (BYOK · Fernet)</td></tr>
+        </table>
+    </section>
+
+    <!-- 10 ROLES -->
+    <section class="panel c4 span-6">
+        <h2><span class="num">10</span> DB ROLES</h2>
+        <table>
+            <tr><th>Role</th><th>Powers</th></tr>
+            <tr><td><code>postgres</code></td><td>super (dev only)</td></tr>
+            <tr><td><code>app_migrator</code></td><td>OWNS schema · runs Alembic · BYPASSRLS</td></tr>
+            <tr><td><code>app_runtime</code></td><td>SELECT/INSERT only · NOT owner · NO BYPASSRLS · DELETE/UPDATE revoked on <code>audit_logs</code></td></tr>
+        </table>
+        <p class="dim">Listener does <code>SET ROLE app_runtime</code> on every cursor execute even when authenticated as a higher-privilege user — guarantees RLS is enforced.</p>
+    </section>
+
+    <!-- 11 INDEXES -->
+    <section class="panel c5 span-6">
+        <h2><span class="num">11</span> KEY INDEXES</h2>
+        <ul class="tight">
+            <li><code>ix_documents_user_id · ix_documents_category · ix_documents_status</code></li>
+            <li><code>idx_documents_category_user</code> composite</li>
+            <li><code>idx_documents_created_at</code></li>
+            <li><code>ix_notices_client_status</code> + <code>ix_notices_client_authority</code> composite</li>
+            <li><code>ix_notice_activity_notice_created</code> composite (timeline)</li>
+            <li><code>ix_documents_fts · ix_compliance_notices_fts</code>  GIN tsvector</li>
+            <li><code>ix_documents_source · ix_documents_source_email_id</code></li>
+            <li><code>idx_audit_action_created</code> composite</li>
+        </ul>
+    </section>
+
+    <!-- 12 ENUMS -->
+    <section class="panel c6 span-6">
+        <h2><span class="num">12</span> ENUM CATALOGUE</h2>
+        <table>
+            <tr><th>Enum</th><th>Values</th></tr>
+            <tr><td>UserRole</td><td>admin · editor · viewer</td></tr>
+            <tr><td>DocumentCategory</td><td>bills · upi · tickets · tax · bank · invoices · unknown</td></tr>
+            <tr><td>DocumentStatus</td><td>pending → processing → completed / failed</td></tr>
+            <tr><td>NoticeStatus</td><td>received → under_review → response_drafted → submitted → resolved / dismissed</td></tr>
+            <tr><td>Authority</td><td>GST · IT · MCA · RBI · SEBI</td></tr>
+            <tr><td>RiskTier</td><td>critical · high · medium · low</td></tr>
+            <tr><td>ResponseStage</td><td>drafter → reviewer → legal → cfo</td></tr>
+            <tr><td>ComplianceRole</td><td>compliance_head · legal · finance · auditor · ca · staff · cfo</td></tr>
+        </table>
+    </section>
+
+</div>
+
+<div class="protip">
+    <div class="badge">PRO<br>TIP</div>
+    <div>
+        <h3>SCHEMA HYGIENE</h3>
+        <ul>
+            <li>NEVER write <code>search_vector</code> from Python — let the trigger do it</li>
+            <li>NEVER add an Index in SQLAlchemy for GIN — use <code>op.execute()</code> in the migration (Alembic autogenerate bug)</li>
+            <li>NEVER hard-delete users — the audit trigger blocks it; use <code>deleted_at</code></li>
+            <li>NEVER assume RLS — always set <code>SET ROLE app_runtime</code> in tests</li>
+        </ul>
+    </div>
+    <div class="footer-quote">"The DB is the last line of defense.<br>If the app forgets to filter by tenant, RLS still does."</div>
+</div>
+
+</div>
+</body>
+</html>

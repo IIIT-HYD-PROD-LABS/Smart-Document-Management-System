@@ -188,13 +188,14 @@ def md_to_docx(md_path: Path, docx_path: Path) -> None:
         _add_inline_runs(p, line)
         i += 1
 
+    docx_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(docx_path))
     print(f"Wrote {docx_path}")
 
 
 def main() -> int:
     project_root = Path(__file__).resolve().parent.parent
-    md = project_root / "STATUS_REPORT.md"
+    md = project_root / "docs" / "status" / "STATUS_REPORT.md"
     if not md.exists():
         print(f"FATAL: {md} not found", file=sys.stderr)
         return 1
@@ -202,7 +203,7 @@ def main() -> int:
     # Single canonical output. The legacy `.md (1) (1).docx` mirror has
     # been retired (2026-05-06) — it was a one-time accommodation for a
     # browser-suffixed download path, no longer needed.
-    canonical = project_root / "Smart_Document_Management_System_Status_Report.docx"
+    canonical = project_root / "docs" / "exports" / "Smart_Document_Management_System_Status_Report.docx"
     md_to_docx(md, canonical)
     return 0
 

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TaxSync · Compliance Workflow</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="page">
+
+<nav class="topic-nav">
+    <a href="index.html">⌂ Index</a>
+    <a href="01-architecture.html">01 Architecture</a>
+    <a href="02-frontend.html">02 Frontend</a>
+    <a href="03-backend.html">03 Backend</a>
+    <a href="04-database-schema.html">04 DB Schema</a>
+    <a href="05-security.html">05 Security</a>
+    <a href="06-deployment.html">06 Deployment</a>
+    <a href="07-ml-ai.html">07 ML / AI</a>
+    <a href="08-compliance-workflow.html" class="cur">08 Compliance</a>
+    <a href="09-api-reference.html">09 API Ref</a>
+    <a href="10-auth-deep-dive.html">10 Auth</a>
+</nav>
+
+<header class="title-strip">
+    <div class="logo" style="background:var(--c4)">CMP</div>
+    <div>
+        <h1>HOW THE <span class="accent">COMPLIANCE</span> WORKFLOW WORKS</h1>
+        <div class="tagline">Phase 9 → 13 · 6-state notice machine · 4-stage approval · 37 statutory deadlines · WebSocket alerts</div>
+    </div>
+    <div class="remember">
+        <h4>★ REMEMBER</h4>
+        <ul>
+            <li>6 notice states</li>
+            <li>4 approval stages</li>
+            <li>5 authorities</li>
+            <li>4 risk tiers</li>
+            <li>Audit = immutable</li>
+        </ul>
+    </div>
+</header>
+
+<div class="grid">
+
+    <!-- 1 PHASES -->
+    <section class="panel c1 span-12">
+        <h2><span class="num">1</span> v2.0 PHASE LANDSCAPE</h2>
+<pre class="ascii">
+PHASE 9 — Foundation                  10 tables · RLS · audit trigger · 7×12 RBAC
+PHASE 10 — Risk scoring + escalation  rule-based scorer · SHAP explanations · review queue
+PHASE 11 — Alerts + statutory cal.    APScheduler · 37 FY 25-26 deadlines · WebSocket bell
+PHASE 12 — 4-stage approval           Drafter → Reviewer → Legal → CFO · versioned drafts
+PHASE 13 — Cross-entity search        unified FTS (notices + documents) · 3 analytics</pre>
+    </section>
+
+    <!-- 2 NOTICE STATES -->
+    <section class="panel c2 span-6">
+        <h2><span class="num">2</span> NOTICE STATE MACHINE</h2>
+<pre class="ascii">
+                ┌───────────┐
+                │ RECEIVED  │
+                └─────┬─────┘
+                      │
+            ┌─────────┴───────────┐
+            ▼                     ▼
+     ┌─────────────┐         ┌─────────┐
+     │UNDER_REVIEW │◄───┐    │DISMISSED│
+     └─────┬───────┘    │    └─────────┘
+           │            │       (terminal)
+           ▼            │
+     ┌──────────────┐   │ back-edit
+     │RESPONSE_DRAFT│───┘
+     └─────┬────────┘
+           ▼
+     ┌─────────────┐  ◄── authority requests clarification
+     │  SUBMITTED  │──┐
+     └─────┬───────┘  │
+           ▼          ▼
+     ┌──────────┐  back to UNDER_REVIEW
+     │ RESOLVED │       (terminal)
+     └──────────┘</pre>
+        <p class="dim">Source: <code>notice_state_machine.py</code>. Validates <code>(current, target)</code> against <code>ALLOWED_TRANSITIONS</code>. <code>InvalidTransitionError</code> on illegal jumps.</p>
+    </section>
+
+    <!-- 3 APPROVAL -->
+    <section class="panel c3 span-6">
+        <h2><span class="num">3</span> 4-STAGE APPROVAL (Phase 12)</h2>
+<pre class="ascii">
+DRAFTER
+   creates response_draft v1
+   evidence_service.attach(document_id)
+        │
+        ▼ submit
+REVIEWER  (notice:approve)
+   ▼ approve / send back
+LEGAL    (notice:approve_legal)
+   ▼ approve / send back
+CFO      (notice:approve_cfo)
+   ▼ approve → notice goes to SUBMITTED</pre>
+        <ul class="tight">
+            <li>Each stage gated by its specific permission</li>
+            <li>Drafts are versioned (immutable history)</li>
+            <li>Send-back rolls to UNDER_REVIEW, draft version++ on next save</li>
+            <li>All transitions land in <code>compliance_notice_activity</code></li>
+            <li>Audit log captures user + IP per transition</li>
+        </ul>
+    </section>
+
+    <!-- 4 CLIENTS / MEMBERSHIPS -->
+    <section class="panel c4 span-6">
+        <h2><span class="num">4</span> CLIENT &amp; MEMBERSHIP MODEL</h2>
+<pre class="ascii">
+compliance_clients          (tenant root · RLS pivot)
+   id · name · client_type · logo_url · website · address
+   config_overrides JSONB
+
+compliance_client_registrations  (multi-GSTIN — one row per state)
+
+compliance_memberships     (M:N users × clients × role)
+   user_id · client_id · role  (7 ComplianceRole values)
+   expires_at NULL = forever</pre>
+        <p class="dim">A single user can have different roles in different tenants. Role is checked AT REQUEST TIME — not stored in JWT.</p>
+    </section>
+
+    <!-- 5 CALENDAR -->
+    <section class="panel c5 span-6">
+        <h2><span class="num">5</span> STATUTORY CALENDAR (Phase 11)</h2>
+        <ul class="tight">
+            <li>37 FY 2025-26 deadlines pre-seeded by migration 0016</li>
+            <li>Recurring rules (annual / quarterly / monthly) + one-offs</li>
+            <li>Indian holiday calendar (<code>holidays</code> pkg) shifts deadlines</li>
+            <li>APScheduler durable jobstore on <code>apscheduler_jobs</code></li>
+            <li>Scheduler fires <code>alert_tasks/check_due</code></li>
+            <li>Channels: email + WebSocket. SMS scaffolded (Twilio).</li>
+            <li>SendGrid migration deferred to v2.1</li>
+        </ul>
+    </section>
+
+    <!-- 6 ALERTS -->
+    <section class="panel c6 span-6">
+        <h2><span class="num">6</span> ALERT PIPELINE</h2>
+<pre class="ascii">
+APScheduler job (every 5 min)
+   │
+   ▼
+alert_tasks.check_due
+   query: deadlines within 7d
+   for each:
+      email_sender.send()           Resend SMTP
+      websocket_broadcast()         /ws/notifications
+   write activity + audit
+
+UI:
+   NotificationBell.tsx subscribes to WS
+   useNotificationStream hook reconnects w/ backoff</pre>
+    </section>
+
+    <!-- 7 NOTICE CHAIN -->
+    <section class="panel c7 span-6">
+        <h2><span class="num">7</span> NOTICE CHAIN (recursive CTE)</h2>
+<pre class="ascii">
+SCN ──► Assessment ──► Demand ──► Appeal
+
+parent_notice_id self-FK builds the chain.
+notice_service.get_notice_chain(id, max_depth=10) runs:
+
+WITH RECURSIVE chain AS (
+   SELECT * FROM compliance_notices WHERE id = :id
+ UNION ALL
+   SELECT n.* FROM compliance_notices n
+     JOIN chain c ON n.parent_notice_id = c.id
+     WHERE c.depth < :max_depth
+)
+SELECT * FROM chain</pre>
+        <p class="dim">UI: <code>NoticeChainTree.tsx</code> renders the tree.</p>
+    </section>
+
+    <!-- 8 UNIFIED SEARCH -->
+    <section class="panel c1 span-6">
+        <h2><span class="num">8</span> UNIFIED SEARCH (Phase 13)</h2>
+<pre class="ascii">
+SELECT 'notice'::text   AS kind, id, title, …
+  FROM compliance_notices
+ WHERE search_vector @@ websearch_to_tsquery(:q)
+UNION ALL
+SELECT 'document'::text AS kind, id, original_filename, …
+  FROM documents
+ WHERE search_vector @@ websearch_to_tsquery(:q)
+ORDER BY ts_rank(...) DESC
+LIMIT 50;</pre>
+        <p class="dim">RLS still in effect — only the active tenant's rows are visible. Elastic Cloud deferred to v2.1.</p>
+    </section>
+
+    <!-- 9 ANALYTICS -->
+    <section class="panel c2 span-6">
+        <h2><span class="num">9</span> ANALYTICS (Phase 13)</h2>
+        <ul class="tight">
+            <li><strong>Penalty by authority</strong> · sum / count per <code>authority</code></li>
+            <li><strong>Notice volume by status</strong> · stacked over time</li>
+            <li><strong>Response time percentiles</strong> · p50 / p90 / p99 from received → submitted</li>
+            <li>Endpoints under <code>/api/compliance/reports</code></li>
+            <li>CSV export for all three (v2.0.1)</li>
+            <li>Stdlib <code>csv</code> + <code>StreamingResponse</code>; no new deps</li>
+        </ul>
+    </section>
+
+    <!-- 10 EMAIL ROBOT -->
+    <section class="panel c4 span-6">
+        <h2><span class="num">10</span> GMAIL MCP (Phase 15)</h2>
+<pre class="ascii">
+User connects Gmail → OAuth → tokens encrypted in DB
+Filter rule: from .gov.in OR subject contains "Notice"
+   │
+   ▼
+MCP server reads inbox via Gmail API
+   for each match:
+      ingest attachment → documents row (source='gmail')
+      if looks like notice: create compliance_notice
+                              source='gmail'
+      log activity + audit
+
+Surface in UI: dashboard/email/{activity, bills, settings}</pre>
+        <p class="dim">All endpoints gated on <code>EMAIL_INTEGRATION_USE</code>. The FastMCP server is in-process (no child process spawned).</p>
+    </section>
+
+    <!-- 11 ONBOARDING -->
+    <section class="panel c5 span-6">
+        <h2><span class="num">11</span> CLIENT ONBOARDING</h2>
+        <ul class="tight">
+            <li><code>OnboardingWizard</code> component · Zustand-driven wizard state</li>
+            <li>Steps: business info → GST registrations → team members → first notice</li>
+            <li>Saves draft to localStorage between steps</li>
+            <li>POST <code>/api/compliance/clients</code> on finish</li>
+            <li>Branding (logo · website · address) editable later from Clients → &lt;client&gt; → Branding</li>
+        </ul>
+    </section>
+
+    <!-- 12 BULK OPS -->
+    <section class="panel c6 span-6">
+        <h2><span class="num">12</span> BULK OPS</h2>
+        <ul class="tight">
+            <li><code>BulkActionBar</code> over <code>NoticeTable</code></li>
+            <li>Select rows → bulk assign · bulk tag · bulk status change</li>
+            <li>Gated on <code>NOTICE_BULK_UPDATE</code> permission</li>
+            <li>Each change goes through the state machine (no shortcut)</li>
+            <li>Failures roll back; partial success returns 207</li>
+        </ul>
+    </section>
+
+</div>
+
+<div class="protip">
+    <div class="badge">PRO<br>TIP</div>
+    <div>
+        <h3>HOW THE LAYERS INTERACT</h3>
+        <ul>
+            <li>Route → checks permission → calls service</li>
+            <li>Service → validates state machine → calls model → writes activity + audit</li>
+            <li>Model → RLS filters → returns rows</li>
+            <li>If ML auto-classified with low confidence → review_queue row pops up</li>
+            <li>If risk = critical → escalation activity logged</li>
+        </ul>
+    </div>
+    <div class="footer-quote">"Compliance is a state machine wrapped in a permission matrix<br>guarded by a tenant filter, audited by a DB trigger."</div>
+</div>
+
+</div>
+</body>
+</html>

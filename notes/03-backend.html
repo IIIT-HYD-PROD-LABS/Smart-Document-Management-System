@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TaxSync · Backend</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="page">
+
+<nav class="topic-nav">
+    <a href="index.html">⌂ Index</a>
+    <a href="01-architecture.html">01 Architecture</a>
+    <a href="02-frontend.html">02 Frontend</a>
+    <a href="03-backend.html" class="cur">03 Backend</a>
+    <a href="04-database-schema.html">04 DB Schema</a>
+    <a href="05-security.html">05 Security</a>
+    <a href="06-deployment.html">06 Deployment</a>
+    <a href="07-ml-ai.html">07 ML / AI</a>
+    <a href="08-compliance-workflow.html">08 Compliance</a>
+    <a href="09-api-reference.html">09 API Ref</a>
+    <a href="10-auth-deep-dive.html">10 Auth</a>
+</nav>
+
+<header class="title-strip">
+    <div class="logo" style="background:var(--c4)">BE</div>
+    <div>
+        <h1>HOW THE <span class="accent">BACKEND</span> WORKS</h1>
+        <div class="tagline">FastAPI 0.120 · Pydantic v2 · SQLAlchemy 2.0 · Celery 5.3 · Uvicorn · Python 3.11</div>
+    </div>
+    <div class="remember">
+        <h4>★ REMEMBER</h4>
+        <ul>
+            <li>Routers thin, services thick</li>
+            <li>DI: <code>Depends(get_db)</code></li>
+            <li>Async OCR via Celery</li>
+            <li>Structlog everywhere</li>
+            <li>RBAC at route, RLS at DB</li>
+        </ul>
+    </div>
+</header>
+
+<div class="grid">
+
+    <!-- 1 ENTRY POINT -->
+    <section class="panel c1 span-6">
+        <h2><span class="num">1</span> ENTRY POINT (<code>main.py</code>)</h2>
+<pre class="ascii">
+app = FastAPI(
+    title=APP_NAME, version=APP_VERSION,
+    docs_url="/docs" if DEBUG else None,
+    lifespan=lifespan,
+)
+
+# rate limit
+app.state.limiter = limiter
+
+# middleware  (LAST added = FIRST executed)
+add_middleware(CORSMiddleware)
+add_middleware(GZipMiddleware, minimum_size=1000)
+add_middleware(SecurityHeadersMiddleware)
+add_middleware(RequestLoggingMiddleware)
+add_middleware(CorrelationIdMiddleware)
+add_middleware(TenantContextMiddleware)
+
+# routers
+include_router(auth, documents, ml, admin, early_access)
+# compliance × 14, email × 6
+include_router(... prefix="/api/compliance")
+include_router(... prefix="/api/email")</pre>
+    </section>
+
+    <!-- 2 LAYERS -->
+    <section class="panel c2 span-6">
+        <h2><span class="num">2</span> 3-LAYER STRUCTURE</h2>
+<pre class="ascii">
+ROUTER  (app/routers/*.py · app/compliance/routers/*)
+   │  thin: validate, authorize, call service
+   ▼
+SERVICE (app/services/*.py · app/compliance/services/*)
+   │  business logic, state machines, transactions
+   ▼
+MODEL   (app/models/*.py · app/compliance/models/*)
+   │  SQLAlchemy ORM tables + relationships
+   ▼
+DATABASE (Postgres · Supabase)
+   │  RLS policies, audit triggers, FTS triggers
+   ▼
+SCHEMA  (app/schemas/*.py) for IN/OUT  ── Pydantic v2</pre>
+        <p class="dim">Routers never query the DB directly past the simplest reads — they call services that own the transaction boundary.</p>
+    </section>
+
+    <!-- 3 ROUTERS V1 -->
+    <section class="panel c3 span-4">
+        <h2><span class="num">3</span> ROUTERS — v1.0</h2>
+        <table>
+            <tr><th>File</th><th>Prefix</th></tr>
+            <tr><td>auth.py</td><td><code>/api/auth</code></td></tr>
+            <tr><td>documents.py</td><td><code>/api/documents</code></td></tr>
+            <tr><td>ml.py</td><td><code>/api/ml</code></td></tr>
+            <tr><td>admin.py</td><td><code>/api/admin</code></td></tr>
+            <tr><td>early_access.py</td><td><code>/api/early-access</code></td></tr>
+        </table>
+        <p class="dim">Plus root <code>GET /</code> and <code>GET /api/health</code>.</p>
+    </section>
+
+    <!-- 4 ROUTERS V2 -->
+    <section class="panel c4 span-4">
+        <h2><span class="num">4</span> ROUTERS — Compliance</h2>
+        <ul class="tight">
+            <li><code>clients</code> · per-tenant CRUD + branding</li>
+            <li><code>memberships</code> · 7-role assignments</li>
+            <li><code>notices</code> · core notice CRUD + upload</li>
+            <li><code>responses</code> · 4-stage approval drafts</li>
+            <li><code>reports</code> · CSV export</li>
+            <li><code>audit</code> · immutable log read</li>
+            <li><code>review_queue</code> · low-confidence ML triage</li>
+            <li><code>alerts</code> · deadline alert schedules</li>
+            <li><code>calendar</code> · per-client deadlines</li>
+            <li><code>regulatory_calendar</code> · FY 25-26 seeds</li>
+            <li><code>notifications</code> · WebSocket / SSE</li>
+            <li><code>search</code> · cross-entity FTS</li>
+            <li><code>notice_types</code> · taxonomy</li>
+            <li><code>ai</code> · BYOK Phase 16</li>
+        </ul>
+    </section>
+
+    <!-- 5 ROUTERS EMAIL -->
+    <section class="panel c5 span-4">
+        <h2><span class="num">5</span> ROUTERS — Email (Phase 15)</h2>
+        <ul class="tight">
+            <li><code>oauth</code> · Gmail OAuth dance</li>
+            <li><code>credentials</code> · Fernet-encrypted token storage</li>
+            <li><code>filter_rules</code> · "ingest if from .gov.in"</li>
+            <li><code>activity</code> · ingestion log</li>
+            <li><code>bills</code> · vendor-invoice surface</li>
+            <li><code>view_email</code> · render raw email</li>
+        </ul>
+        <p class="dim">All gate on <code>EMAIL_INTEGRATION_USE</code> permission. MCP server registered in <code>lifespan()</code> handler.</p>
+    </section>
+
+    <!-- 6 SERVICES -->
+    <section class="panel c6 span-6">
+        <h2><span class="num">6</span> SERVICE LAYER</h2>
+<pre class="ascii">
+v1.0 services/
+  audit_service        immutable append + dead-letter JSONL
+  llm_service          multi-provider Ollama/Gemini/etc
+  oauth_service        Google + Microsoft adapters
+  storage_service      path-traversal-safe FS + S3
+
+compliance/services/
+  notice_service       create, transition, chain CTE
+  notice_state_machine 6 states · explicit allowed-transitions
+  response_state_machine 4-stage approval gate
+  permission_registry  7×12 matrix · frozenset lookups
+  evidence_service     attach Document → response_drafts
+  alert_service        APScheduler add_job
+  scheduler            durable jobstore on apscheduler_jobs
+  unified_search       FTS across notices + documents
+  ai_service           scope-locked SYSTEM prompt · 5 tasks
+  ai_providers         Anthropic SDK · Gemini httpx REST</pre>
+    </section>
+
+    <!-- 7 SCHEMAS -->
+    <section class="panel c7 span-3">
+        <h2><span class="num">7</span> SCHEMAS</h2>
+        <ul class="tight">
+            <li>Pydantic v2 (~2.13)</li>
+            <li>Strict typing; v2 perf is ~5–50× v1</li>
+            <li>Group by feature: <code>schemas/document.py</code>, <code>sharing.py</code>, <code>admin.py</code>, <code>audit.py</code>, <code>early_access.py</code></li>
+            <li>Compliance schemas live under <code>compliance/schemas/</code></li>
+            <li><code>model_validate</code> for ORM→DTO</li>
+        </ul>
+    </section>
+
+    <!-- 8 DI -->
+    <section class="panel c1 span-3">
+        <h2><span class="num">8</span> DEPENDENCY INJECTION</h2>
+<pre class="ascii">
+def route(
+  request: Request,
+  user = Depends(get_current_user),
+  db   = Depends(get_db),
+  perm = Depends(
+   require_compliance_permission(
+    Permission.NOTICE_VIEW)),
+): ...</pre>
+        <p class="dim">DI composes: <code>get_db</code> opens session, <code>get_current_user</code> decodes JWT, <code>require_compliance_permission</code> checks the 7×12 matrix.</p>
+    </section>
+
+    <!-- 9 CELERY -->
+    <section class="panel c2 span-6">
+        <h2><span class="num">9</span> CELERY — ASYNC WORKERS</h2>
+<pre class="ascii">
+celery_app = Celery(broker=REDIS, backend=REDIS)
+
+# v1.0 default queue
+process_document_task(document_id):
+  read file → OCR → classify → update row
+  reports stages: reading_file 10% → extract 30%
+                  → classify 70% → done 100%
+
+# compliance queue (2GB cap)
+classify_notice_task(notice_id):
+  BERT classify → NER spaCy → risk_scorer
+  → CalibratedClassifier confidence
+  → low confidence → review_queue
+  → critical tier  → auto-escalation + audit
+
+alert_tasks/check_due:
+  pulls APScheduler jobs near deadline,
+  fires email + WebSocket push</pre>
+    </section>
+
+    <!-- 10 CONFIG -->
+    <section class="panel c4 span-6">
+        <h2><span class="num">10</span> CONFIG &amp; ENV</h2>
+        <table>
+            <tr><th>Key</th><th>Purpose</th></tr>
+            <tr><td><code>SECRET_KEY</code></td><td>JWT signing (≥32 chars, ≥10 unique)</td></tr>
+            <tr><td><code>DATABASE_URL</code></td><td>Postgres / Supabase session-mode</td></tr>
+            <tr><td><code>REDIS_URL</code> + <code>REDIS_PASSWORD</code></td><td>Celery broker + cache</td></tr>
+            <tr><td><code>LLM_PROVIDER</code></td><td>local / ollama / gemini / anthropic / openai</td></tr>
+            <tr><td><code>OLLAMA_BASE_URL</code></td><td>host.docker.internal:11434</td></tr>
+            <tr><td><code>GOOGLE_CLIENT_ID / SECRET</code></td><td>Optional OAuth</td></tr>
+            <tr><td><code>MICROSOFT_CLIENT_ID / SECRET</code></td><td>Optional OAuth</td></tr>
+            <tr><td><code>RATE_LIMIT_AUTH</code></td><td>slowapi limit string</td></tr>
+            <tr><td><code>AUDIT_FAILURES_PATH</code></td><td>Dead-letter JSONL path</td></tr>
+            <tr><td><code>MAX_FILE_SIZE_MB</code></td><td>Upload cap</td></tr>
+            <tr><td><code>DEBUG</code></td><td>Toggles /docs + HSTS</td></tr>
+        </table>
+    </section>
+
+    <!-- 11 ERROR HANDLING -->
+    <section class="panel c5 span-6">
+        <h2><span class="num">11</span> ERROR HANDLING</h2>
+        <ul>
+            <li>Global <code>Exception</code> handler → logs <span class="warn">unhandled_exception</span> + returns 500 generic body</li>
+            <li><code>RequestValidationError</code> → structured 422 with <code>loc/msg/type</code></li>
+            <li><code>StarletteHTTPException</code> → echoes status + detail</li>
+            <li>Service layer raises <code>HTTPException</code> with explicit status codes (401/403/409/422/503)</li>
+            <li><code>structlog</code> emits correlation-id with every log line via <code>asgi-correlation-id</code></li>
+        </ul>
+    </section>
+
+    <!-- 12 LIFESPAN -->
+    <section class="panel c6 span-6">
+        <h2><span class="num">12</span> LIFESPAN HOOKS</h2>
+<pre class="ascii">
+@asynccontextmanager
+async def lifespan(app):
+    # On boot
+    import app.email.mcp.server   # register FastMCP
+    try:
+        get_scheduler()           # APScheduler warm
+    except InsufficientPrivilege:
+        warn("scheduler_init_skipped")
+    yield
+    # On shutdown — APScheduler atexit closes it</pre>
+        <p class="dim">Best-effort scheduler init: in dev the <code>app_runtime</code> role can't <code>CREATE TABLE</code>, so the scheduler lazy-binds on first compliance request.</p>
+    </section>
+
+</div>
+
+<div class="protip">
+    <div class="badge">PRO<br>TIP</div>
+    <div>
+        <h3>WHEN ADDING A NEW FEATURE</h3>
+        <ul>
+            <li>1. Model: add SQLAlchemy class + Alembic revision</li>
+            <li>2. Schema: Pydantic IN/OUT DTOs</li>
+            <li>3. Service: write business logic + tests first</li>
+            <li>4. Router: thin wrapper composing DI + service</li>
+            <li>5. Register: add <code>include_router</code> in <code>main.py</code></li>
+        </ul>
+    </div>
+    <div class="footer-quote">"Routers are an HTTP boundary. Don't put business logic there.<br>If a service has no test, it doesn't exist yet."</div>
+</div>
+
+</div>
+</body>
+</html>

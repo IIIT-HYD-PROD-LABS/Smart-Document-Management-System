@@ -1,0 +1,2791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>TaxSync — Technical Documentation</title>
+    <style>
+@page {
+    size: A4;
+    margin: 22mm 18mm 22mm 18mm;
+
+    @top-right {
+        content: "TaxSync Technical Documentation";
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 9pt;
+        color: #6b7280;
+    }
+    @bottom-center {
+        content: counter(page) " / " counter(pages);
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 9pt;
+        color: #6b7280;
+    }
+    @bottom-left {
+        content: "v2.0.1";
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 9pt;
+        color: #6b7280;
+    }
+}
+
+@page :first {
+    margin: 0;
+    @top-right { content: none; }
+    @bottom-center { content: none; }
+    @bottom-left { content: none; }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: #111827;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Cover page */
+.cover {
+    page-break-after: always;
+    height: 297mm;
+    width: 210mm;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f172a 100%);
+    color: #f8fafc;
+    position: relative;
+    overflow: hidden;
+}
+.cover::before {
+    content: "";
+    position: absolute;
+    top: -150px;
+    right: -150px;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.25), transparent 70%);
+}
+.cover::after {
+    content: "";
+    position: absolute;
+    bottom: -100px;
+    left: -100px;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.18), transparent 70%);
+}
+.cover-header {
+    padding: 30mm 25mm 0 25mm;
+    position: relative;
+    z-index: 1;
+}
+.cover-brand {
+    font-size: 14pt;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 8mm;
+}
+.cover-title {
+    font-size: 44pt;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0 0 6mm 0;
+    color: #f8fafc;
+}
+.cover-subtitle {
+    font-size: 16pt;
+    font-weight: 400;
+    color: #cbd5e1;
+    line-height: 1.4;
+    max-width: 140mm;
+}
+.cover-meta {
+    padding: 0 25mm 30mm 25mm;
+    position: relative;
+    z-index: 1;
+}
+.cover-divider {
+    width: 80mm;
+    height: 2px;
+    background: linear-gradient(90deg, #6366f1, transparent);
+    margin-bottom: 10mm;
+}
+.cover-meta-row {
+    display: flex;
+    gap: 20mm;
+    margin-bottom: 6mm;
+}
+.cover-meta-item .label {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #94a3b8;
+    margin-bottom: 2mm;
+}
+.cover-meta-item .value {
+    font-size: 11pt;
+    color: #f1f5f9;
+    font-weight: 500;
+}
+.cover-tagline {
+    font-size: 9pt;
+    color: #64748b;
+    margin-top: 8mm;
+    font-style: italic;
+}
+
+/* Document body */
+.doc {
+    padding: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 600;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+}
+
+h1 {
+    font-size: 24pt;
+    margin: 0 0 6mm 0;
+    padding-bottom: 4mm;
+    border-bottom: 2px solid #1e293b;
+    page-break-before: always;
+    page-break-after: avoid;
+}
+.doc > h1:first-of-type { page-break-before: avoid; }
+
+h2 {
+    font-size: 16pt;
+    margin: 9mm 0 4mm 0;
+    color: #1e293b;
+    page-break-after: avoid;
+}
+
+h3 {
+    font-size: 12.5pt;
+    margin: 6mm 0 3mm 0;
+    color: #334155;
+    page-break-after: avoid;
+}
+
+h4 {
+    font-size: 10.5pt;
+    margin: 4mm 0 2mm 0;
+    color: #475569;
+    page-break-after: avoid;
+}
+
+p {
+    margin: 0 0 3mm 0;
+    text-align: justify;
+}
+
+strong { color: #0f172a; font-weight: 600; }
+em { color: #334155; }
+
+a { color: #4f46e5; text-decoration: none; }
+
+/* Lists */
+ul, ol {
+    margin: 0 0 4mm 0;
+    padding-left: 6mm;
+}
+ul li, ol li {
+    margin-bottom: 1.5mm;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 4mm 0 5mm 0;
+    font-size: 9.5pt;
+    page-break-inside: avoid;
+}
+thead {
+    background: #1e293b;
+    color: #f1f5f9;
+}
+thead th {
+    text-align: left;
+    padding: 2.5mm 3mm;
+    font-weight: 600;
+    font-size: 9pt;
+    letter-spacing: 0.02em;
+    border-bottom: 2px solid #0f172a;
+}
+tbody td {
+    padding: 2mm 3mm;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+}
+tbody tr:nth-child(even) { background: #f8fafc; }
+tbody tr:hover { background: #f1f5f9; }
+tbody td strong { color: #0f172a; }
+
+/* Code */
+code {
+    font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    font-size: 9pt;
+    background: #f1f5f9;
+    color: #0f172a;
+    padding: 0.5mm 1.5mm;
+    border-radius: 2px;
+    border: 1px solid #e2e8f0;
+}
+pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 4mm;
+    border-radius: 3px;
+    overflow-x: auto;
+    margin: 3mm 0 5mm 0;
+    page-break-inside: avoid;
+    font-size: 8.5pt;
+    line-height: 1.5;
+    white-space: pre;
+}
+pre code {
+    background: transparent;
+    border: none;
+    color: inherit;
+    padding: 0;
+    font-size: inherit;
+}
+
+/* Blockquotes */
+blockquote {
+    border-left: 3px solid #6366f1;
+    padding: 2mm 4mm;
+    margin: 3mm 0;
+    background: #f8fafc;
+    color: #334155;
+    font-style: italic;
+}
+
+/* Horizontal rules */
+hr {
+    border: 0;
+    border-top: 1px solid #e2e8f0;
+    margin: 8mm 0;
+}
+
+/* TOC styling - the markdown TOC is just a list */
+.toc-section {
+    page-break-after: always;
+}
+.toc-section ol, .toc-section ul {
+    list-style: none;
+    padding-left: 0;
+}
+.toc-section li {
+    padding: 1.5mm 0;
+    border-bottom: 1px dotted #cbd5e1;
+    margin-bottom: 0;
+    font-size: 11pt;
+}
+.toc-section li a {
+    color: #1e293b;
+    font-weight: 500;
+}
+
+/* Section anchors */
+h1[id], h2[id], h3[id] {
+    scroll-margin-top: 20mm;
+}
+
+/* Print-specific avoids */
+table, pre, blockquote {
+    page-break-inside: avoid;
+}
+</style>
+</head>
+<body>
+    
+<section class="cover">
+    <div class="cover-header">
+        <div class="cover-brand">TaxSync</div>
+        <h1 class="cover-title">Technical<br/>Documentation</h1>
+        <p class="cover-subtitle">
+            Smart Document Management and Compliance Platform
+            for Indian Regulatory Practice
+        </p>
+    </div>
+    <div class="cover-meta">
+        <div class="cover-divider"></div>
+        <div class="cover-meta-row">
+            <div class="cover-meta-item">
+                <div class="label">Product Version</div>
+                <div class="value">v2.0.1</div>
+            </div>
+            <div class="cover-meta-item">
+                <div class="label">Document Date</div>
+                <div class="value">8 May 2026</div>
+            </div>
+            <div class="cover-meta-item">
+                <div class="label">Status</div>
+                <div class="value">Production-Ready</div>
+            </div>
+        </div>
+        <div class="cover-meta-row">
+            <div class="cover-meta-item">
+                <div class="label">Production Features</div>
+                <div class="value">64 features across 9 areas</div>
+            </div>
+            <div class="cover-meta-item">
+                <div class="label">Test Coverage</div>
+                <div class="value">389 automated tests</div>
+            </div>
+        </div>
+        <p class="cover-tagline">
+            This document describes the production-shipped capability of the TaxSync platform.
+        </p>
+    </div>
+</section>
+
+    <article class="doc"><h1>TaxSync — Technical Documentation</h1>
+<p><strong>Version:</strong> v2.0.1
+<strong>Document date:</strong> 8 May 2026
+<strong>Audience:</strong> CA firms, finance teams, compliance leadership, and technology evaluators</p>
+<hr />
+<h2>Table of Contents</h2>
+<ol>
+<li><a href="#1-executive-summary">Executive Summary</a></li>
+<li><a href="#2-product-overview">Product Overview</a></li>
+<li><a href="#3-system-architecture">System Architecture</a></li>
+<li><a href="#4-technology-stack">Technology Stack</a></li>
+<li><a href="#5-feature-catalog">Feature Catalog</a></li>
+<li><a href="#6-ai-and-machine-learning-pipeline">AI and Machine Learning Pipeline</a></li>
+<li><a href="#7-compliance-notice-lifecycle">Compliance Notice Lifecycle</a></li>
+<li><a href="#8-email-integration">Email Integration</a></li>
+<li><a href="#9-notifications-and-alerts">Notifications and Alerts</a></li>
+<li><a href="#10-security-and-compliance">Security and Compliance</a></li>
+<li><a href="#11-role-based-access-control">Role-Based Access Control</a></li>
+<li><a href="#12-statutory-calendar">Statutory Calendar</a></li>
+<li><a href="#13-api-reference">API Reference</a></li>
+<li><a href="#14-deployment-architecture">Deployment Architecture</a></li>
+<li><a href="#15-performance-and-reliability">Performance and Reliability</a></li>
+<li><a href="#16-quality-assurance">Quality Assurance</a></li>
+<li><a href="#17-glossary">Glossary</a></li>
+</ol>
+<hr />
+<h2>1. Executive Summary</h2>
+<p>TaxSync is a smart document and compliance management platform built specifically for Indian tax practitioners, Chartered Accountant (CA) firms, in-house finance teams, and individuals managing regulatory paperwork. It combines an intelligent document library with end-to-end compliance notice management — from intake (manual upload or automatic Gmail capture), through classification and risk scoring, to drafting, approval, escalation, and tracking.</p>
+<p><strong>Core value proposition.</strong> TaxSync replaces fragmented workflows — inbox triage, spreadsheet trackers, manual deadline calendars, and ad-hoc approval chains — with a single multi-tenant platform that automatically captures regulatory notices, classifies and risk-scores them with explainable AI, routes them through a configurable approval workflow, and ensures no statutory deadline is ever missed.</p>
+<p><strong>Production status.</strong> The platform is production-ready: 64 user-facing features are live across 9 functional areas, backed by 389 backend automated tests, comprehensive security hardening, and continuous deployment infrastructure.</p>
+<hr />
+<h2>2. Product Overview</h2>
+<h3>2.1 What TaxSync Is</h3>
+<p>A unified web application that brings together:</p>
+<ul>
+<li><strong>Intelligent document library</strong> — upload, OCR, classify, extract metadata, search, share, and version-control any document.</li>
+<li><strong>Compliance notice management</strong> — track every regulatory notice (GST, Income Tax, MCA, RBI, SEBI) end-to-end with risk scoring and approval workflows.</li>
+<li><strong>Statutory calendar</strong> — 37 pre-loaded FY 2025-26 deadlines, holiday-aware adjustment, and a rolling compliance health score.</li>
+<li><strong>Email-driven intake</strong> — Gmail integration that continuously imports compliance notices and household bills.</li>
+<li><strong>Multi-tenant management</strong> — CA firms manage many client entities with strict cross-client isolation.</li>
+</ul>
+<h3>2.2 Target Users</h3>
+<table>
+<thead>
+<tr>
+<th>User profile</th>
+<th>Primary use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CA firms and consultants</td>
+<td>Managing many client entities, multi-client triage, response drafting, audit-ready documentation</td>
+</tr>
+<tr>
+<td>In-house finance and compliance teams</td>
+<td>Notice tracking, approval workflows, statutory calendar, regulator-facing audit trails</td>
+</tr>
+<tr>
+<td>Solo practitioners</td>
+<td>Personal document library, bill tracking, regulator-notice intake</td>
+</tr>
+<tr>
+<td>External auditors</td>
+<td>Time-bound, read-only access to notices and audit history for assurance work</td>
+</tr>
+<tr>
+<td>Individuals</td>
+<td>Personal document management, household bill reminders</td>
+</tr>
+</tbody>
+</table>
+<h3>2.3 Product Surface</h3>
+<p>The product is organized into nine functional areas:</p>
+<ol>
+<li>Document Management</li>
+<li>Compliance Notice Management</li>
+<li>Statutory Calendar and Alerts</li>
+<li>Email Integration (Gmail)</li>
+<li>Bills and Payments</li>
+<li>AI Document Intelligence</li>
+<li>Search and Reporting</li>
+<li>Multi-User Access and Security</li>
+<li>Analytics and Reporting</li>
+</ol>
+<p>Each area is documented in detail in Section 5: Feature Catalog.</p>
+<hr />
+<h2>3. System Architecture</h2>
+<h3>3.1 High-Level Architecture</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────┐
+│                    Next.js Frontend                         │
+│   Landing  ·  Auth  ·  Dashboard  ·  Compliance  ·  Search  │
+└────────────────────────┬────────────────────────────────────┘
+                         │ HTTPS REST + WebSocket
+┌────────────────────────┴────────────────────────────────────┐
+│                    FastAPI Backend (Python)                 │
+│                                                             │
+│  Auth   Documents   ML   Compliance   Email   Notifications │
+└────┬───────────┬─────────────┬────────────┬─────────────────┘
+     │           │             │            │
+┌────┴────┐ ┌────┴────┐ ┌──────┴───────┐ ┌──┴──────────────┐
+│ Postgres│ │  Redis  │ │   Celery     │ │  APScheduler    │
+│(Supabase│ │ (Broker │ │   Workers    │ │ (Deadline jobs, │
+│  Cloud) │ │ + PubSub│ │ (OCR + ML +  │ │  Email scans)   │
+│         │ │ + Cache)│ │  Compliance) │ │                 │
+└─────────┘ └─────────┘ └──────────────┘ └─────────────────┘
+</code></pre>
+<h3>3.2 Component Topology</h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Frontend</strong></td>
+<td>Single-page application, server components, client-side state, real-time WebSocket subscriptions</td>
+</tr>
+<tr>
+<td><strong>API Gateway</strong></td>
+<td>REST endpoints, JWT authentication, rate limiting, request validation, audit logging</td>
+</tr>
+<tr>
+<td><strong>Document Worker</strong></td>
+<td>OCR, text extraction, ML classification, metadata extraction, AI summary generation</td>
+</tr>
+<tr>
+<td><strong>Compliance Worker</strong></td>
+<td>Risk scoring, escalation logic, response state transitions, alert dispatch</td>
+</tr>
+<tr>
+<td><strong>Scheduler</strong></td>
+<td>Deadline-driven alerts (T-7, T-3, T-1, overdue), Gmail polling, statutory calendar refresh</td>
+</tr>
+<tr>
+<td><strong>Database</strong></td>
+<td>Persistent state with row-level security and immutable audit logs</td>
+</tr>
+<tr>
+<td><strong>Object Storage</strong></td>
+<td>Original document files (local volume in development; S3-compatible in production)</td>
+</tr>
+<tr>
+<td><strong>Message Broker</strong></td>
+<td>Task queue and pub/sub channel for real-time notifications</td>
+</tr>
+</tbody>
+</table>
+<h3>3.3 Data Flow — Document Ingestion</h3>
+<pre><code>Upload → API returns 202 Accepted
+   │
+   ▼
+Celery enqueues processing task
+   │
+   ├─ PDF? → text extraction (pdfplumber); fall back to OCR if text &lt; 50 chars
+   ├─ DOCX? → python-docx (paragraphs + tables)
+   ├─ Image? → Tesseract OCR with adaptive preprocessing
+   │
+   ▼
+Text preprocessing (clean, normalize, preserve financial patterns)
+   │
+   ▼
+TF-IDF + Linear SVC classification → category + confidence
+   │
+   ▼
+Multi-provider LLM smart extraction → structured JSON
+   │
+   ▼
+Metadata extraction (dates, amounts, vendor) via regex + dateutil
+   │
+   ▼
+Status: COMPLETED → frontend polls status endpoint → UI updates
+</code></pre>
+<h3>3.4 Data Flow — Compliance Notice (Email-Driven)</h3>
+<pre><code>Background scanner (15-min cadence per credential)
+   │
+   ▼
+Gmail API: incremental sync via historyId; full-scan fallback on 404
+   │
+   ▼
+Per-message classification (sender domain + subject keyword rules)
+   │
+   ├─ High confidence → auto-create ComplianceNotice with authority + metadata
+   ├─ Medium confidence → review queue for human triage
+   ├─ Low confidence  → ignored, or persisted as document if substantive body
+   │
+   ▼
+Attachments: stored, OCR'd, ML-classified through document pipeline
+   │
+   ▼
+Risk scoring → critical-tier auto-escalation
+   │
+   ▼
+Deadline alerts scheduled (T-7 / T-3 / T-1 / overdue) via durable scheduler
+   │
+   ▼
+Multi-channel dispatch (Email + WebSocket)
+</code></pre>
+<h3>3.5 Multi-Tenancy Model</h3>
+<p>TaxSync uses a single-database, RLS-enforced multi-tenant model:</p>
+<ul>
+<li>Every client-scoped table (<code>compliance_notices</code>, <code>notice_activity</code>, <code>notice_alert_log</code>, <code>client_memberships</code>, <code>responses</code>, etc.) has a <code>client_id</code> foreign key.</li>
+<li>PostgreSQL Row-Level Security (RLS) policies are applied with <code>FORCE ROW LEVEL SECURITY</code> on every client-scoped table.</li>
+<li>The application connects to PostgreSQL as a runtime role (<code>app_runtime</code>) that has <code>REVOKE</code> rights on the <code>audit_logs</code> table — meaning even the application cannot bypass audit immutability.</li>
+<li>Tenant context (the active <code>client_id</code>) is injected per-request from a custom HTTP header (<code>X-Client-Id</code>) and propagated into PostgreSQL via session-level <code>SET</code> statements.</li>
+<li>A <code>cross_client_view</code> PERMISSIVE policy lets senior roles (Compliance Head, CA Consultant, CFO) see aggregated views across the clients they belong to, without leaking unauthorized clients.</li>
+</ul>
+<p>This model is stronger than application-layer scoping because a missed <code>WHERE client_id = ...</code> clause in code cannot leak data — the database itself filters every row.</p>
+<hr />
+<h2>4. Technology Stack</h2>
+<h3>4.1 Frontend</h3>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Technology</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Framework</td>
+<td>Next.js 15 (App Router, standalone build)</td>
+</tr>
+<tr>
+<td>UI library</td>
+<td>React 19</td>
+</tr>
+<tr>
+<td>Language</td>
+<td>TypeScript</td>
+</tr>
+<tr>
+<td>Styling</td>
+<td>Tailwind CSS</td>
+</tr>
+<tr>
+<td>Server-state</td>
+<td>TanStack Query v5</td>
+</tr>
+<tr>
+<td>Client-state</td>
+<td>Zustand v5 (with persist middleware for multi-tenant state)</td>
+</tr>
+<tr>
+<td>Forms</td>
+<td>React Hook Form v7 + Zod v3 schema validation</td>
+</tr>
+<tr>
+<td>Tables</td>
+<td>TanStack Table v8 (notice list with row selection)</td>
+</tr>
+<tr>
+<td>Date pickers</td>
+<td>react-day-picker v9 (React 19 compatible)</td>
+</tr>
+<tr>
+<td>CSV parsing</td>
+<td>PapaParse v5</td>
+</tr>
+<tr>
+<td>Date utilities</td>
+<td>date-fns v3</td>
+</tr>
+<tr>
+<td>Animation</td>
+<td>Framer Motion</td>
+</tr>
+<tr>
+<td>Charts</td>
+<td>Recharts</td>
+</tr>
+<tr>
+<td>PDF preview</td>
+<td>react-pdf</td>
+</tr>
+</tbody>
+</table>
+<h3>4.2 Backend</h3>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Technology</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Web framework</td>
+<td>FastAPI</td>
+</tr>
+<tr>
+<td>ORM</td>
+<td>SQLAlchemy</td>
+</tr>
+<tr>
+<td>Validation</td>
+<td>Pydantic v2</td>
+</tr>
+<tr>
+<td>ASGI server</td>
+<td>Uvicorn</td>
+</tr>
+<tr>
+<td>Structured logging</td>
+<td>structlog (with PII redaction)</td>
+</tr>
+<tr>
+<td>Background tasks</td>
+<td>Celery (default queue + dedicated compliance queue)</td>
+</tr>
+<tr>
+<td>Scheduled jobs</td>
+<td>APScheduler with PostgreSQL JobStore</td>
+</tr>
+<tr>
+<td>Rate limiting</td>
+<td>slowapi (Redis-backed with in-memory fallback)</td>
+</tr>
+<tr>
+<td>Migrations</td>
+<td>Alembic</td>
+</tr>
+<tr>
+<td>Testing</td>
+<td>pytest (389 backend tests), pytest-freezer, freezegun</td>
+</tr>
+</tbody>
+</table>
+<h3>4.3 Data Layer</h3>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Technology</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Primary database</td>
+<td>PostgreSQL 16 (managed via Supabase Cloud, session-mode pooler)</td>
+</tr>
+<tr>
+<td>Cache and broker</td>
+<td>Redis 7 (Celery message broker, pub/sub channel for real-time, rate limiter)</td>
+</tr>
+<tr>
+<td>Object storage</td>
+<td>Local filesystem in development; S3-compatible in production</td>
+</tr>
+<tr>
+<td>Full-text search</td>
+<td>PostgreSQL <code>tsvector</code> + GIN indexes + <code>pg_trgm</code> trigram fuzzy matching</td>
+</tr>
+</tbody>
+</table>
+<h3>4.4 AI and Machine Learning</h3>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Technology</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Document classifier</td>
+<td>Linear SVC + Calibrated Classifier with TF-IDF (15K vocabulary, n-grams up to trigrams)</td>
+</tr>
+<tr>
+<td>Classification accuracy</td>
+<td>85.06% (exceeds 85% target on held-out evaluation)</td>
+</tr>
+<tr>
+<td>OCR engine</td>
+<td>Tesseract with adaptive preprocessing pipeline</td>
+</tr>
+<tr>
+<td>PDF text extraction</td>
+<td>pdfplumber with OCR fallback</td>
+</tr>
+<tr>
+<td>DOCX extraction</td>
+<td>python-docx (paragraphs + tables)</td>
+</tr>
+<tr>
+<td>Named-entity recognition</td>
+<td>spaCy (regulatory entity extraction)</td>
+</tr>
+<tr>
+<td>Risk scoring</td>
+<td>Rule-based scorer with SHAP-style explainable factors</td>
+</tr>
+<tr>
+<td>LLM smart extraction</td>
+<td>Multi-provider abstraction with automatic fallback (local Ollama, cloud LLMs, regex fallback)</td>
+</tr>
+<tr>
+<td>Training datasets</td>
+<td>7 datasets totaling ~28 GB (UPI Transactions 2024, Bank Statements, ITR Form 16 images, Invoice OCR, RVL-CDIP, Financial Images India, synthetic augmentation)</td>
+</tr>
+</tbody>
+</table>
+<h3>4.5 Authentication and Security</h3>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Technology</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Access tokens</td>
+<td>JWT (HS256, 30-minute expiry) with <code>jti</code> claims</td>
+</tr>
+<tr>
+<td>Refresh tokens</td>
+<td>Opaque, with rotation and reuse detection</td>
+</tr>
+<tr>
+<td>Password hashing</td>
+<td>bcrypt (passlib)</td>
+</tr>
+<tr>
+<td>Single sign-on</td>
+<td>Google OAuth 2.0, Microsoft OAuth 2.0 with CSRF state parameter</td>
+</tr>
+<tr>
+<td>Sensitive-field encryption</td>
+<td>Fernet symmetric encryption (GSTIN, PAN, refresh tokens at rest)</td>
+</tr>
+<tr>
+<td>Email service</td>
+<td>Resend SMTP (configurable to any SMTP provider)</td>
+</tr>
+<tr>
+<td>Rate limiting</td>
+<td>Redis-backed slowapi with in-memory fallback</td>
+</tr>
+</tbody>
+</table>
+<h3>4.6 Infrastructure</h3>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Technology</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Containerization</td>
+<td>Docker Compose (db, redis, backend, default worker, compliance worker, frontend)</td>
+</tr>
+<tr>
+<td>Frontend hosting</td>
+<td>Vercel (production)</td>
+</tr>
+<tr>
+<td>CI/CD</td>
+<td>GitHub Actions (automated tests, linting, Docker image build)</td>
+</tr>
+<tr>
+<td>Dependency monitoring</td>
+<td>Dependabot</td>
+</tr>
+<tr>
+<td>Logging</td>
+<td>JSON-structured logs with correlation IDs, 10MB rotation per container</td>
+</tr>
+<tr>
+<td>Health checks</td>
+<td>Per-service Docker healthchecks with start_period and retry policies</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>5. Feature Catalog</h2>
+<p>This catalog organizes all 64 production features by user need.</p>
+<h3>5.1 Document Management (10 features)</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A1</td>
+<td>Universal upload</td>
+<td>PDF, DOCX, JPEG, PNG, TIFF up to 16 MB, single or batch</td>
+</tr>
+<tr>
+<td>A2</td>
+<td>OCR for scans and images</td>
+<td>Reads text from photographs, scanned documents, blurred or skewed images</td>
+</tr>
+<tr>
+<td>A3</td>
+<td>Auto-categorization</td>
+<td>Sorts documents into 7 categories (Bills, Invoices, Tax, Bank, UPI, Tickets, Other) at ~85% accuracy</td>
+</tr>
+<tr>
+<td>A4</td>
+<td>Smart field extraction</td>
+<td>Automatically pulls vendor, date, and amount from documents</td>
+</tr>
+<tr>
+<td>A5</td>
+<td>AI-generated summaries</td>
+<td>One-paragraph plain-English summary per document</td>
+</tr>
+<tr>
+<td>A6</td>
+<td>Document sharing with roles</td>
+<td>Viewer / Editor / Admin permissions per document</td>
+</tr>
+<tr>
+<td>A7</td>
+<td>Version control with rollback</td>
+<td>Auto-versioning on re-upload; restore any historical version</td>
+</tr>
+<tr>
+<td>A8</td>
+<td>In-browser preview</td>
+<td>PDF and image preview with page navigation, zoom, and pan</td>
+</tr>
+<tr>
+<td>A9</td>
+<td>Full-text search</td>
+<td>Search across document content (not just filenames) with fuzzy matching</td>
+</tr>
+<tr>
+<td>A10</td>
+<td>Document analytics dashboard</td>
+<td>Upload trends, category distribution, processing status</td>
+</tr>
+</tbody>
+</table>
+<h3>5.2 Compliance Notice Management (12 features)</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>B1</td>
+<td>Multi-client tracking</td>
+<td>CA firms manage many client entities; each with its own GSTIN/PAN/CIN</td>
+</tr>
+<tr>
+<td>B2</td>
+<td>Three intake modes</td>
+<td>Drag-and-drop, manual metadata, or automatic Gmail capture</td>
+</tr>
+<tr>
+<td>B3</td>
+<td>Auto-classification by authority</td>
+<td>GST, Income Tax, MCA, RBI, SEBI identified from sender + content</td>
+</tr>
+<tr>
+<td>B4</td>
+<td>Risk scoring with explainable factors</td>
+<td>0-100 score, Critical/High/Medium/Low tier, top 3 driving factors in plain English</td>
+</tr>
+<tr>
+<td>B5</td>
+<td>Status workflow</td>
+<td>Received → Under Review → Response Drafted → Submitted → Resolved/Dismissed</td>
+</tr>
+<tr>
+<td>B6</td>
+<td>Linked notice chains</td>
+<td>Show-Cause → Assessment → Demand modeled as parent-child notice tree</td>
+</tr>
+<tr>
+<td>B7</td>
+<td>4-stage approval workflow</td>
+<td>Drafter → Reviewer → Legal → CFO with version history</td>
+</tr>
+<tr>
+<td>B8</td>
+<td>Auto-escalation for Critical notices</td>
+<td>Compliance Head notified instantly via in-app + email</td>
+</tr>
+<tr>
+<td>B9</td>
+<td>Bulk status updates</td>
+<td>Move many notices through a stage in one action with partial-failure UX</td>
+</tr>
+<tr>
+<td>B10</td>
+<td>Time-bound auditor access</td>
+<td>External auditors get read-only access until configured expiry date</td>
+</tr>
+<tr>
+<td>B11</td>
+<td>Immutable audit trail</td>
+<td>Every action logged in tamper-proof, append-only record</td>
+</tr>
+<tr>
+<td>B12</td>
+<td>7-role permission matrix</td>
+<td>12 permissions × 7 roles, plus time-bound Auditor role</td>
+</tr>
+</tbody>
+</table>
+<h3>5.3 Statutory Calendar and Alerts (6 features)</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C1</td>
+<td>37 pre-loaded FY 2025-26 deadlines</td>
+<td>GSTR-1, GSTR-3B, GSTR-9, TDS quarterly returns, Advance Tax, ITR, MCA returns</td>
+</tr>
+<tr>
+<td>C2</td>
+<td>Holiday-aware deadline shifting</td>
+<td>Sundays and gazetted holidays shift to next working day automatically</td>
+</tr>
+<tr>
+<td>C3</td>
+<td>Real-time in-app notifications</td>
+<td>Live notification bell with auto-reconnecting WebSocket</td>
+</tr>
+<tr>
+<td>C4</td>
+<td>Email alerts</td>
+<td>T-7, T-3, T-1 reminders for every notice and deadline</td>
+</tr>
+<tr>
+<td>C5</td>
+<td>Compliance health score</td>
+<td>Single percentage over rolling 90-day window per client</td>
+</tr>
+<tr>
+<td>C6</td>
+<td>Bill reminders</td>
+<td>T-3, T-1, overdue reminders for utility / telecom / OTT / credit card bills</td>
+</tr>
+</tbody>
+</table>
+<h3>5.4 Email Integration — Gmail (7 features)</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D1</td>
+<td>One-click Gmail connect</td>
+<td>OAuth 2.0 with offline access for refresh tokens</td>
+</tr>
+<tr>
+<td>D2</td>
+<td>Continuous background scanning</td>
+<td>15-minute cadence per credential, configurable from 5 minutes to 24 hours</td>
+</tr>
+<tr>
+<td>D3</td>
+<td>Filter rules</td>
+<td>Route to compliance / bills / document-only / ignore based on sender, subject, label</td>
+</tr>
+<tr>
+<td>D4</td>
+<td>Auto-detect regulatory emails</td>
+<td>gov.in domains and known authority senders auto-create notices</td>
+</tr>
+<tr>
+<td>D5</td>
+<td>Auto-detect bills</td>
+<td>Utility, telecom, credit card, OTT subscription emails captured as bill records</td>
+</tr>
+<tr>
+<td>D6</td>
+<td>View source email on demand</td>
+<td>Original email body fetched on request, never stored on disk</td>
+</tr>
+<tr>
+<td>D7</td>
+<td>Connection health monitoring</td>
+<td>&quot;Reconnect required&quot; banner on token revocation; email alert after 2 consecutive failures</td>
+</tr>
+</tbody>
+</table>
+<h3>5.5 Bills and Payments (6 features)</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>E1</td>
+<td>Bill dashboard with filters</td>
+<td>Upcoming / Due Soon / Overdue / Paid buckets with category aggregates</td>
+</tr>
+<tr>
+<td>E2</td>
+<td>Pre-deadline reminders</td>
+<td>T-3, T-1, overdue with cap of three reminders per bill</td>
+</tr>
+<tr>
+<td>E3</td>
+<td>Mark as paid</td>
+<td>Track payment date, reference number, method with audit log entry</td>
+</tr>
+<tr>
+<td>E4</td>
+<td>Recurring bill detection</td>
+<td>Auto-link by biller and last 4 of account number; series view with monthly/quarterly/annual</td>
+</tr>
+<tr>
+<td>E5</td>
+<td>Missing-month anomaly detection</td>
+<td>Surface bills that should have arrived but didn't</td>
+</tr>
+<tr>
+<td>E6</td>
+<td>Multi-channel reminder delivery</td>
+<td>Email + in-app bell</td>
+</tr>
+</tbody>
+</table>
+<h3>5.6 AI Document Intelligence (6 features)</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F1</td>
+<td>Auto-classification across 7 categories</td>
+<td>~85% accuracy with manual override</td>
+</tr>
+<tr>
+<td>F2</td>
+<td>Multi-provider LLM with automatic fallback</td>
+<td>Local-first (Ollama) with cloud fallback; provider outages are silent</td>
+</tr>
+<tr>
+<td>F3</td>
+<td>Smart extraction (dates, amounts, vendors)</td>
+<td>Structured JSON output</td>
+</tr>
+<tr>
+<td>F4</td>
+<td>AI-generated summaries</td>
+<td>Plain-English one-paragraph summary per document</td>
+</tr>
+<tr>
+<td>F5</td>
+<td>Risk scoring for compliance notices</td>
+<td>0-100 score with explainable factors</td>
+</tr>
+<tr>
+<td>F6</td>
+<td>Human review queue for low-confidence ML output</td>
+<td>Prevents miscategorization on uncertain inputs</td>
+</tr>
+</tbody>
+</table>
+<h3>5.7 Search and Reporting (6 features)</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G1</td>
+<td>Full-text search across documents</td>
+<td>PostgreSQL tsvector with relevance ranking</td>
+</tr>
+<tr>
+<td>G2</td>
+<td>Cross-entity unified search</td>
+<td>Single query across documents and compliance notices with type badges</td>
+</tr>
+<tr>
+<td>G3</td>
+<td>Fuzzy matching</td>
+<td>Typo tolerance via pg_trgm trigram similarity</td>
+</tr>
+<tr>
+<td>G4</td>
+<td>Filter by authority, status, risk, date</td>
+<td>Combinable filters with shareable URL state</td>
+</tr>
+<tr>
+<td>G5</td>
+<td>Pre-built reports</td>
+<td>Penalty by Authority, Notice Volume by Status, Response Time Percentiles, Health Summary</td>
+</tr>
+<tr>
+<td>G6</td>
+<td>CSV export of every report</td>
+<td>Downloads to Excel or Google Sheets format</td>
+</tr>
+</tbody>
+</table>
+<h3>5.8 Multi-User Access and Security (8 features)</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>H1</td>
+<td>Email and password sign-in</td>
+<td>Standard registration with strong password requirements</td>
+</tr>
+<tr>
+<td>H2</td>
+<td>Single sign-on</td>
+<td>Google and Microsoft OAuth</td>
+</tr>
+<tr>
+<td>H3</td>
+<td>7 compliance roles + Auditor</td>
+<td>Compliance Head, CA Consultant, CFO, Drafter, Reviewer, Legal Team, Finance Team, Auditor</td>
+</tr>
+<tr>
+<td>H4</td>
+<td>Cross-client view for senior roles</td>
+<td>Aggregated dashboard across multiple clients for owners and consultants</td>
+</tr>
+<tr>
+<td>H5</td>
+<td>Admin user management</td>
+<td>Invite, assign roles, revoke access from a Team page</td>
+</tr>
+<tr>
+<td>H6</td>
+<td>Auto-logout and session management</td>
+<td>Refresh on activity; automatic sign-out after inactivity</td>
+</tr>
+<tr>
+<td>H7</td>
+<td>Encrypted sensitive fields</td>
+<td>GSTIN, PAN, refresh tokens encrypted at rest with Fernet</td>
+</tr>
+<tr>
+<td>H8</td>
+<td>Production security hardening</td>
+<td>Rate limiting, security headers, CSRF protection, magic-byte file validation</td>
+</tr>
+</tbody>
+</table>
+<h3>5.9 Analytics and Reporting (6 features)</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>I1</td>
+<td>Documents dashboard</td>
+<td>Total count, monthly upload trends, category breakdown</td>
+</tr>
+<tr>
+<td>I2</td>
+<td>Compliance dashboard with risk distribution</td>
+<td>Pie chart of notices by risk tier, monthly volume, status snapshot</td>
+</tr>
+<tr>
+<td>I3</td>
+<td>Compliance health score</td>
+<td>Rolling 90-day percentage prominently displayed per client</td>
+</tr>
+<tr>
+<td>I4</td>
+<td>Per-authority penalty totals</td>
+<td>Bar chart of total penalty amounts by regulator</td>
+</tr>
+<tr>
+<td>I5</td>
+<td>Notice response time analytics</td>
+<td>Median, 75th percentile, 90th percentile response times</td>
+</tr>
+<tr>
+<td>I6</td>
+<td>CSV export of every report</td>
+<td>Universal export across all dashboards</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>6. AI and Machine Learning Pipeline</h2>
+<h3>6.1 Document Processing Pipeline</h3>
+<p>Every uploaded document flows through a deterministic pipeline that combines deterministic text extraction with ML inference and AI smart extraction:</p>
+<pre><code>Upload (HTTP 202 Accepted)
+   │
+   ▼
+Celery worker picks up task
+   │
+   ├─ PDF? → pdfplumber text extraction
+   │           └─ if text &lt; 50 chars, fall back to OCR
+   ├─ DOCX? → python-docx (paragraphs + tables)
+   ├─ Image? → Tesseract OCR
+   │           ├─ Grayscale → Gaussian blur → Adaptive threshold
+   │           ├─ Deskew correction
+   │           ├─ Morphological open/close
+   │           └─ Multi-PSM retry (PSM 6 → PSM 3)
+   │
+   ▼
+Text preprocessing (clean, normalize, preserve financial patterns)
+   │
+   ▼
+TF-IDF + Linear SVC classification → category + confidence score
+   │
+   ▼
+Multi-provider LLM smart extraction
+   (category-specific prompts → structured JSON)
+   │
+   ▼
+Metadata extraction (dates, amounts, vendor — regex + dateutil)
+   │
+   ▼
+Persist: status COMPLETED, category, confidence, AI summary, structured fields
+</code></pre>
+<h3>6.2 Document Classifier</h3>
+<ul>
+<li><strong>Algorithm:</strong> Linear Support Vector Classifier wrapped in a Calibrated Classifier for probability estimates</li>
+<li><strong>Features:</strong> TF-IDF vectorization with 15,000-term vocabulary, n-grams up to trigrams</li>
+<li><strong>Class balance:</strong> Synthetic data augmentation (factor=10) on the smaller categories</li>
+<li><strong>Held-out accuracy:</strong> 85.06% (exceeds 85% target)</li>
+<li><strong>Per-category metrics:</strong> Precision/Recall/F1 visible in the in-app ML evaluation dashboard with confusion matrix</li>
+<li><strong>Model artifacts:</strong> Versioned in source control for reproducible deployment; no training step required at deploy time</li>
+</ul>
+<h3>6.3 OCR Pipeline</h3>
+<p>The OCR engine handles scanned PDFs, phone-camera photographs, and low-quality images. Adaptive preprocessing improves Tesseract output significantly compared to a naive pipeline:</p>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Operation</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Grayscale conversion</td>
+<td>Reduces channel count, improves edge detection</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Gaussian blur</td>
+<td>Smooths sensor noise without losing strokes</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Adaptive thresholding</td>
+<td>Binarizes under varying lighting (better than fixed threshold)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Deskew correction</td>
+<td>Rotates skewed scans within ±45°</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Morphological open/close</td>
+<td>Cleans speckle and joins broken strokes</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Multi-PSM retry</td>
+<td>If PSM 6 (uniform block) yields low confidence, retry with PSM 3 (auto layout)</td>
+</tr>
+</tbody>
+</table>
+<h3>6.4 LLM Smart Extraction</h3>
+<p>A multi-provider abstraction lets the system route LLM calls across:</p>
+<ul>
+<li><strong>Local-first (Ollama)</strong> for privacy-sensitive deployments and zero per-call cost</li>
+<li><strong>Cloud LLM providers</strong> for higher-quality extraction when latency budget allows</li>
+<li><strong>Regex fallback</strong> so the pipeline degrades gracefully if all LLM providers are unreachable (the system tracks degraded-mode runs in its metrics)</li>
+</ul>
+<p>Category-specific prompts produce structured JSON output (vendor, date, amount, account number, deadline, notice number, authority) that flows directly into the database without manual parsing.</p>
+<h3>6.5 Risk Scoring with Explainable Factors</h3>
+<p>Each compliance notice receives:</p>
+<ul>
+<li>A 0-100 numeric risk score</li>
+<li>A risk tier label (Critical / High / Medium / Low)</li>
+<li>The top 3 explainable factors driving the score, in plain English</li>
+</ul>
+<p>Example: <code>&quot;Penalty over Rs. 5L&quot;</code>, <code>&quot;Deadline within 7 days&quot;</code>, <code>&quot;Senior authority (CGST Commissioner)&quot;</code>. The factor list is generated in a SHAP-style additive decomposition, so users can trust the score is not a black box.</p>
+<h3>6.6 Multi-Provider Fallback</h3>
+<p>The LLM service ships with automatic provider fallback. If the primary provider returns an error, exceeds the latency budget, or hits a rate limit, the next provider in the configured chain is tried. The fallback is silent to end users — they never see an error from a provider outage. Each call's actual provider is logged for cost attribution and operational visibility.</p>
+<hr />
+<h2>7. Compliance Notice Lifecycle</h2>
+<h3>7.1 State Machine</h3>
+<p>A compliance notice moves through five canonical states, with two terminal states:</p>
+<pre><code>                  ┌──────────────┐
+                  │   Received   │
+                  └──────┬───────┘
+                         │
+                         ▼
+                  ┌──────────────┐
+                  │ Under Review │
+                  └──────┬───────┘
+                         │
+                         ▼
+                  ┌────────────────────┐
+                  │  Response Drafted  │
+                  └──────┬─────────────┘
+                         │
+                         ▼
+                  ┌──────────────┐
+                  │  Submitted   │
+                  └──────┬───────┘
+                         │
+              ┌──────────┴──────────┐
+              ▼                     ▼
+        ┌──────────┐          ┌────────────┐
+        │ Resolved │          │ Dismissed  │
+        └──────────┘          └────────────┘
+</code></pre>
+<p>Each transition is permission-gated, audit-logged, and emits a real-time WebSocket event. Backwards transitions are not allowed except by Compliance Head with explicit reason.</p>
+<h3>7.2 4-Stage Approval Workflow for Responses</h3>
+<p>Notice responses flow through up to four approval stages. Each stage has its own users, permissions, and version history.</p>
+<pre><code>Draft (Drafter)
+   │
+   ├─ Saved as Version 1
+   ▼
+Reviewer
+   │
+   ├─ Approve → version locked, advances
+   ├─ Send back → Drafter creates Version 2
+   ▼
+Legal
+   │
+   ├─ Approve → version locked, advances
+   ├─ Send back → returns to Reviewer
+   ▼
+CFO
+   │
+   ├─ Approve → final version, ready to submit
+   ├─ Send back → returns to Legal
+   ▼
+Mark as Submitted
+</code></pre>
+<p>A notice cannot reach <code>Submitted</code> unless every required stage has approved. Evidence (linked documents, supporting calculations, regulator correspondence) is attached at the response level.</p>
+<h3>7.3 Auto-Escalation Rules</h3>
+<p>When a notice scores Critical on risk:</p>
+<ol>
+<li>The Compliance Head receives an immediate in-app and email notification</li>
+<li>An escalation entry is added to the notice activity timeline</li>
+<li>An audit log row records the escalation event with full forensic detail</li>
+</ol>
+<h3>7.4 Linked Notice Chains</h3>
+<p>Many regulatory matters span multiple notices over time. TaxSync models these as a directed graph (parent-child with <code>parent_notice_id</code>):</p>
+<ul>
+<li>Show-Cause Notice → Assessment Order → Demand Notice</li>
+<li>Original Demand → Stay Order → Revised Demand → Closure</li>
+</ul>
+<p>A recursive Common Table Expression (CTE) returns ancestors and descendants of any notice in a single query. The chain is rendered visually on the notice detail page.</p>
+<h3>7.5 Activity Timeline</h3>
+<p>Every user-facing action on a notice is recorded as an <code>activity</code> event with:</p>
+<ul>
+<li>Actor (user_id)</li>
+<li>Action type (status_change, comment, assignment, attachment, escalation)</li>
+<li>Timestamp</li>
+<li>Details (free-text or structured JSON)</li>
+<li>Visibility (compliance team only / external auditor / regulator-facing)</li>
+</ul>
+<p>The activity timeline is separate from the immutable audit log. The timeline is user-facing and editable for typos; the audit log is forensically immutable.</p>
+<hr />
+<h2>8. Email Integration</h2>
+<h3>8.1 OAuth 2.0 Connection Flow</h3>
+<pre><code>User: &quot;Connect Gmail&quot;
+   │
+   ▼
+Frontend → POST /api/email/gmail/oauth/authorize
+   │   (returns Google consent URL with signed-JWT state parameter)
+   ▼
+User redirected to accounts.google.com → consents
+   │   (with offline access + prompt=consent for guaranteed refresh token)
+   ▼
+Google redirects to callback URL with authorization code
+   │
+   ▼
+Backend validates signed state JWT (CSRF protection)
+   │
+   ▼
+Code exchanged for refresh + access tokens
+   │
+   ▼
+Refresh token encrypted (Fernet) and stored
+   │
+   ▼
+Background scanner scheduled (15-min cadence per credential)
+   │
+   ▼
+User redirected back to /dashboard/email/connect with success status
+</code></pre>
+<p>The signed state JWT (HS256, 10-minute expiry, payload includes nonce + user_id + client_id) is the authentication of record on the cross-origin callback, since SameSite cookies are not sent on Google's redirect.</p>
+<h3>8.2 Continuous Background Scanning</h3>
+<p>A durable scheduler runs a per-credential job every 15 minutes by default (configurable from 5 minutes to 24 hours per credential). Each scan:</p>
+<ol>
+<li>Acquires a Redis distributed lock (<code>SETNX</code> with 5-minute TTL) to prevent concurrent runs</li>
+<li>Refreshes the OAuth access token if expired</li>
+<li>Fetches new messages via Gmail History API (incremental sync from last <code>historyId</code>)</li>
+<li>Falls back to a full message list if Gmail returns 404 (history record expired)</li>
+<li>For each new message: classifies, ingests attachments, runs the document pipeline, persists structured records</li>
+<li>Updates <code>last_history_id</code> for the next run</li>
+<li>Releases the lock</li>
+</ol>
+<h3>8.3 PII Privacy Model</h3>
+<p>A core privacy principle: the email body is never persisted in raw form.</p>
+<ul>
+<li>Body lives only in a Python local variable for the duration of one scan iteration</li>
+<li>A SHA-256 hash of the body is stored for deduplication and audit reference</li>
+<li>Only sender domain (not full email address) is persisted in classification logs</li>
+<li>Audit log entries reference message IDs and SHA-256 hashes, never plaintext content</li>
+<li>&quot;View source email&quot; fetches the body on demand at view time and discards it on page refresh</li>
+</ul>
+<p>This model means a database breach does not leak the contents of regulator notices.</p>
+<h3>8.4 Filter Rules Engine</h3>
+<p>Users can route incoming emails based on configurable rules:</p>
+<ul>
+<li><strong>Match by:</strong> sender pattern (regex), subject pattern (regex), Gmail label</li>
+<li><strong>Action:</strong> route to compliance notice, route to bill, save as document only, or ignore</li>
+<li><strong>Pre-seeded defaults:</strong> <code>gov.in</code> domains route to compliance notices; common biller domains route to bills</li>
+</ul>
+<p>Rules are evaluated in order; the first matching rule wins.</p>
+<h3>8.5 Auto-Detection Logic</h3>
+<p>Two parallel detection layers operate on every scanned message:</p>
+<table>
+<thead>
+<tr>
+<th>Detector</th>
+<th>Rule</th>
+<th>Outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compliance</td>
+<td>Sender domain matches a regulator pattern AND subject contains a compliance keyword</td>
+<td>Auto-create ComplianceNotice with authority pre-filled (high confidence)</td>
+</tr>
+<tr>
+<td>Compliance</td>
+<td>Sender domain matches but subject does not</td>
+<td>Route to review queue (medium confidence)</td>
+</tr>
+<tr>
+<td>Bill</td>
+<td>Sender domain matches a known biller pattern</td>
+<td>Auto-create Bill record with biller name + amount + due date extracted</td>
+</tr>
+<tr>
+<td>Default</td>
+<td>No rule match, body ≥ 200 chars</td>
+<td>Persist as Document for ML classification</td>
+</tr>
+<tr>
+<td>Default</td>
+<td>No rule match, body &lt; 200 chars</td>
+<td>Ignored</td>
+</tr>
+</tbody>
+</table>
+<h3>8.6 Connection Health Monitoring</h3>
+<p>If two consecutive scans fail (HTTP 401 from Google means revoked refresh token, or other terminal errors):</p>
+<ul>
+<li>The credential is marked <code>REVOKED</code> in the database</li>
+<li>The scheduler stops retrying (no log spam)</li>
+<li>A &quot;Reconnect required&quot; banner appears in the dashboard</li>
+<li>An email alert is sent to the user and to the Compliance Head</li>
+</ul>
+<hr />
+<h2>9. Notifications and Alerts</h2>
+<h3>9.1 Channels</h3>
+<table>
+<thead>
+<tr>
+<th>Channel</th>
+<th>Delivery</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Email</td>
+<td>SMTP via Resend (configurable to any SMTP provider)</td>
+</tr>
+<tr>
+<td>In-App WebSocket</td>
+<td>Redis pub/sub channel <code>notifications:{client_id}</code>, FastAPI WebSocket forwards to authenticated subscribers</td>
+</tr>
+</tbody>
+</table>
+<h3>9.2 Scheduled Deadline Alerts</h3>
+<p>For every compliance notice with a deadline, four jobs are scheduled in a durable PostgreSQL-backed scheduler:</p>
+<table>
+<thead>
+<tr>
+<th>Alert</th>
+<th>Fires</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>deadline_t7</code></td>
+<td>7 days before deadline</td>
+</tr>
+<tr>
+<td><code>deadline_t3</code></td>
+<td>3 days before deadline</td>
+</tr>
+<tr>
+<td><code>deadline_t1</code></td>
+<td>1 day before deadline</td>
+</tr>
+<tr>
+<td><code>overdue</code></td>
+<td>1 day after deadline if status is not Submitted</td>
+</tr>
+</tbody>
+</table>
+<p>Jobs survive backend restarts (persisted in <code>apscheduler_jobs</code> table). On notice transition to <code>Submitted</code> / <code>Resolved</code> / <code>Dismissed</code>, all scheduled alerts are cancelled in O(1) by job ID.</p>
+<h3>9.3 Real-Time In-App Notifications</h3>
+<p>The frontend opens a JWT-authenticated WebSocket connection on dashboard load:</p>
+<ul>
+<li>Authentication: JWT in the initial connection query string</li>
+<li>Authorization: server validates the user has an active <code>ClientMembership</code> for the requested <code>client_id</code></li>
+<li>Auto-reconnect with exponential backoff (capped at 30 seconds)</li>
+<li>Membership re-validation every 60 seconds — auditors whose access window expires mid-session are disconnected automatically</li>
+<li>Per-client subscription: switching clients reopens the socket with new <code>client_id</code></li>
+</ul>
+<h3>9.4 Pub/Sub Routing</h3>
+<p>Alert dispatch follows a fan-out pattern:</p>
+<pre><code>Alert event
+   │
+   ▼
+Resolve recipients (by role + tenant)
+   │
+   ▼
+For each recipient × channel:
+   │
+   ├─ Email → SMTP send → record delivery_status
+   ├─ WebSocket → Redis publish → record subscriber count
+   │
+   ▼
+Persist to notice_alert_log with delivery_status per recipient
+</code></pre>
+<p>A future caller can audit any alert: who was supposed to receive it, on what channels, with what delivery outcome.</p>
+<hr />
+<h2>10. Security and Compliance</h2>
+<h3>10.1 Multi-Tenant Isolation (Row-Level Security)</h3>
+<p>PostgreSQL Row-Level Security policies are applied to every client-scoped table with <code>FORCE ROW LEVEL SECURITY</code>. The application connects as a runtime database role (<code>app_runtime</code>) that:</p>
+<ul>
+<li>Has READ/WRITE on operational tables, subject to RLS</li>
+<li>Has REVOKE on <code>audit_logs</code> (cannot UPDATE or DELETE)</li>
+</ul>
+<p>A <code>cross_client_view</code> PERMISSIVE policy lets senior roles see aggregated data across the clients they belong to, without leaking unauthorized clients.</p>
+<h3>10.2 Immutable Audit Trail</h3>
+<p>The <code>audit_logs</code> table has:</p>
+<ul>
+<li>A trigger that raises EXCEPTION on any UPDATE or DELETE</li>
+<li><code>REVOKE ALL ON audit_logs FROM app_runtime</code> so the application role literally cannot modify rows</li>
+<li>INSERT-only access, ensuring append-only semantics</li>
+</ul>
+<p>This is stronger than soft-delete or version columns — even a compromised application cannot tamper with the audit chain.</p>
+<p>The trigger has a real consequence for user deletion: a hard <code>DELETE FROM users</code> would cascade <code>ON DELETE SET NULL</code> on <code>audit_logs.user_id</code>, which is an UPDATE that trips the trigger. The product instead performs soft-delete + PII anonymization: email becomes <code>deleted-{id}-{epoch}@deleted.local</code>, username and full name are anonymized, hashed_password is nulled, freeing the unique slots for re-registration while preserving forensic linkage in the audit log.</p>
+<h3>10.3 Encryption at Rest</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Algorithm</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GSTIN</td>
+<td>Fernet (AES-128 CBC + HMAC)</td>
+<td>Per-client encryption key</td>
+</tr>
+<tr>
+<td>PAN</td>
+<td>Fernet</td>
+<td>Per-client encryption key</td>
+</tr>
+<tr>
+<td>Refresh tokens (Gmail)</td>
+<td>Fernet</td>
+<td>Tokens stored in <code>gmail_credentials</code></td>
+</tr>
+<tr>
+<td>User refresh tokens</td>
+<td>Opaque hashed</td>
+<td>Database stores hash, not plaintext</td>
+</tr>
+<tr>
+<td>Passwords</td>
+<td>bcrypt</td>
+<td>passlib with adaptive cost factor</td>
+</tr>
+</tbody>
+</table>
+<h3>10.4 Authentication and Session Management</h3>
+<ul>
+<li><strong>Access tokens:</strong> JWT (HS256, 30-minute expiry) with <code>jti</code> claim for replay protection</li>
+<li><strong>Refresh tokens:</strong> Opaque, with rotation on every use and reuse detection (a revoked token presented again revokes ALL tokens for that user)</li>
+<li><strong>Row-level locking</strong> on token rotation prevents concurrent rotation race conditions</li>
+<li><strong>Type validation</strong> on every token (access vs refresh) prevents token-type confusion attacks</li>
+<li><strong>Auto-logout</strong> after configurable inactivity period</li>
+</ul>
+<h3>10.5 OAuth Single Sign-On</h3>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Flow</th>
+<th>CSRF protection</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Google</td>
+<td>OAuth 2.0 authorization code</td>
+<td>Signed state JWT (HS256, 10-min expiry)</td>
+</tr>
+<tr>
+<td>Microsoft</td>
+<td>OAuth 2.0 authorization code</td>
+<td>Signed state JWT</td>
+</tr>
+<tr>
+<td>Gmail (separate)</td>
+<td>OAuth 2.0 with offline access</td>
+<td>Signed state JWT</td>
+</tr>
+</tbody>
+</table>
+<p>OAuth buttons render unconditionally on <code>/login</code> and <code>/register</code>. If credentials are not configured, clicking shows a helpful toast; the OAuth flow is fully gated server-side, so there is no client-side error escape path.</p>
+<h3>10.6 Rate Limiting and DDoS Protection</h3>
+<table>
+<thead>
+<tr>
+<th>Endpoint class</th>
+<th>Limit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Login, register, password operations</td>
+<td>5 requests/minute per IP</td>
+</tr>
+<tr>
+<td>Search</td>
+<td>30 requests/minute per user</td>
+</tr>
+<tr>
+<td>Document upload</td>
+<td>60 requests/minute per user</td>
+</tr>
+<tr>
+<td>General API</td>
+<td>120 requests/minute per user</td>
+</tr>
+</tbody>
+</table>
+<p>Rate limits are stored in Redis with an in-memory fallback if Redis is briefly unavailable. The IP for rate limiting ignores <code>X-Forwarded-For</code> to prevent IP spoofing.</p>
+<h3>10.7 HTTP Security Headers</h3>
+<table>
+<thead>
+<tr>
+<th>Header</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Strict-Transport-Security</code></td>
+<td><code>max-age=63072000; includeSubDomains; preload</code> (2 years)</td>
+</tr>
+<tr>
+<td><code>Content-Security-Policy</code></td>
+<td><code>frame-ancestors 'none'</code>, no <code>unsafe-eval</code>, no <code>unsafe-inline</code> for scripts</td>
+</tr>
+<tr>
+<td><code>X-Frame-Options</code></td>
+<td><code>DENY</code></td>
+</tr>
+<tr>
+<td><code>X-Content-Type-Options</code></td>
+<td><code>nosniff</code></td>
+</tr>
+<tr>
+<td><code>Cross-Origin-Resource-Policy</code></td>
+<td><code>cross-origin</code></td>
+</tr>
+<tr>
+<td><code>Cache-Control</code></td>
+<td><code>no-store</code> on API responses</td>
+</tr>
+</tbody>
+</table>
+<h3>10.8 Input Validation and File Safety</h3>
+<ul>
+<li><strong>Pydantic v2</strong> schema validation on every request body</li>
+<li><strong>Email regex</strong> validation with lowercase normalization</li>
+<li><strong>Username</strong> restricted to <code>[a-zA-Z0-9_-]</code></li>
+<li><strong>Passwords</strong> require minimum 8 characters with at least one uppercase, lowercase, digit, and special character</li>
+<li><strong>File upload</strong> extension whitelist, 50 MB size limit, magic-byte signature validation (uploaded files are checked against expected file signatures, not just extension — prevents disguised file uploads)</li>
+<li><strong>Streaming upload</strong> prevents memory-DoS on large files</li>
+<li><strong>SQL injection</strong> prevented by SQLAlchemy ORM parameterized queries</li>
+<li><strong>Path traversal</strong> prevented by <code>realpath</code> + prefix validation in storage service</li>
+</ul>
+<h3>10.9 OWASP Top 10 Coverage</h3>
+<table>
+<thead>
+<tr>
+<th>OWASP risk</th>
+<th>TaxSync mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A01 Broken Access Control</td>
+<td>RLS at database, role-permission matrix at application, time-bound auditor windows</td>
+</tr>
+<tr>
+<td>A02 Cryptographic Failures</td>
+<td>bcrypt for passwords, Fernet for sensitive fields, HTTPS-only with HSTS</td>
+</tr>
+<tr>
+<td>A03 Injection</td>
+<td>ORM parameterized queries, magic-byte file validation, Pydantic input validation</td>
+</tr>
+<tr>
+<td>A04 Insecure Design</td>
+<td>Immutable audit log via DB trigger + REVOKE (not just app-layer)</td>
+</tr>
+<tr>
+<td>A05 Security Misconfiguration</td>
+<td>Strict security headers, no <code>unsafe-eval</code> in CSP, explicit CORS allowlist</td>
+</tr>
+<tr>
+<td>A06 Vulnerable Components</td>
+<td>Dependabot, automated dependency CI</td>
+</tr>
+<tr>
+<td>A07 Authentication Failures</td>
+<td>Refresh token rotation with reuse detection, rate limiting on auth, OAuth state CSRF</td>
+</tr>
+<tr>
+<td>A08 Software and Data Integrity</td>
+<td>Signed JWT state on OAuth, content-type validation, integrity checksums on documents</td>
+</tr>
+<tr>
+<td>A09 Logging and Monitoring</td>
+<td>Structured JSON logs with correlation IDs, immutable audit log, audit-failure dead-letter file</td>
+</tr>
+<tr>
+<td>A10 Server-Side Request Forgery</td>
+<td>Outbound HTTP only to allowlisted providers, no user-controlled URLs in server-side fetches</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>11. Role-Based Access Control</h2>
+<h3>11.1 Role Model</h3>
+<p>TaxSync defines 7 compliance roles plus Auditor:</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Scope</th>
+<th>Typical user</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compliance Head</td>
+<td>Senior in-house owner of regulatory matters</td>
+<td>Tax Director, VP Compliance</td>
+</tr>
+<tr>
+<td>CA Consultant</td>
+<td>External Chartered Accountant managing many clients</td>
+<td>CA firm partner</td>
+</tr>
+<tr>
+<td>CFO</td>
+<td>Final approver on responses with material financial impact</td>
+<td>Chief Financial Officer</td>
+</tr>
+<tr>
+<td>Drafter</td>
+<td>Writes the first version of a response</td>
+<td>Tax associate</td>
+</tr>
+<tr>
+<td>Reviewer</td>
+<td>Peer reviews a draft before Legal</td>
+<td>Senior associate</td>
+</tr>
+<tr>
+<td>Legal Team</td>
+<td>Legal accuracy and regulation citations</td>
+<td>In-house legal counsel</td>
+</tr>
+<tr>
+<td>Finance Team</td>
+<td>Tax-specific notice review and reconciliation</td>
+<td>Finance Manager</td>
+</tr>
+<tr>
+<td>Auditor (special)</td>
+<td>Time-bound, read-only access for inspection</td>
+<td>External auditor, regulator</td>
+</tr>
+</tbody>
+</table>
+<h3>11.2 Permission Matrix</h3>
+<p>12 distinct permissions are mapped across the 7 compliance roles, producing an 84-cell decision matrix. Permissions include:</p>
+<ul>
+<li><code>NOTICE_VIEW</code></li>
+<li><code>NOTICE_CREATE</code></li>
+<li><code>NOTICE_EDIT</code></li>
+<li><code>NOTICE_REVIEW</code></li>
+<li><code>NOTICE_DRAFT_RESPONSE</code></li>
+<li><code>NOTICE_APPROVE_LEGAL</code></li>
+<li><code>NOTICE_APPROVE_CFO</code></li>
+<li><code>NOTICE_SUBMIT</code></li>
+<li><code>EMAIL_INTEGRATION_USE</code></li>
+<li><code>REPORT_VIEW</code></li>
+<li><code>AUDIT_VIEW</code></li>
+<li><code>MEMBERSHIP_MANAGE</code></li>
+</ul>
+<p>The permission registry is a single source of truth; every API endpoint and UI component checks against it. The 84-cell matrix is verified by parametrized test fixtures.</p>
+<h3>11.3 Time-Bound Auditor Access</h3>
+<p>Auditors receive a <code>ClientMembership</code> row with <code>access_end</code> set to a configured expiry date:</p>
+<ul>
+<li>The <code>is_membership_active(membership)</code> helper returns False after <code>access_end</code></li>
+<li>WebSocket connections re-validate every 60 seconds — auditors mid-session are disconnected when their window closes</li>
+<li>A countdown banner shows the auditor how many days remain</li>
+<li>Read-only enforcement is at the permission level (auditor role grants only <code>*_VIEW</code> permissions)</li>
+</ul>
+<h3>11.4 Cross-Client View</h3>
+<p>Senior roles (Compliance Head, CA Consultant, CFO) can see aggregated data across all clients they belong to:</p>
+<ul>
+<li>The <code>cross_client_view</code> PostgreSQL PERMISSIVE policy allows multi-client SELECTs for these roles</li>
+<li>The <code>X-Client-Id</code> HTTP header accepts a sentinel value (<code>*</code>) for cross-client mode</li>
+<li>All other roles see only the active client; cross-client mode is silently downgraded if attempted</li>
+</ul>
+<hr />
+<h2>12. Statutory Calendar</h2>
+<h3>12.1 Pre-Loaded Deadlines</h3>
+<p>37 statutory deadlines for FY 2025-26 are pre-seeded:</p>
+<table>
+<thead>
+<tr>
+<th>Authority</th>
+<th>Deadline examples</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GST</td>
+<td>GSTR-1 (monthly), GSTR-3B (monthly), GSTR-9 (annual), GSTR-9C (annual)</td>
+</tr>
+<tr>
+<td>Income Tax</td>
+<td>Advance Tax instalments (4×), TDS quarterly returns (4×), ITR filings</td>
+</tr>
+<tr>
+<td>MCA</td>
+<td>Annual filings, AOC-4, MGT-7</td>
+</tr>
+<tr>
+<td>RBI</td>
+<td>Reporting circulars by category</td>
+</tr>
+<tr>
+<td>SEBI</td>
+<td>Quarterly disclosures</td>
+</tr>
+</tbody>
+</table>
+<h3>12.2 Holiday-Aware Adjustment</h3>
+<p>When a deadline falls on:</p>
+<ul>
+<li><strong>Sunday</strong> → shift to next Monday</li>
+<li><strong>Gazetted holiday</strong> (Indian holiday calendar) → shift to next working day</li>
+<li><strong>Both</strong> → cascade through the calendar to the next working day</li>
+</ul>
+<p>The system shows the original date alongside the adjusted date so users understand why an alert is firing. Penalty calculations use the adjusted date.</p>
+<h3>12.3 Compliance Health Score</h3>
+<p>A single percentage shown at the top of every client dashboard, calculated over a rolling 90-day window:</p>
+<pre><code>health_score = 100 × (
+    (notices_responded_on_time / total_notices)
+    + (1 - average_response_time_factor)
+    + (1 - overdue_count_factor)
+) / 3
+</code></pre>
+<p>Higher means fewer overdue notices and faster response times. The breakdown (% on time, average response time, overdue count) is visible on hover.</p>
+<hr />
+<h2>13. API Reference</h2>
+<p>A summary of the major REST endpoints. All endpoints (except auth) require <code>Authorization: Bearer &lt;token&gt;</code>. Compliance endpoints additionally require the <code>X-Client-Id</code> tenant header.</p>
+<h3>13.1 Authentication</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/register</code></td>
+<td>Create account</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/login</code></td>
+<td>Get access + refresh token pair</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/refresh</code></td>
+<td>Rotate refresh token</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/logout</code></td>
+<td>Revoke refresh token</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/auth/providers</code></td>
+<td>List configured auth providers</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/auth/oauth/google</code></td>
+<td>Google OAuth URL</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/auth/oauth/microsoft</code></td>
+<td>Microsoft OAuth URL</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/oauth/exchange</code></td>
+<td>Exchange OAuth code for tokens</td>
+</tr>
+</tbody>
+</table>
+<h3>13.2 Documents</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/documents/upload</code></td>
+<td>Upload file (returns 202, async processing)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/documents/{id}/status</code></td>
+<td>Poll processing status</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/documents/all</code></td>
+<td>List all documents (paginated)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/documents/{id}</code></td>
+<td>Get document detail</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/documents/search</code></td>
+<td>Full-text search with optional category filter</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/documents/category/{cat}</code></td>
+<td>Filter by category</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/documents/stats</code></td>
+<td>Dashboard statistics</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/documents/{id}</code></td>
+<td>Delete document and file</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/documents/{id}/share</code></td>
+<td>Share with a user (Viewer / Editor / Admin)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/documents/shared-with-me</code></td>
+<td>List documents shared with current user</td>
+</tr>
+</tbody>
+</table>
+<h3>13.3 Compliance Notices</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/notices</code></td>
+<td>List/filter notices for active tenant</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/compliance/notices</code></td>
+<td>Create notice with manual metadata</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/notices/{id}</code></td>
+<td>Get notice detail</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/compliance/notices/{id}</code></td>
+<td>Edit metadata</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/compliance/notices/{id}/status</code></td>
+<td>State machine transition</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/compliance/notices/bulk</code></td>
+<td>Bulk status update with partial-failure semantics</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/notices/{id}/chain</code></td>
+<td>Recursive ancestors and descendants</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/compliance/notices/{id}/upload</code></td>
+<td>Attach PDF/JPG/PNG; dispatches OCR + classification</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/notices/{id}/activity</code></td>
+<td>User-facing timeline</td>
+</tr>
+</tbody>
+</table>
+<h3>13.4 Compliance Reporting</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/compliance/reports/health-summary</code></td>
+<td>Monthly summary (JSON)</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/compliance/reports/health-summary/export</code></td>
+<td>Same as above (CSV)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/reports/penalty-by-authority</code></td>
+<td>Aggregation (JSON or CSV)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/reports/notice-volume-by-status</code></td>
+<td>Aggregation (JSON or CSV)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/reports/response-time</code></td>
+<td>Percentile stats (JSON or CSV)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/search/unified</code></td>
+<td>FTS across notices and documents</td>
+</tr>
+</tbody>
+</table>
+<h3>13.5 Compliance Operational</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/clients/me</code></td>
+<td>Tenants the current user has membership on</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/audit</code></td>
+<td>Read-only audit log</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/calendar/entries</code></td>
+<td>37 statutory deadlines (filterable)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/calendar/compliance-score</code></td>
+<td>Rolling 90-day health score</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/compliance/review/pending</code></td>
+<td>ML review queue</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/compliance/responses</code></td>
+<td>Create draft response</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/compliance/responses/{id}/transition</code></td>
+<td>4-stage approval transition</td>
+</tr>
+</tbody>
+</table>
+<h3>13.6 Email Integration</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/email/gmail/oauth/authorize</code></td>
+<td>Get Google consent URL</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/email/gmail/oauth/callback</code></td>
+<td>OAuth callback handler</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/email/credentials</code></td>
+<td>List connected Gmail credentials</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/email/credentials/{id}</code></td>
+<td>Disconnect a credential</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/email/filter-rules</code></td>
+<td>List filter rules</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/email/filter-rules</code></td>
+<td>Add a filter rule</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/email/bills</code></td>
+<td>List detected bills</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/email/activity</code></td>
+<td>Scan history and outcomes</td>
+</tr>
+</tbody>
+</table>
+<h3>13.7 Real-Time</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WS</td>
+<td><code>/ws/notifications?token=&lt;jwt&gt;&amp;client_id=&lt;id&gt;</code></td>
+<td>JWT-authenticated WebSocket subscription</td>
+</tr>
+</tbody>
+</table>
+<h3>13.8 Admin</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/admin/users</code></td>
+<td>List all users</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/admin/stats</code></td>
+<td>Admin dashboard statistics</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/admin/users/{id}/role</code></td>
+<td>Update user role</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/admin/users/{id}/status</code></td>
+<td>Update user status</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/admin/users/{id}</code></td>
+<td>Soft-delete with PII anonymization</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/admin/audit</code></td>
+<td>Query audit logs (filterable)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>14. Deployment Architecture</h2>
+<h3>14.1 Container Topology</h3>
+<p>A single <code>docker compose up</code> brings up the entire stack:</p>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Image</th>
+<th>Memory ceiling</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>db</code> (development)</td>
+<td>postgres:16-alpine</td>
+<td>512 MB</td>
+<td>Local PostgreSQL with trigger DDL support</td>
+</tr>
+<tr>
+<td><code>redis</code></td>
+<td>redis:7-alpine</td>
+<td>256 MB</td>
+<td>Celery broker, pub/sub, rate limiter</td>
+</tr>
+<tr>
+<td><code>backend</code></td>
+<td>Built from <code>./backend</code></td>
+<td>1 GB</td>
+<td>FastAPI app server</td>
+</tr>
+<tr>
+<td><code>celery_worker</code></td>
+<td>Built from <code>./backend</code></td>
+<td>1 GB</td>
+<td>Default queue (OCR, document pipeline)</td>
+</tr>
+<tr>
+<td><code>compliance_worker</code></td>
+<td>Built from <code>./backend</code></td>
+<td>2.5 GB</td>
+<td>Compliance queue (BERT, spaCy, risk scoring)</td>
+</tr>
+<tr>
+<td><code>frontend</code></td>
+<td>Built from <code>./frontend</code></td>
+<td>512 MB</td>
+<td>Next.js standalone server</td>
+</tr>
+</tbody>
+</table>
+<p>Production uses the same images with <code>db</code> swapped for managed PostgreSQL (Supabase Cloud or equivalent) via <code>DATABASE_URL</code> override.</p>
+<h3>14.2 Environment Variables</h3>
+<p>Critical configuration:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SECRET_KEY</code></td>
+<td>JWT signing (≥32 chars, cryptographically random)</td>
+</tr>
+<tr>
+<td><code>DATABASE_URL</code></td>
+<td>PostgreSQL connection (session-mode pooler required for RLS)</td>
+</tr>
+<tr>
+<td><code>REDIS_URL</code>, <code>REDIS_PASSWORD</code></td>
+<td>Broker and cache</td>
+</tr>
+<tr>
+<td><code>CELERY_BROKER_URL</code>, <code>CELERY_RESULT_BACKEND</code></td>
+<td>Task queue</td>
+</tr>
+<tr>
+<td><code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code></td>
+<td>Google OAuth (login + Gmail)</td>
+</tr>
+<tr>
+<td><code>MICROSOFT_CLIENT_ID</code>, <code>MICROSOFT_CLIENT_SECRET</code></td>
+<td>Microsoft OAuth</td>
+</tr>
+<tr>
+<td><code>GMAIL_OAUTH_REDIRECT_URI</code></td>
+<td>Must match Google Console authorized redirect URI</td>
+</tr>
+<tr>
+<td><code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USERNAME</code>, <code>SMTP_PASSWORD</code>, <code>SMTP_FROM_EMAIL</code></td>
+<td>Email delivery</td>
+</tr>
+<tr>
+<td><code>LLM_PROVIDER</code>, <code>LLM_MODEL</code></td>
+<td>Primary LLM provider</td>
+</tr>
+<tr>
+<td><code>OLLAMA_BASE_URL</code></td>
+<td>Local LLM endpoint</td>
+</tr>
+<tr>
+<td><code>FRONTEND_URL</code>, <code>BACKEND_URL</code></td>
+<td>Cross-origin and OAuth redirects</td>
+</tr>
+<tr>
+<td><code>ALLOWED_ORIGINS</code></td>
+<td>CORS allowlist (production: exact domain only)</td>
+</tr>
+<tr>
+<td><code>DEBUG</code></td>
+<td><code>false</code> in production</td>
+</tr>
+<tr>
+<td><code>AUDIT_FAILURES_PATH</code></td>
+<td>Durable path for audit-write dead-letter JSONL</td>
+</tr>
+</tbody>
+</table>
+<h3>14.3 Database Hosting</h3>
+<ul>
+<li><strong>Production:</strong> Supabase Cloud, session-mode pooler on port 5432 (transaction-mode pooling does not support RLS context vars)</li>
+<li><strong>Development:</strong> Local PostgreSQL 16 in Docker (required for trigger DDL, CREATE ROLE, FORCE ROW LEVEL SECURITY tests)</li>
+<li><strong>Migrations:</strong> Alembic with linear, idempotent revision history</li>
+<li><strong>Backups:</strong> Managed by Supabase (point-in-time recovery, daily snapshots)</li>
+</ul>
+<h3>14.4 CI/CD Pipeline</h3>
+<p>GitHub Actions:</p>
+<ul>
+<li>Automated test suite on every push and pull request</li>
+<li>Linting and type checking</li>
+<li>Docker image build on merge to main</li>
+<li>Dependabot pull requests for dependency updates</li>
+<li>Preview deployments via Vercel for frontend changes</li>
+<li>Production frontend deployment on merge to main</li>
+</ul>
+<h3>14.5 Monitoring and Logging</h3>
+<ul>
+<li><strong>Structured JSON logs</strong> with correlation IDs across services</li>
+<li><strong>PII redaction</strong> in log output (regex-based, applied at structlog processor)</li>
+<li><strong>Per-container log rotation</strong> (10 MB per file, 3 files retained)</li>
+<li><strong>Audit failure dead-letter</strong> persisted to a named volume so a regulatory event during a database outage is recoverable</li>
+<li><strong>Health checks</strong> per service with start_period and retry policies</li>
+<li><strong>Metrics endpoints</strong> ready for Prometheus / Grafana scrape</li>
+</ul>
+<hr />
+<h2>15. Performance and Reliability</h2>
+<h3>15.1 Document Processing</h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Target</th>
+<th>Achieved</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>API response on upload</td>
+<td>&lt; 200 ms (returns 202)</td>
+<td>Achieved (no synchronous OCR on the request path)</td>
+</tr>
+<tr>
+<td>OCR + classification per document</td>
+<td>&lt; 30 seconds typical</td>
+<td>Achieved on test corpus</td>
+</tr>
+<tr>
+<td>Classifier accuracy</td>
+<td>≥ 85% on held-out set</td>
+<td>85.06% achieved</td>
+</tr>
+<tr>
+<td>Concurrent documents per worker</td>
+<td>2 (configurable)</td>
+<td>Achieved with <code>--max-memory-per-child=512000</code></td>
+</tr>
+</tbody>
+</table>
+<h3>15.2 Compliance Pipeline</h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Target</th>
+<th>Achieved</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gmail scan cadence</td>
+<td>5-1440 minutes per credential</td>
+<td>Achieved, configurable</td>
+</tr>
+<tr>
+<td>Notice creation latency (after Gmail fetch)</td>
+<td>&lt; 5 seconds</td>
+<td>Achieved</td>
+</tr>
+<tr>
+<td>Deadline alert firing accuracy</td>
+<td>±1 hour (misfire grace 1 hour)</td>
+<td>Achieved via APScheduler</td>
+</tr>
+<tr>
+<td>WebSocket reconnect time</td>
+<td>&lt; 30 seconds</td>
+<td>Achieved with exponential backoff cap</td>
+</tr>
+</tbody>
+</table>
+<h3>15.3 Database</h3>
+<ul>
+<li><strong>Connection pool</strong> sized to per-service ceiling</li>
+<li><strong>Pool overflow</strong> logged and alerted</li>
+<li><strong>SSL</strong> enforced on all production database connections</li>
+<li><strong>PgBouncer / Supabase pooler</strong> in session mode (RLS-compatible)</li>
+</ul>
+<h3>15.4 Caching</h3>
+<table>
+<thead>
+<tr>
+<th>Cached object</th>
+<th>TTL</th>
+<th>Backing store</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gmail access tokens</td>
+<td>until expiry</td>
+<td>Redis</td>
+</tr>
+<tr>
+<td>Rate limit counters</td>
+<td>1 minute</td>
+<td>Redis (in-memory fallback)</td>
+</tr>
+<tr>
+<td>Frequent reports</td>
+<td>configurable</td>
+<td>Redis</td>
+</tr>
+<tr>
+<td>Tenant context per request</td>
+<td>request scope</td>
+<td>In-process</td>
+</tr>
+</tbody>
+</table>
+<h3>15.5 Backup and Recovery</h3>
+<ul>
+<li><strong>Database:</strong> Supabase managed point-in-time recovery + daily snapshots</li>
+<li><strong>Object storage:</strong> Versioned bucket with lifecycle rules</li>
+<li><strong>Audit failure dead-letter:</strong> Persisted to durable named volume; replayed on next successful database connection</li>
+<li><strong>Disaster recovery RPO:</strong> &lt; 24 hours (daily snapshots)</li>
+<li><strong>Disaster recovery RTO:</strong> &lt; 4 hours (managed restore + container redeploy)</li>
+</ul>
+<hr />
+<h2>16. Quality Assurance</h2>
+<h3>16.1 Test Coverage</h3>
+<ul>
+<li>389 backend automated tests covering authentication, document pipeline, compliance state machine, RLS isolation, audit immutability, RBAC matrix, alert dispatch, Gmail scanner, response workflow, and search</li>
+<li>63 test files organized by module</li>
+<li>Parametrized RBAC matrix: 84 role × permission cells verified in a single test fixture</li>
+<li>Frozen-time fixtures: Deadline alerts, time-bound auditor windows, and refresh token expiry tested with deterministic time</li>
+</ul>
+<h3>16.2 Security Audit Outcomes</h3>
+<p>The platform has been hardened through multiple comprehensive security audits:</p>
+<table>
+<thead>
+<tr>
+<th>Audit</th>
+<th>Outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Initial security audit</td>
+<td>21 fixes across 17 files (OAuth CSRF, token rotation, rate limiter IP spoofing, security headers, input validation)</td>
+</tr>
+<tr>
+<td>Authentication and login fixes</td>
+<td>11 bugs fixed (database connection, Redis fallback, cookie expiry, OAuth response safety, token rotation ordering)</td>
+</tr>
+<tr>
+<td>Comprehensive security hardening</td>
+<td>25 fixes across 14 files (password complexity, magic byte file validation, streaming upload, CSP hardening, server-side route protection, JWT jti claims, OAuth timing-safe comparison, CORS validation, DB SSL, Celery rate limiting)</td>
+</tr>
+</tbody>
+</table>
+<h3>16.3 Code Review Process</h3>
+<ul>
+<li>Mandatory pull request review for changes to security-critical paths</li>
+<li>Automated linting and type checking in CI</li>
+<li>Structured logging review to ensure no PII leakage</li>
+<li>Schema change review for migration safety (online migrations preferred)</li>
+</ul>
+<hr />
+<h2>17. Glossary</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Definition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>GSTIN</strong></td>
+<td>A unique 15-character ID issued to a business under Goods and Services Tax. A tax-ID for a specific GST registration.</td>
+</tr>
+<tr>
+<td><strong>PAN</strong></td>
+<td>Permanent Account Number. A 10-character ID from Income Tax that identifies a person or entity.</td>
+</tr>
+<tr>
+<td><strong>CIN</strong></td>
+<td>Corporate Identification Number. A 21-character code for a company registered with the MCA.</td>
+</tr>
+<tr>
+<td><strong>GST</strong></td>
+<td>Goods and Services Tax. The federal indirect tax in India.</td>
+</tr>
+<tr>
+<td><strong>TDS</strong></td>
+<td>Tax Deducted at Source. Tax withheld at the time of payment (salary, contractor fees, rent over a threshold).</td>
+</tr>
+<tr>
+<td><strong>ITR</strong></td>
+<td>Income Tax Return. Annual filing with the Income Tax department.</td>
+</tr>
+<tr>
+<td><strong>MCA</strong></td>
+<td>Ministry of Corporate Affairs. Regulator for companies.</td>
+</tr>
+<tr>
+<td><strong>RBI</strong></td>
+<td>Reserve Bank of India. Banking and forex regulator.</td>
+</tr>
+<tr>
+<td><strong>SEBI</strong></td>
+<td>Securities and Exchange Board of India. Capital markets regulator.</td>
+</tr>
+<tr>
+<td><strong>Notice</strong></td>
+<td>A formal communication from a regulator demanding information, payment, or response by a deadline.</td>
+</tr>
+<tr>
+<td><strong>Show-Cause Notice</strong></td>
+<td>A notice asking the recipient to explain why a proposed action (penalty, demand) should not be taken.</td>
+</tr>
+<tr>
+<td><strong>Compliance Head</strong></td>
+<td>The senior in-house owner of regulatory matters. Typically approves the most serious responses.</td>
+</tr>
+<tr>
+<td><strong>CA Consultant</strong></td>
+<td>A Chartered Accountant external to the client, often managing many clients across many GSTINs.</td>
+</tr>
+<tr>
+<td><strong>CFO</strong></td>
+<td>Chief Financial Officer. Final approver on responses with material financial impact.</td>
+</tr>
+<tr>
+<td><strong>Drafter</strong></td>
+<td>The team member who writes the first version of a response.</td>
+</tr>
+<tr>
+<td><strong>Reviewer</strong></td>
+<td>The peer who reviews a draft before it goes to Legal.</td>
+</tr>
+<tr>
+<td><strong>Legal Team</strong></td>
+<td>The team responsible for legal accuracy and regulation citations in a response.</td>
+</tr>
+<tr>
+<td><strong>Finance Team</strong></td>
+<td>Reviewers of tax-specific notices and reconciliation data.</td>
+</tr>
+<tr>
+<td><strong>Auditor</strong></td>
+<td>An external party with time-bound, read-only access for inspection or assurance work.</td>
+</tr>
+<tr>
+<td><strong>Audit Trail</strong></td>
+<td>A tamper-proof, timestamped record of who did what, when.</td>
+</tr>
+<tr>
+<td><strong>Risk Tier</strong></td>
+<td>A label (Critical, High, Medium, Low) summarizing how urgent a notice is.</td>
+</tr>
+<tr>
+<td><strong>OAuth</strong></td>
+<td>A standard authorization flow used to connect a Google or Microsoft account safely without sharing a password.</td>
+</tr>
+<tr>
+<td><strong>OCR</strong></td>
+<td>Optical Character Recognition. Reading text from images and scanned documents.</td>
+</tr>
+<tr>
+<td><strong>RLS</strong></td>
+<td>Row-Level Security. A PostgreSQL feature that filters rows at the database level, not the application level.</td>
+</tr>
+<tr>
+<td><strong>TF-IDF</strong></td>
+<td>Term Frequency-Inverse Document Frequency. A text-vectorization technique used to convert documents into numeric features for ML.</td>
+</tr>
+<tr>
+<td><strong>SHAP</strong></td>
+<td>A method for explaining the contribution of each input feature to a model's output.</td>
+</tr>
+</tbody>
+</table>
+</article>
+</body>
+</html>

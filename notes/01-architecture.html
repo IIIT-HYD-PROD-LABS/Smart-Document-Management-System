@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TaxSync · Architecture</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="page">
+
+<nav class="topic-nav">
+    <a href="index.html">⌂ Index</a>
+    <a href="01-architecture.html" class="cur">01 Architecture</a>
+    <a href="02-frontend.html">02 Frontend</a>
+    <a href="03-backend.html">03 Backend</a>
+    <a href="04-database-schema.html">04 DB Schema</a>
+    <a href="05-security.html">05 Security</a>
+    <a href="06-deployment.html">06 Deployment</a>
+    <a href="07-ml-ai.html">07 ML / AI</a>
+    <a href="08-compliance-workflow.html">08 Compliance</a>
+    <a href="09-api-reference.html">09 API Ref</a>
+    <a href="10-auth-deep-dive.html">10 Auth</a>
+</nav>
+
+<header class="title-strip">
+    <div class="logo">TS</div>
+    <div>
+        <h1>HOW <span class="accent">TAXSYNC</span> <span class="accent2">ARCHITECTURE</span> WORKS</h1>
+        <div class="tagline">AI-powered document management + Indian-regulator compliance tracker. v2.1.1 · 502+ tests green</div>
+    </div>
+    <div class="remember">
+        <h4>★ REMEMBER</h4>
+        <ul>
+            <li>3-tier service: web → API → DB</li>
+            <li>Async: HTTP 202 + Celery</li>
+            <li>Multi-tenant via RLS</li>
+            <li>JWT + opaque refresh</li>
+            <li>Docker for everything</li>
+        </ul>
+    </div>
+</header>
+
+<div class="grid">
+
+    <!-- 1 -->
+    <section class="panel c1 span-5">
+        <h2><span class="num">1</span> WHAT IS TAXSYNC?</h2>
+        <p>Multi-tenant SaaS that ingests documents (PDF, image, DOCX), runs <span class="h">OCR + ML classification</span>, then layers a <span class="h">4-stage compliance approval</span> workflow for Indian regulatory notices (GST · IT · MCA · RBI · SEBI).</p>
+        <pre class="ascii">
+USER ─► UPLOAD ─► OCR ─► CLASSIFY ─► STORE
+                                  ▼
+                          SEARCH / WORKFLOW
+                                  ▼
+                  ALERTS · APPROVALS · REPORTS</pre>
+        <p class="dim">Built for IIIT Hyderabad Production Labs. v1.0 shipped doc management; v2.0 added compliance; v2.1 added BYOK AI + per-tenant branding.</p>
+    </section>
+
+    <!-- 2 -->
+    <section class="panel c2 span-7">
+        <h2><span class="num">2</span> SYSTEM-LEVEL DIAGRAM</h2>
+        <pre class="ascii">
+┌─────────────────────────────────────────────────────────────┐
+│ Browser  (Next.js 15 · App Router · TanStack Query · Zustand)│
+└──────────────┬──────────────────────────────────▲────────────┘
+   REST + JWT  │                                  │ WebSocket
+               ▼                                  │
+┌─────────────────────────────────────────────────────────────┐
+│            FastAPI Backend  (Uvicorn · Python 3.11)          │
+│  Auth · Documents · ML · Admin · Compliance(14 routers)      │
+│  Middleware: CORS → GZip → Sec-Headers → Logging → Tenant    │
+└──────┬──────────────┬────────────────────────┬───────────────┘
+       │              │                        │
+       ▼              ▼                        ▼
+  ┌─────────┐   ┌──────────┐         ┌───────────────────┐
+  │ Postgres│   │  Redis   │ ◄─jobs─ │ Celery Workers ×2 │
+  │ Supabase│   │  Broker  │         │ • default (OCR)   │
+  │  + RLS  │   │  + cache │         │ • compliance (ML) │
+  └─────────┘   └──────────┘         └───────────────────┘</pre>
+    </section>
+
+    <!-- 3 -->
+    <section class="panel c3 span-4">
+        <h2><span class="num">3</span> TECH STACK MAP</h2>
+        <table>
+            <tr><th>Layer</th><th>Tech</th></tr>
+            <tr><td>Frontend</td><td>Next.js 15, React 19, TS, Tailwind</td></tr>
+            <tr><td>State</td><td>TanStack Query · Zustand</td></tr>
+            <tr><td>API</td><td>FastAPI 0.120, Pydantic v2</td></tr>
+            <tr><td>ORM</td><td>SQLAlchemy 2.0 + Alembic</td></tr>
+            <tr><td>DB</td><td>Postgres 16 (Supabase)</td></tr>
+            <tr><td>Broker</td><td>Redis 7</td></tr>
+            <tr><td>Async</td><td>Celery 5.3 · APScheduler</td></tr>
+            <tr><td>OCR</td><td>Tesseract · pdfplumber</td></tr>
+            <tr><td>ML</td><td>LinearSVC · BERT · XGBoost</td></tr>
+            <tr><td>LLM</td><td>Anthropic · Gemini · OpenAI · Ollama</td></tr>
+            <tr><td>Auth</td><td>JWT(HS256) · bcrypt · OAuth</td></tr>
+        </table>
+    </section>
+
+    <!-- 4 -->
+    <section class="panel c4 span-4">
+        <h2><span class="num">4</span> REQUEST FLOW (sync)</h2>
+        <ol>
+            <li>Browser → <code>POST /api/auth/login</code></li>
+            <li>CORS → GZip → SecHeaders → Logging</li>
+            <li>TenantContext: parse <code>X-Client-Id</code> → ContextVars</li>
+            <li>Route → <code>Depends(get_db)</code></li>
+            <li>SQLAlchemy <code>before_cursor_execute</code> → <code>SET app.current_client_id</code> + <code>SET ROLE app_runtime</code></li>
+            <li>RLS policy filters rows</li>
+            <li>Pydantic v2 schema serializes</li>
+            <li>Response + Sec headers</li>
+        </ol>
+    </section>
+
+    <!-- 5 -->
+    <section class="panel c5 span-4">
+        <h2><span class="num">5</span> REQUEST FLOW (async)</h2>
+        <pre class="ascii">
+Upload  ─►  HTTP 202  +  Celery enqueue
+                        │
+                        ▼
+                  Redis broker queue
+                        │
+                        ▼
+                Celery worker pulls
+                        │
+   ┌──────── stage 1 ───┴──── stage 2 ────────┐
+   ▼                                          ▼
+ OCR + extract                       Classify + LLM
+   │                                          │
+   └──────► UPDATE documents SET status='completed'
+                        │
+                        ▼
+              Frontend polls task status
+                or WebSocket push</pre>
+    </section>
+
+    <!-- 6 -->
+    <section class="panel c6 span-4">
+        <h2><span class="num">6</span> MULTI-TENANCY MODEL</h2>
+        <ul class="tight">
+            <li><span class="k">Shared schema</span>, one DB</li>
+            <li>Every tenant table has <code>client_id</code></li>
+            <li>Row isolation = <span class="h">Postgres RLS</span></li>
+            <li>Tenant resolved per-request via header <code>X-Client-Id</code></li>
+            <li>Listener pins SQL session vars BEFORE the route runs</li>
+            <li><span class="h">Cross-client mode</span> <code>X-Client-Id: *</code> only for senior auditors</li>
+            <li>No tenant header ⇒ <span class="warn">fail-closed</span> (zero rows)</li>
+        </ul>
+    </section>
+
+    <!-- 7 -->
+    <section class="panel c7 span-4">
+        <h2><span class="num">7</span> CONTAINERS (docker-compose)</h2>
+        <pre class="ascii">
+┌──────────────────────────────────┐
+│ frontend      :3000   Next.js 15 │
+│ backend       :8000   FastAPI    │
+│ celery_worker  -      OCR queue  │
+│ compliance_w.  -      ML queue   │
+│ redis         :6379   broker     │
+│ db            :5432   pg local   │
+└──────────────────────────────────┘
+PROD: db→Supabase (session-mode pooler)
+      frontend→Vercel  backend→VPS/EC2</pre>
+    </section>
+
+    <!-- 8 -->
+    <section class="panel c1 span-4">
+        <h2><span class="num">8</span> MIDDLEWARE STACK</h2>
+        <p class="dim">Order matters: LAST added = FIRST executed.</p>
+        <ol>
+            <li>CORSMiddleware  <span class="dim">(outermost)</span></li>
+            <li>GZipMiddleware  <span class="dim">≥1KB</span></li>
+            <li>SecurityHeadersMiddleware</li>
+            <li>RequestLoggingMiddleware  <span class="dim">structlog</span></li>
+            <li>CorrelationIdMiddleware</li>
+            <li>TenantContextMiddleware  <span class="dim">(innermost · RLS)</span></li>
+        </ol>
+    </section>
+
+    <!-- 9 -->
+    <section class="panel c2 span-4">
+        <h2><span class="num">9</span> DATA STORES</h2>
+        <table>
+            <tr><th>Store</th><th>Holds</th></tr>
+            <tr><td>Postgres</td><td>Users · Docs · Notices · Audit · FTS</td></tr>
+            <tr><td>Redis</td><td>Celery broker + result · OAuth replay</td></tr>
+            <tr><td>Local FS</td><td><code>/app/uploads</code> volume</td></tr>
+            <tr><td>S3 (opt)</td><td><code>s3_url</code> column · boto3</td></tr>
+            <tr><td>JSONL</td><td>Audit dead-letter <code>/var/log/smartdocs/</code></td></tr>
+            <tr><td>HF Cache</td><td>BERT weights <code>/app/models/hf_cache</code></td></tr>
+        </table>
+    </section>
+
+    <!-- 10 -->
+    <section class="panel c4 span-6">
+        <h2><span class="num">10</span> VERSION TIMELINE</h2>
+        <pre class="ascii">
+v1.0   Doc Mgmt          OCR · Classify · Search · RBAC 3-tier
+   │
+v2.0   Compliance        7×12 RBAC · RLS · 4-stage approval
+   ├─ Phase 9   Foundation + RLS + audit-trigger
+   ├─ Phase 10  ML risk scoring + auto-escalation
+   ├─ Phase 11  APScheduler alerts · 37 deadlines · WS
+   ├─ Phase 12  Drafter→Reviewer→Legal→CFO
+   └─ Phase 13  Cross-entity FTS + analytics
+v2.0.1 Patch            CSV export · notice upload pipeline
+v2.1   BYOK AI          Per-tenant Anthropic/Gemini keys
+       Phase 15         Gmail MCP integration
+       Branding         logo · website · address
+v2.1.1 IA reset         19→14 sidebar · Profile · perf fix</pre>
+    </section>
+
+    <!-- 11 -->
+    <section class="panel c5 span-6">
+        <h2><span class="num">11</span> KEY ARCHITECTURAL DECISIONS</h2>
+        <table>
+            <tr><th>Decision</th><th>Why</th></tr>
+            <tr><td>Shared DB + RLS, not DB-per-tenant</td><td>Cheaper at scale; less ops overhead; one migration set</td></tr>
+            <tr><td>Session-mode Supabase pooler</td><td>RLS context vars don't survive transaction pooling</td></tr>
+            <tr><td>before_cursor_execute listener</td><td>set_config + SET ROLE are tx-local; rebind per statement</td></tr>
+            <tr><td>Two Celery queues</td><td>Heavy ML never starves v1.0 OCR; 2 GB cap on ML worker</td></tr>
+            <tr><td>BYOK LLM</td><td>Costs hit tenant's provider account; TaxSync never bills</td></tr>
+            <tr><td>Audit immutability via DB trigger</td><td>Defense in depth even against compromised app role</td></tr>
+            <tr><td>Soft-delete only</td><td>Audit-log trigger forbids row removal</td></tr>
+        </table>
+    </section>
+
+</div>
+
+<div class="protip">
+    <div class="badge">PRO<br>TIP</div>
+    <div>
+        <h3>READ THE FILES IN THIS ORDER</h3>
+        <ul>
+            <li>1 Architecture → 5 Security → 4 DB Schema → 3 Backend → 9 API Ref</li>
+            <li>Then 2 Frontend → 10 Auth → 7 ML → 8 Compliance → 6 Deployment</li>
+        </ul>
+    </div>
+    <div class="footer-quote">"Multi-tenant SaaS is fundamentally a `WHERE client_id = ?` problem.<br>RLS just moves that WHERE from your app code to the database."</div>
+</div>
+
+</div>
+</body>
+</html>

@@ -52,18 +52,71 @@ Also rejected: default insecure values like `changeme`, `secret`, `test`, `passw
 
 ---
 
-### Supabase password expired
+### Supabase password expired / rotated
 
-**Problem:** Login or database operations fail with "connection refused" or authentication errors after Supabase rotates the database password.
+**Problem:** Login or database operations fail after Supabase rotates the database password. Symptoms include:
+- `FATAL: password authentication failed for user "postgres"` in Supabase's Postgres logs (Dashboard > Logs > Postgres)
+- Supabase MCP returns `"Database authentication failed. Try refreshing the page or reinput your current password in Settings > Database > Reset database password"`
+- Backend container starts but stays `(unhealthy)`, with uvicorn logs stuck at `Waiting for application startup.`
+
+**Why this fails subtly:** The healthcheck error inside the container is `ConnectionRefusedError: [Errno 111] Connection refused` -- but that's the *healthcheck itself* failing to reach `localhost:8000` because uvicorn never bound the port. The root cause is the FastAPI lifespan startup blocking on the bad DB credential.
 
 **Solution:**
-1. Go to Supabase Dashboard > Project Settings > Database > Connection string.
-2. Copy the new password.
-3. Update `DATABASE_URL` in `.env` with the new password.
-4. Restart containers:
-   ```bash
-   docker compose down && docker compose up -d
+1. Go to Supabase Dashboard > Project Settings > Database > **Reset database password**. Save the new password in your password manager *before* navigating away (Supabase only shows it once).
+2. Update **all three** `DATABASE_URL` lines in `docker-compose.override.yml` (services: `backend`, `celery_worker`, `compliance_worker`) with the new password. The override file is the source of truth for the docker stack; `.env` is secondary.
+3. Leave `DATABASE_URL_RUNTIME` (`app_runtime`) and `DATABASE_URL_MIGRATOR` (`app_migrator`) alone unless their logins also fail -- those are app-managed roles created by migration `0017_db_roles` with stable dev passwords, not the Supabase project password.
+4. Verify with MCP from outside your network:
    ```
+   # Supabase MCP > execute_sql > SELECT 1
+   # If this returns 1, the new password is live server-side.
+   ```
+5. Force-recreate the backend so the new env vars take effect:
+   ```bash
+   docker compose up -d --force-recreate backend celery_worker compliance_worker
+   ```
+
+---
+
+### Backend (unhealthy) / "dependency failed to start" — TimeoutError on port 5432
+
+**Problem:** `docker compose start` or `docker compose up` fails with `dependency failed to start: container smartdocs-backend is unhealthy`. The backend container is `Up (unhealthy)`, uvicorn logs are stuck at `Waiting for application startup.`, and probing the Supabase pooler from inside the container gives `TimeoutError` (not `Connection refused`).
+
+**Cause:** Some networks silently drop outbound TCP on Postgres ports (5432/6543). Common offenders: ERNET (Indian education/research networks, `14.139.0.0/16`), corporate VPNs with egress filtering, several Indian residential ISPs. Distinguishing signal: connections to the *same* Supabase pooler IP on port `443` succeed in <200ms, but `5432` times out at 4-8s with no RST.
+
+**Diagnostic probe:**
+```bash
+# Run on the host AND inside the container -- both should show the same result.
+python3 -c "
+import socket, time
+for ip in ['3.111.225.200','3.109.171.244','13.200.110.68']:
+    s=socket.socket(); s.settimeout(5); t=time.time()
+    try: s.connect((ip,5432)); print('OK  ', ip, round(time.time()-t,2),'s')
+    except Exception as e: print('FAIL', ip, type(e).__name__, str(e)[:50])
+    finally: s.close()
+"
+# TimeoutError -> port-level block (this section)
+# Connection refused -> server unreachable (different problem)
+```
+
+**Solution:** Tunnel the DB traffic over UDP/443 or TCP/443 so the egress filter can't see port 5432.
+1. **Cloudflare WARP** (free, fastest, no account):
+   ```bash
+   curl https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+   echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+   sudo apt update && sudo apt install -y cloudflare-warp
+   warp-cli registration new && warp-cli connect
+   ```
+2. **Any commercial VPN** (ProtonVPN/Mullvad/NordVPN) — pick a non-India exit.
+3. **SSH tunnel via a cloud VM you control:**
+   ```bash
+   ssh -L 15432:aws-1-ap-south-1.pooler.supabase.com:5432 user@your-vm -N -f
+   # Then point docker-compose.override.yml DATABASE_URL at host.docker.internal:15432
+   ```
+4. **Phone hotspot** (quick test if your carrier doesn't also block 5432).
+
+After the tunnel is up, the existing containers' next healthcheck (every 15s) auto-flips the backend to `healthy` -- no restart needed. Confirm with `docker compose ps`.
+
+**This issue often stacks with "Supabase password expired" above.** If both apply, fix the password first (verifiable via Supabase MCP without touching your network), then enable the tunnel.
 
 ---
 

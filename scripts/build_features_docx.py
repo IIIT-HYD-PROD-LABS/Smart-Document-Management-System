@@ -6,7 +6,7 @@ in-tree pattern used by build_tech_pdf.py (markdown-it-py + Chrome
 headless for the PDF variant).
 
 Run:  python scripts/build_features_docx.py
-Output: PRODUCT_FEATURES.docx in the repo root.
+Output: docs/exports/PRODUCT_FEATURES.docx
 """
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from docx.shared import Pt, RGBColor
 from markdown_it import MarkdownIt
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "PRODUCT_FEATURES.md"
-DST = ROOT / "PRODUCT_FEATURES.docx"
+SRC = ROOT / "docs" / "reference" / "PRODUCT_FEATURES.md"
+DST = ROOT / "docs" / "exports" / "PRODUCT_FEATURES.docx"
 
 # Heading sizes (pt) by markdown level. h1 is the doc title; h2-h4 are
 # the bulk of the body. We cap at h6 for safety even though the doc
@@ -216,6 +216,7 @@ def main() -> None:
         else:
             i += 1
 
+    DST.parent.mkdir(parents=True, exist_ok=True)
     doc.save(DST)
     print(f"Wrote {DST.relative_to(ROOT)} ({DST.stat().st_size:,} bytes)")
 

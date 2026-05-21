@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TaxSync · Security</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="page">
+
+<nav class="topic-nav">
+    <a href="index.html">⌂ Index</a>
+    <a href="01-architecture.html">01 Architecture</a>
+    <a href="02-frontend.html">02 Frontend</a>
+    <a href="03-backend.html">03 Backend</a>
+    <a href="04-database-schema.html">04 DB Schema</a>
+    <a href="05-security.html" class="cur">05 Security</a>
+    <a href="06-deployment.html">06 Deployment</a>
+    <a href="07-ml-ai.html">07 ML / AI</a>
+    <a href="08-compliance-workflow.html">08 Compliance</a>
+    <a href="09-api-reference.html">09 API Ref</a>
+    <a href="10-auth-deep-dive.html">10 Auth</a>
+</nav>
+
+<header class="title-strip">
+    <div class="logo" style="background:var(--bad)">SEC</div>
+    <div>
+        <h1>HOW <span class="accent">SECURITY</span> WORKS</h1>
+        <div class="tagline">JWT + opaque refresh · OAuth · 7×12 RBAC · RLS · Audit-immutable · Rate-limit · OWASP-aware</div>
+    </div>
+    <div class="remember">
+        <h4>★ REMEMBER</h4>
+        <ul>
+            <li>4 overlapping layers</li>
+            <li>RBAC at route, RLS at DB</li>
+            <li>Bcrypt + JWT (HS256)</li>
+            <li>Refresh-token rotation</li>
+            <li>Audit trigger = unbreakable</li>
+        </ul>
+    </div>
+</header>
+
+<div class="grid">
+
+    <!-- 1 DEFENSE IN DEPTH -->
+    <section class="panel c1 span-6">
+        <h2><span class="num">1</span> DEFENSE IN DEPTH</h2>
+<pre class="ascii">
+        ┌──────────────────────────────────┐
+LAYER 1 │  HTTP middleware                  │  CORS · CSP · HSTS · XFO
+        │                                   │  GZip · Rate limit
+        └──────────────────────────────────┘
+        ┌──────────────────────────────────┐
+LAYER 2 │  AuthN (JWT) + AuthZ (RBAC)       │  3-tier + 7×12 matrix
+        │                                   │  at the route layer
+        └──────────────────────────────────┘
+        ┌──────────────────────────────────┐
+LAYER 3 │  Tenant context (X-Client-Id)     │  Postgres session var
+        │                                   │  + RLS policy filter
+        └──────────────────────────────────┘
+        ┌──────────────────────────────────┐
+LAYER 4 │  DB triggers + role grants        │  audit_logs immutable
+        │                                   │  app_runtime no DELETE
+        └──────────────────────────────────┘</pre>
+    </section>
+
+    <!-- 2 AUTH FLOWS -->
+    <section class="panel c2 span-6">
+        <h2><span class="num">2</span> AUTH FLOWS</h2>
+<pre class="ascii">
+LOCAL
+  /register → bcrypt(password) → row inserted
+  /login    → verify bcrypt   → access + refresh
+  /refresh  → rotate refresh  → reuse-detect → nuke
+
+OAUTH (Google · Microsoft)
+  /oauth/google     → state JWT (10 min · CSRF)
+  provider redirect → /callback/google
+  backend creates user (or links · refuses local-pwd link)
+  redirect → /oauth/callback?code=&token=  (2-min JWT)
+  POST /oauth/exchange   ← single-use jti via Redis
+  → access + refresh</pre>
+    </section>
+
+    <!-- 3 TOKEN STRATEGY -->
+    <section class="panel c3 span-4">
+        <h2><span class="num">3</span> TOKEN STRATEGY</h2>
+        <table>
+            <tr><th>Token</th><th>Shape</th><th>Where</th></tr>
+            <tr><td>Access</td><td>JWT HS256<br>sub + role + exp</td><td>Authorization header</td></tr>
+            <tr><td>Refresh</td><td>Opaque random<br>(secrets.token_urlsafe)</td><td><code>refresh_tokens</code> table</td></tr>
+            <tr><td>OAuth exchange</td><td>JWT 2-min<br>+ jti for replay</td><td>URL one-shot</td></tr>
+            <tr><td>OAuth state</td><td>JWT 10-min</td><td>CSRF param</td></tr>
+        </table>
+        <p class="dim">Access is stateless (no DB read). Refresh is stateful (DB row) so we can revoke instantly.</p>
+    </section>
+
+    <!-- 4 ROTATION -->
+    <section class="panel c4 span-4">
+        <h2><span class="num">4</span> REFRESH ROTATION</h2>
+<pre class="ascii">
+SELECT … FROM refresh_tokens
+   WHERE token = ?
+   FOR UPDATE          ← row lock
+
+if revoked:
+   UPDATE refresh_tokens
+      SET is_revoked = TRUE
+      WHERE user_id = ? AND is_revoked = FALSE
+   → 401 "reuse detected"   ← all sessions killed
+
+if expired: revoke + 401
+otherwise:
+   issue new refresh; old.replaced_by = new
+   commit</pre>
+    </section>
+
+    <!-- 5 RBAC v1 -->
+    <section class="panel c5 span-4">
+        <h2><span class="num">5</span> RBAC v1.0 (3-tier)</h2>
+        <table>
+            <tr><th>Role</th><th>Powers</th></tr>
+            <tr><td>admin</td><td>users · roles · soft-delete · all docs</td></tr>
+            <tr><td>editor</td><td>upload · share own docs</td></tr>
+            <tr><td>viewer</td><td>read shared docs</td></tr>
+        </table>
+        <ul class="tight">
+            <li>First registered user → admin</li>
+            <li>Admin can change role + status</li>
+            <li>Soft-delete + PII anonymize keeps audit trail intact</li>
+        </ul>
+    </section>
+
+    <!-- 6 RBAC v2 -->
+    <section class="panel c6 span-12">
+        <h2><span class="num">6</span> RBAC v2.0 — COMPLIANCE 7×12 MATRIX</h2>
+<pre class="ascii">
+                    NOTICE_VIEW  CREATE  DRAFT  APPROVE  APPROVE_LEGAL  APPROVE_CFO  SUBMIT  BULK  REVIEW  ATTACH  AUDIT_VIEW  EMAIL
+compliance_head        ✓         ✓       ·        ✓             ·              ·          ✓       ✓       ✓       ✓        ✓        ✓
+legal_team             ✓         ·       ✓        ·             ✓              ·          ·       ·       ✓       ✓        ·        ·
+finance_team           ✓(GST/IT) ·       ·        ·             ·              ·          ·       ·       ·       ·        ·        ·
+auditor                ✓         ·       ·        ·             ·              ·          ·       ·       ·       ·        ✓        ·
+ca_consultant          ✓         ✓       ✓        ✓             ✓              ✓          ✓       ✓       ✓       ✓        ·        ·
+staff                  ✓         ·       ·        ·             ·              ·          ·       ·       ·       ·        ·        ·
+cfo                    ✓         ·       ·        ·             ·              ✓          ·       ·       ✓       ✓        ✓        ✓
+                                                                                                                  (+ CLIENT_CREATE · CLIENT_MANAGE · REPORT_VIEW · REPORT_EXPORT · ESCALATION_TRIGGER)</pre>
+        <p class="dim">Source: <code>backend/app/compliance/services/permission_registry.py</code>. FINANCE_TEAM has NOTICE_VIEW but is scoped to GST/IT only at the service layer. Verified by 84-case parametrized test.</p>
+    </section>
+
+    <!-- 7 RLS -->
+    <section class="panel c7 span-6">
+        <h2><span class="num">7</span> ROW LEVEL SECURITY</h2>
+<pre class="ascii">
+incoming request
+   │ X-Client-Id: 42
+   ▼
+TenantContextMiddleware
+   sets ContextVar  current_client_id = 42
+   ▼
+route handler → Depends(get_db)
+   ▼
+SQLAlchemy before_cursor_execute  (every statement)
+   SET app.current_client_id = 42
+   SET app.user_id           = jwt.sub
+   SET app.cross_client_mode = false
+   SET ROLE app_runtime
+   ▼
+SELECT * FROM compliance_notices
+   ──► RLS rewrites: …AND client_id = 42</pre>
+        <p class="dim">No tenant header = no <code>set_config</code> = policy denies all rows. Fail-closed.</p>
+    </section>
+
+    <!-- 8 SEC HEADERS -->
+    <section class="panel c1 span-6">
+        <h2><span class="num">8</span> SECURITY HEADERS</h2>
+        <table>
+            <tr><th>Header</th><th>Value</th></tr>
+            <tr><td>X-Frame-Options</td><td>DENY</td></tr>
+            <tr><td>X-Content-Type-Options</td><td>nosniff</td></tr>
+            <tr><td>Referrer-Policy</td><td>strict-origin-when-cross-origin</td></tr>
+            <tr><td>Permissions-Policy</td><td>camera=() microphone=() geolocation=()</td></tr>
+            <tr><td>Content-Security-Policy</td><td>frame-ancestors 'none'</td></tr>
+            <tr><td>Cross-Origin-Resource-Policy</td><td>cross-origin</td></tr>
+            <tr><td>X-Permitted-Cross-Domain-Policies</td><td>none</td></tr>
+            <tr><td>Cache-Control</td><td>no-store, no-cache, must-revalidate</td></tr>
+            <tr><td>HSTS</td><td>63072000; includeSubDomains; preload <span class="dim">(prod only)</span></td></tr>
+        </table>
+    </section>
+
+    <!-- 9 RATE LIMIT -->
+    <section class="panel c2 span-4">
+        <h2><span class="num">9</span> RATE LIMITING (slowapi)</h2>
+        <ul class="tight">
+            <li>Per-IP + per-route limits</li>
+            <li><code>RATE_LIMIT_AUTH</code> on register/login/refresh/logout/oauth</li>
+            <li>OAuth provider URL endpoints capped at 30/min</li>
+            <li>Storage: in-memory by default; Redis-backed in prod</li>
+            <li>429 returned with <code>Retry-After</code></li>
+        </ul>
+    </section>
+
+    <!-- 10 UPLOAD HARDENING -->
+    <section class="panel c4 span-4">
+        <h2><span class="num">10</span> UPLOAD HARDENING</h2>
+        <ul class="tight">
+            <li><span class="h">Magic-byte</span> check — not just extension</li>
+            <li>SVG <span class="warn">rejected</span> for logo upload (XSS)</li>
+            <li>Logo cap: 340 KB base64 data URL</li>
+            <li>Path-traversal guard via <code>_validate_path_inside_upload_dir</code></li>
+            <li><code>MAX_FILE_SIZE_MB</code> enforced</li>
+            <li>OCR worker re-validates before <code>open()</code></li>
+        </ul>
+    </section>
+
+    <!-- 11 SECRETS -->
+    <section class="panel c5 span-4">
+        <h2><span class="num">11</span> SECRETS &amp; CRYPTO</h2>
+        <ul class="tight">
+            <li><code>SECRET_KEY</code> validated: ≥32 chars, ≥10 unique</li>
+            <li>OAuth client secrets in env only</li>
+            <li><code>ai_credentials</code> table stores Fernet-encrypted BYOK keys</li>
+            <li>Encryption cipher is INFRA-06 module</li>
+            <li>Plaintext NEVER returned to API consumers</li>
+            <li>Bcrypt cost factor default (12)</li>
+        </ul>
+    </section>
+
+    <!-- 12 OWASP -->
+    <section class="panel c6 span-12">
+        <h2><span class="num">12</span> OWASP TOP 10 (2021) — TAXSYNC COVERAGE</h2>
+        <table>
+            <tr><th>OWASP</th><th>Mitigation</th></tr>
+            <tr><td>A01 Broken Access Control</td><td>RBAC (3-tier + 7×12) at route + RLS at DB. Audit trigger blocks tamper.</td></tr>
+            <tr><td>A02 Cryptographic Failures</td><td>HTTPS in prod, HSTS, bcrypt for passwords, Fernet for BYOK keys.</td></tr>
+            <tr><td>A03 Injection</td><td>SQLAlchemy parameterized queries; Pydantic v2 input validation; CHECK constraints on enums.</td></tr>
+            <tr><td>A04 Insecure Design</td><td>Multi-layer (middleware + AuthZ + RLS + audit trigger). State machines for valid transitions.</td></tr>
+            <tr><td>A05 Security Misconfiguration</td><td>SecurityHeadersMiddleware. <code>DEBUG=false</code> hides /docs in prod. Default-deny policies.</td></tr>
+            <tr><td>A06 Vulnerable / Outdated Components</td><td>requirements.txt pinned + pip check clean. Phase 15 reconciliation block.</td></tr>
+            <tr><td>A07 Identification / Auth Failures</td><td>JWT + opaque refresh + rotation + reuse-detect + slowapi rate limit.</td></tr>
+            <tr><td>A08 Software &amp; Data Integrity</td><td>Audit trigger forbids row mutation. Refresh-chain integrity via <code>replaced_by</code>.</td></tr>
+            <tr><td>A09 Logging &amp; Monitoring</td><td>structlog + correlation-id; <code>audit_logs</code> append-only; dead-letter JSONL for DB-outage events.</td></tr>
+            <tr><td>A10 SSRF</td><td>OAuth redirect URIs whitelisted; BYOK provider URLs hardcoded; httpx with timeouts.</td></tr>
+        </table>
+    </section>
+
+</div>
+
+<div class="protip">
+    <div class="badge">PRO<br>TIP</div>
+    <div>
+        <h3>EXAM ANGLES</h3>
+        <ul>
+            <li><strong>Q: How do you prevent tenant data leakage?</strong> X-Client-Id → ContextVar → before_cursor_execute → SET app.current_client_id → RLS policy + fail-closed.</li>
+            <li><strong>Q: What if a refresh token is stolen?</strong> Reuse-detect: presenting a revoked token nukes all the user's tokens.</li>
+            <li><strong>Q: How is the audit log made tamper-proof?</strong> DB trigger blocks UPDATE/DELETE + REVOKE on app_runtime.</li>
+            <li><strong>Q: How are BYOK keys protected?</strong> Fernet symmetric encryption, key in env, plaintext never leaves the server.</li>
+        </ul>
+    </div>
+    <div class="footer-quote">"Belt and braces. <br>The DB doesn't trust the app, the app doesn't trust the client."</div>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TaxSync · Frontend</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="page">
+
+<nav class="topic-nav">
+    <a href="index.html">⌂ Index</a>
+    <a href="01-architecture.html">01 Architecture</a>
+    <a href="02-frontend.html" class="cur">02 Frontend</a>
+    <a href="03-backend.html">03 Backend</a>
+    <a href="04-database-schema.html">04 DB Schema</a>
+    <a href="05-security.html">05 Security</a>
+    <a href="06-deployment.html">06 Deployment</a>
+    <a href="07-ml-ai.html">07 ML / AI</a>
+    <a href="08-compliance-workflow.html">08 Compliance</a>
+    <a href="09-api-reference.html">09 API Ref</a>
+    <a href="10-auth-deep-dive.html">10 Auth</a>
+</nav>
+
+<header class="title-strip">
+    <div class="logo" style="background:var(--c2)">FE</div>
+    <div>
+        <h1>HOW THE <span class="accent">FRONTEND</span> WORKS</h1>
+        <div class="tagline">Next.js 15 App Router · React 19 · TypeScript · Tailwind · TanStack Query · Zustand</div>
+    </div>
+    <div class="remember">
+        <h4>★ REMEMBER</h4>
+        <ul>
+            <li>Server-first (RSC)</li>
+            <li>App Router only</li>
+            <li>Server state ≠ Client state</li>
+            <li>Cookies, not localStorage, for auth</li>
+            <li>Standalone build for Docker</li>
+        </ul>
+    </div>
+</header>
+
+<div class="grid">
+
+    <!-- 1 STACK -->
+    <section class="panel c2 span-4">
+        <h2><span class="num">1</span> STACK SNAPSHOT</h2>
+        <table>
+            <tr><th>What</th><th>Tool</th></tr>
+            <tr><td>Framework</td><td>Next.js 15.5</td></tr>
+            <tr><td>UI lib</td><td>React 19</td></tr>
+            <tr><td>Lang</td><td>TypeScript 5.5</td></tr>
+            <tr><td>Styles</td><td>Tailwind 3.4 + globals.css</td></tr>
+            <tr><td>Server state</td><td>TanStack Query v5</td></tr>
+            <tr><td>Client state</td><td>Zustand 5</td></tr>
+            <tr><td>Forms</td><td>react-hook-form + Zod</td></tr>
+            <tr><td>HTTP</td><td>Axios (interceptor)</td></tr>
+            <tr><td>Date picker</td><td>react-day-picker v9</td></tr>
+            <tr><td>Tables</td><td>TanStack Table v8</td></tr>
+            <tr><td>Charts</td><td>recharts</td></tr>
+            <tr><td>Drag-drop</td><td>react-dropzone</td></tr>
+            <tr><td>Anim</td><td>framer-motion</td></tr>
+            <tr><td>Toasts</td><td>react-hot-toast</td></tr>
+        </table>
+    </section>
+
+    <!-- 2 ROUTE TREE -->
+    <section class="panel c1 span-4">
+        <h2><span class="num">2</span> ROUTE TREE</h2>
+<pre class="ascii">
+src/app/
+├ page.tsx              landing
+├ login/
+├ register/
+├ oauth/                callback page
+├ oauth-setup/          diag page
+└ dashboard/
+   ├ layout.tsx         auth gate + QC provider
+   ├ page.tsx           dashboard home
+   ├ documents/         hub: upload/shared/search
+   ├ upload/
+   ├ shared/
+   ├ search/
+   ├ analytics/
+   ├ profile/
+   ├ admin/             RBAC: admin only
+   ├ model-evaluation/
+   ├ email/             Gmail MCP
+   │  ├ bills/
+   │  ├ connect/
+   │  ├ activity/
+   │  └ settings/
+   ├ settings/ai/       BYOK page
+   └ compliance/
+      ├ clients/
+      ├ notices/
+      ├ reports/
+      ├ calendar/
+      ├ review/
+      ├ search/
+      └ audit/</pre>
+    </section>
+
+    <!-- 3 RENDERING MODES -->
+    <section class="panel c3 span-4">
+        <h2><span class="num">3</span> RENDERING MODES</h2>
+        <ul>
+            <li><span class="k">Server Component</span> by default (RSC) — fetches data on Node, ships HTML</li>
+            <li><span class="k">"use client"</span> on files that need hooks, state, or browser APIs</li>
+            <li><span class="k">force-dynamic</span> on <code>dashboard/layout.tsx</code> — auth-gated pages can never be static</li>
+            <li><span class="k">middleware.ts</span> runs at the edge — cookie check redirects unauth users to <code>/login</code></li>
+            <li>Standalone build → tiny Docker image for self-hosted</li>
+        </ul>
+    </section>
+
+    <!-- 4 STATE MANAGEMENT -->
+    <section class="panel c4 span-6">
+        <h2><span class="num">4</span> STATE: SERVER vs CLIENT</h2>
+<pre class="ascii">
+┌─────────────────────────────────────────────────┐
+│  SERVER state  ──►  TanStack Query              │
+│  caches HTTP responses, dedupes, refetches      │
+│  • queryKey = ['documents', filters]            │
+│  • staleTime + gcTime per resource              │
+│  • invalidate on mutation                       │
+└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│  CLIENT state  ──►  Zustand stores              │
+│  currentClientStore     active tenant ID        │
+│  onboardingWizardStore  wizard step + draft     │
+│  (no Redux — Zustand is ~1 KB, no Provider)     │
+└─────────────────────────────────────────────────┘</pre>
+        <p class="dim">Rule of thumb: if the value comes from the API, it's TanStack Query. If it's UI/local (selection, wizard step, modal open), it's Zustand or <code>useState</code>.</p>
+    </section>
+
+    <!-- 5 AUTH FLOW -->
+    <section class="panel c5 span-6">
+        <h2><span class="num">5</span> AUTH FLOW (client side)</h2>
+<pre class="ascii">
+1.  User submits /login  ─► POST /api/auth/login
+2.  Backend returns { access_token, refresh_token, user }
+3.  Frontend writes BOTH to js-cookie  (httpOnly not yet)
+4.  middleware.ts sees cookie ⇒ allows /dashboard/*
+5.  Axios interceptor injects Authorization: Bearer <jwt>
+6.  On 401 ⇒ POST /api/auth/refresh  (rotation + reuse-detect)
+7.  Logout ⇒ POST /api/auth/logout + clear cookies
+
+OAuth path:
+   Click "Sign in with Google"
+   GET /api/auth/oauth/google   (returns provider URL + state JWT)
+   Provider redirect → backend /callback/google
+   Backend redirects → /oauth/callback?code=XYZ&token=JWT
+   Frontend exchanges → POST /api/auth/oauth/exchange  (one-shot)</pre>
+    </section>
+
+    <!-- 6 SIDEBAR / IA -->
+    <section class="panel c6 span-4">
+        <h2><span class="num">6</span> SIDEBAR IA (v2.1.1)</h2>
+        <p class="dim">Reset 2026-05-09 from 19 → 14 items. Documents became a HUB.</p>
+        <ul class="tight">
+            <li>Dashboard</li>
+            <li><span class="h">Documents</span> (Upload · Shared · Search)</li>
+            <li>Analytics</li>
+            <li>Compliance ▾ (Clients · Notices · Reports · Calendar · Review · Audit · Search)</li>
+            <li>Vendor invoices <span class="tag pink">renamed from Bills</span></li>
+            <li>AI assistant <span class="tag yellow">BYOK</span></li>
+            <li>Email <span class="tag blue">Gmail MCP</span></li>
+            <li>Model evaluation</li>
+            <li>Admin <span class="tag orange">admin only</span></li>
+            <li>Profile cluster (avatar)</li>
+            <li>Co-brand cluster <span class="tag">tenant logo</span></li>
+        </ul>
+    </section>
+
+    <!-- 7 COMPONENT MAP -->
+    <section class="panel c7 span-4">
+        <h2><span class="num">7</span> COMPONENT MAP</h2>
+<pre class="ascii">
+components/
+├ admin/              DeleteUserModal
+├ compliance/         23 files (NoticeTable, StatusWorkflow,
+│                     ApprovalStageStrip, NotificationBell,
+│                     RiskTierDot, WhyThisRiskScore …)
+├ email/              Gmail viewer panels
+├ landing/            Hero, Navbar, ProcessFlow, Footer
+├ AIChatFloating.tsx  global AI panel
+├ CategoryBadge.tsx
+├ StatusBadge.tsx
+├ ThemeToggle.tsx
+├ UserMenu.tsx
+└ ConfidenceBadge.tsx</pre>
+    </section>
+
+    <!-- 8 HOOKS / API -->
+    <section class="panel c1 span-4">
+        <h2><span class="num">8</span> HOOKS &amp; API LAYER</h2>
+<pre class="ascii">
+src/lib/
+├ api.ts            axios instance + interceptors
+├ email-api.ts      Gmail endpoints
+└ api/
+   ├ ai.ts          BYOK AI calls
+   └ compliance.ts  clients · notices · reports
+
+src/hooks/
+└ useNotificationStream.ts   WebSocket /ws/notifications
+                              auto-reconnect w/ backoff</pre>
+        <ul class="tight">
+            <li>Single Axios instance</li>
+            <li>Interceptor attaches JWT, handles 401 refresh, redirects on hard fail</li>
+            <li>WebSocket hook auto-reconnects with exponential backoff</li>
+        </ul>
+    </section>
+
+    <!-- 9 STYLING -->
+    <section class="panel c2 span-4">
+        <h2><span class="num">9</span> STYLING SYSTEM</h2>
+        <ul class="tight">
+            <li>Tailwind 3.4 → JIT compile</li>
+            <li><code>tailwind.config.ts</code> defines tokens (colors, fonts, breakpoints)</li>
+            <li><code>globals.css</code> for CSS variables + base resets</li>
+            <li>Dark mode via <code>ThemeToggle.tsx</code> (class strategy)</li>
+            <li>Custom utility classes co-located with components</li>
+            <li>framer-motion for page transitions + drawer slide-ins</li>
+        </ul>
+    </section>
+
+    <!-- 10 KEY PATTERNS -->
+    <section class="panel c4 span-6">
+        <h2><span class="num">10</span> KEY PATTERNS</h2>
+        <table>
+            <tr><th>Pattern</th><th>Where / Why</th></tr>
+            <tr><td>QueryClient hoisted to <code>dashboard/layout.tsx</code></td><td>Sidebar uses <code>useQuery</code> → needs a provider above it</td></tr>
+            <tr><td>Shared <code>queryKey</code> across sidebar + dashboard</td><td>Dedupes the active-client query — perf fix v2.1.1</td></tr>
+            <tr><td>Optimistic UI on status changes</td><td>NoticeTable updates instantly; reverts on failure</td></tr>
+            <tr><td>Suspense boundaries around fetches</td><td>Lets RSC stream while client islands hydrate</td></tr>
+            <tr><td>Zod schema mirrors backend Pydantic</td><td>Catches contract drift at compile time</td></tr>
+            <tr><td>Conditional sidebar items by role</td><td>Admin · compliance roles see different nav</td></tr>
+        </table>
+    </section>
+
+    <!-- 11 GOTCHAS -->
+    <section class="panel c6 span-6">
+        <h2><span class="num">11</span> GOTCHAS / FIXES SHIPPED</h2>
+        <ul>
+            <li><span class="warn">SSG break on auth pages</span> — solved by <code>export const dynamic = "force-dynamic"</code> on <code>dashboard/layout.tsx</code></li>
+            <li><span class="warn">QueryClientProvider missing for sidebar</span> — hoisted from <code>compliance/layout</code> to <code>dashboard/layout</code></li>
+            <li><span class="warn">Tenant listener round-trips</span> — fix: batch 3 <code>set_config</code> calls into one SQL + dirty-bit cleanup skip → ~2× <code>/api/health</code></li>
+            <li><span class="warn">Active-client double-fetch</span> — fix: shared queryKey across sidebar + dashboard</li>
+            <li><span class="warn">OAuth replay</span> — exchange code is single-use, tracked in Redis (in-memory fallback if Redis down)</li>
+        </ul>
+    </section>
+
+</div>
+
+<div class="protip">
+    <div class="badge">PRO<br>TIP</div>
+    <div>
+        <h3>MENTAL MODEL</h3>
+        <ul>
+            <li>Route renders on the server → data fetched with native <code>fetch</code> or via API → hydrated client islands take over</li>
+            <li>Anything user-interactive lives behind <code>"use client"</code></li>
+            <li>Cache lives in TanStack Query; UI lives in Zustand; auth lives in cookies</li>
+            <li>Build = <code>next build</code>, run = <code>next start</code>, dev = <code>next dev</code></li>
+        </ul>
+    </div>
+    <div class="footer-quote">"Server Components are the default. <br>You opt into the client. Not the other way around."</div>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TaxSync · Study Notes · Index</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="page">
+
+<header class="title-strip">
+    <div class="logo">TS</div>
+    <div>
+        <h1><span class="accent">TAXSYNC</span> · STUDY NOTES</h1>
+        <div class="tagline">10 infographic-style notes covering Frontend, Backend, Architecture, DB, Security, Deployment, ML, Compliance, API &amp; Auth</div>
+    </div>
+    <div class="remember">
+        <h4>★ HOW TO USE</h4>
+        <ul>
+            <li>Click any card</li>
+            <li>Read in any order</li>
+            <li>Ctrl+P prints clean</li>
+            <li>MD versions next to HTML</li>
+        </ul>
+    </div>
+</header>
+
+<div class="index-grid">
+
+    <a class="card" href="01-architecture.html" style="border-top-color:var(--c1)">
+        <div class="num">01 · OVERVIEW</div>
+        <h3>Architecture</h3>
+        <p>System diagram · container topology · request flow · 4-layer middleware · tech stack map.</p>
+    </a>
+
+    <a class="card" href="02-frontend.html" style="border-top-color:var(--c2)">
+        <div class="num">02 · CLIENT</div>
+        <h3>Frontend</h3>
+        <p>Next.js 15 · App Router · TanStack Query · Zustand · sidebar IA · component map.</p>
+    </a>
+
+    <a class="card" href="03-backend.html" style="border-top-color:var(--c4)">
+        <div class="num">03 · SERVER</div>
+        <h3>Backend</h3>
+        <p>FastAPI · 3-layer routers/services/models · DI · 26 routers · Celery · lifespan hooks.</p>
+    </a>
+
+    <a class="card" href="04-database-schema.html" style="border-top-color:var(--c3)">
+        <div class="num">04 · PERSISTENCE</div>
+        <h3>Database Schema</h3>
+        <p>32 Alembic revisions · RLS · FTS · audit trigger · 3 DB roles · enum catalogue · ERD.</p>
+    </a>
+
+    <a class="card" href="05-security.html" style="border-top-color:var(--bad)">
+        <div class="num">05 · TRUST</div>
+        <h3>Security</h3>
+        <p>Defense-in-depth · refresh rotation · RBAC 3×3 + 7×12 · headers · OWASP coverage.</p>
+    </a>
+
+    <a class="card" href="06-deployment.html" style="border-top-color:var(--c5)">
+        <div class="num">06 · OPS</div>
+        <h3>Deployment</h3>
+        <p>Docker Compose · Vercel · Supabase pooler gotchas · env vars · 10-step pre-deploy checklist.</p>
+    </a>
+
+    <a class="card" href="07-ml-ai.html" style="border-top-color:var(--c6)">
+        <div class="num">07 · INTELLIGENCE</div>
+        <h3>ML / AI Pipeline</h3>
+        <p>OCR · LinearSVC 85.06% · BERT + NER · XGBoost risk · BYOK Anthropic / Gemini · scope lock.</p>
+    </a>
+
+    <a class="card" href="08-compliance-workflow.html" style="border-top-color:var(--c4)">
+        <div class="num">08 · WORKFLOW</div>
+        <h3>Compliance Workflow</h3>
+        <p>6-state notice machine · 4-stage approval · alerts · statutory calendar · unified search.</p>
+    </a>
+
+    <a class="card" href="09-api-reference.html" style="border-top-color:var(--c7)">
+        <div class="num">09 · CONTRACT</div>
+        <h3>API Reference</h3>
+        <p>All endpoints grouped by router · 5 v1 + 14 compliance + 6 email · status code cheat-sheet.</p>
+    </a>
+
+    <a class="card" href="10-auth-deep-dive.html" style="border-top-color:var(--c5)">
+        <div class="num">10 · IDENTITY</div>
+        <h3>Auth Deep-Dive</h3>
+        <p>JWT + opaque refresh · rotation + reuse-detect · OAuth state JWT · single-use exchange.</p>
+    </a>
+
+</div>
+
+<div class="protip" style="margin-top:24px;">
+    <div class="badge">USE<br>FLOW</div>
+    <div>
+        <h3>SUGGESTED READING ORDER</h3>
+        <ul>
+            <li>1. <strong>Architecture</strong> (01) — master overview</li>
+            <li>2. <strong>Security</strong> (05) + <strong>Auth</strong> (10) — trust model</li>
+            <li>3. <strong>DB Schema</strong> (04) — data model</li>
+            <li>4. <strong>Backend</strong> (03) + <strong>API Ref</strong> (09) — server</li>
+            <li>5. <strong>Frontend</strong> (02) — client</li>
+            <li>6. <strong>ML</strong> (07) + <strong>Compliance</strong> (08) — features</li>
+            <li>7. <strong>Deployment</strong> (06) — production</li>
+        </ul>
+    </div>
+    <div class="footer-quote">"Read the architecture first — it's the map.<br>Everything else fits inside it."</div>
+</div>
+
+</div>
+</body>
+</html>

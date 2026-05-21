@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TaxSync · Auth Deep-Dive</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="page">
+
+<nav class="topic-nav">
+    <a href="index.html">⌂ Index</a>
+    <a href="01-architecture.html">01 Architecture</a>
+    <a href="02-frontend.html">02 Frontend</a>
+    <a href="03-backend.html">03 Backend</a>
+    <a href="04-database-schema.html">04 DB Schema</a>
+    <a href="05-security.html">05 Security</a>
+    <a href="06-deployment.html">06 Deployment</a>
+    <a href="07-ml-ai.html">07 ML / AI</a>
+    <a href="08-compliance-workflow.html">08 Compliance</a>
+    <a href="09-api-reference.html">09 API Ref</a>
+    <a href="10-auth-deep-dive.html" class="cur">10 Auth</a>
+</nav>
+
+<header class="title-strip">
+    <div class="logo" style="background:var(--c5)">AUT</div>
+    <div>
+        <h1>HOW <span class="accent">AUTH</span> WORKS — DEEP DIVE</h1>
+        <div class="tagline">JWT (HS256) access · opaque refresh w/ rotation + reuse-detect · OAuth Google &amp; Microsoft · CSRF state · single-use exchange</div>
+    </div>
+    <div class="remember">
+        <h4>★ REMEMBER</h4>
+        <ul>
+            <li>2 tokens: access + refresh</li>
+            <li>Reuse-detect = nuke all</li>
+            <li>OAuth state = JWT 10min</li>
+            <li>Exchange code = single-use</li>
+            <li>Bcrypt cost 12 default</li>
+        </ul>
+    </div>
+</header>
+
+<div class="grid">
+
+    <!-- 1 LOCAL LOGIN -->
+    <section class="panel c1 span-6">
+        <h2><span class="num">1</span> LOCAL LOGIN FLOW</h2>
+<pre class="ascii">
+POST /api/auth/login
+  body: { email, password }
+   ▼
+SELECT user WHERE email = ?
+  if not found            → 401
+  if auth_provider != local → 401
+  if !verify_password()   → 401
+  if !is_active           → 401
+   ▼
+access = jwt.encode({sub, role, exp+30m})
+refresh = secrets.token_urlsafe(64), exp+7d
+INSERT refresh_tokens(token, user_id, expires_at)
+   ▼
+200 { access_token, refresh_token, user }</pre>
+        <p class="dim">All errors return the SAME message "Invalid email or password" to avoid email enumeration.</p>
+    </section>
+
+    <!-- 2 REGISTER -->
+    <section class="panel c2 span-6">
+        <h2><span class="num">2</span> REGISTER FLOW</h2>
+<pre class="ascii">
+POST /api/auth/register
+  body: { email, username, password, full_name? }
+   ▼
+if email exists  → 409
+if username exists → 409
+   ▼
+is_first = users.count() == 0
+role = 'admin' if is_first else 'editor'
+hashed = bcrypt(password)
+INSERT users
+   ▼
+issue token pair  (same as login)
+201 { access_token, refresh_token, user }</pre>
+    </section>
+
+    <!-- 3 REFRESH ROTATION -->
+    <section class="panel c3 span-12">
+        <h2><span class="num">3</span> REFRESH ROTATION + REUSE DETECTION</h2>
+<pre class="ascii">
+POST /api/auth/refresh   body: { refresh_token }
+   ▼
+SELECT * FROM refresh_tokens
+   WHERE token = :rt
+   FOR UPDATE          ← prevents concurrent rotation race
+   ▼
+┌── token not found ───────────────────────────────────┐
+│   401 "Invalid refresh token"                         │
+└──────────────────────────────────────────────────────┘
+┌── token already revoked  ←  THE KILL-SWITCH           │
+│   UPDATE refresh_tokens                                │
+│     SET is_revoked = TRUE, revoked_at = now()          │
+│     WHERE user_id = :uid AND is_revoked = FALSE        │
+│   commit                                               │
+│   401 "Refresh token reuse detected -- all sessions   │
+│        revoked"                                        │
+└──────────────────────────────────────────────────────┘
+┌── token expired                                       │
+│   revoke it · 401 "expired"                            │
+└──────────────────────────────────────────────────────┘
+   ▼ valid
+load user · check is_active
+   ▼
+new_refresh = secrets.token_urlsafe()
+old.is_revoked = TRUE
+old.replaced_by = new_refresh  ←  rotation chain
+INSERT new refresh
+commit
+   ▼
+new access = jwt.encode({sub, role, exp+30m})
+200 { access, refresh, user }</pre>
+    </section>
+
+    <!-- 4 OAUTH START -->
+    <section class="panel c4 span-6">
+        <h2><span class="num">4</span> OAUTH START (CSRF state)</h2>
+<pre class="ascii">
+GET /api/auth/oauth/google
+   ▼
+if GOOGLE_CLIENT_ID empty → 404
+   ▼
+nonce = secrets.token_urlsafe(16)
+state = jwt.encode({nonce, exp: now+10m}, SECRET, HS256)
+url = google_authorize_url + state + redirect_uri
+200 { url }
+
+(cookies cannot be used for CSRF — backend is on
+:8000 and frontend on :3000, cross-origin cookies
+are unreliable. State JWT is self-verifying.)</pre>
+    </section>
+
+    <!-- 5 OAUTH CALLBACK -->
+    <section class="panel c5 span-6">
+        <h2><span class="num">5</span> OAUTH CALLBACK</h2>
+<pre class="ascii">
+GET /api/auth/callback/google?code=...&state=...
+   ▼
+jwt.decode(state, SECRET)
+   if ExpiredSignatureError → 400
+   if InvalidTokenError     → 400 (possible CSRF)
+   ▼
+token_data = GoogleOAuth.exchange_code(code)
+user_info  = GoogleOAuth.get_user_info(access)
+   if not verified_email → 400
+   ▼
+find user by oauth_id
+  found → use it
+  not found:
+    find by email:
+      if auth_provider=='local' AND hashed_password
+        → 409 (refuse silent link to local-pwd account)
+      else: link oauth_id
+    none: create new user (first user → admin)
+   ▼
+exchange_code = secrets.token_urlsafe(32)
+exchange_token = jwt.encode({sub, role,
+                  type='oauth_exchange',
+                  code: exchange_code,
+                  exp: now+2m})
+redirect → FRONTEND/oauth/callback?
+              code=...&token=...</pre>
+    </section>
+
+    <!-- 6 OAUTH EXCHANGE -->
+    <section class="panel c6 span-12">
+        <h2><span class="num">6</span> OAUTH EXCHANGE (single-use)</h2>
+<pre class="ascii">
+POST /api/auth/oauth/exchange
+   body: { code, token }
+   ▼
+payload = jwt.decode(token, SECRET)
+   if InvalidTokenError → 401
+   if payload.type != 'oauth_exchange' → 401
+   ▼
+secrets.compare_digest(payload.code, body.code) ← constant-time
+   ▼
+jti = payload.jti
+   ▼
+redis.set('oauth_exchange_used:'+jti, '1', NX=True, EX=180)
+   if NX fails  → 401 "already used"          ← replay block
+   if redis down → in-memory dict fallback     ← still single-use
+   ▼
+load user; check is_active
+   ▼
+return token pair (200)</pre>
+        <p class="dim">Two layers of replay protection: a Redis SET-NX, and an in-process dict + lock as fallback. The exchange token lives only 2 minutes.</p>
+    </section>
+
+    <!-- 7 LOGOUT -->
+    <section class="panel c7 span-4">
+        <h2><span class="num">7</span> LOGOUT</h2>
+<pre class="ascii">
+POST /api/auth/logout
+  body: { refresh_token }
+   ▼
+find row
+  if not found → 401
+  if !revoked  → revoke + commit
+   ▼
+200 "Successfully logged out"</pre>
+        <p class="dim">Access token still valid until natural expiry (30 min). Refresh revoked = no rotation possible.</p>
+    </section>
+
+    <!-- 8 TOKEN SHAPES -->
+    <section class="panel c1 span-4">
+        <h2><span class="num">8</span> TOKEN SHAPES</h2>
+<pre class="ascii">
+ACCESS  (JWT HS256)
+  sub  : "42"           ← user id as str
+  role : "admin"
+  iat  : 17xx…
+  exp  : 17xx…  (30m)
+
+REFRESH (opaque)
+  64-char urlsafe base64
+  stored in refresh_tokens row:
+    id · token (UQ) · user_id
+    expires_at · is_revoked
+    revoked_at · replaced_by</pre>
+    </section>
+
+    <!-- 9 RATE LIMITS -->
+    <section class="panel c2 span-4">
+        <h2><span class="num">9</span> RATE LIMITS (slowapi)</h2>
+        <table>
+            <tr><th>Endpoint</th><th>Default</th></tr>
+            <tr><td>/register · /login · /refresh · /logout</td><td><code>RATE_LIMIT_AUTH</code></td></tr>
+            <tr><td>/oauth/google · /callback/* · /oauth/exchange</td><td><code>RATE_LIMIT_AUTH</code></td></tr>
+            <tr><td>/providers · /oauth/diag</td><td>30/minute</td></tr>
+            <tr><td>/upload</td><td><code>RATE_LIMIT_UPLOAD</code> default 10/min</td></tr>
+            <tr><td>default</td><td><code>RATE_LIMIT_DEFAULT</code> default 60/min</td></tr>
+        </table>
+    </section>
+
+    <!-- 10 CSRF / STATE -->
+    <section class="panel c4 span-4">
+        <h2><span class="num">10</span> CSRF / STATE NOTES</h2>
+        <ul class="tight">
+            <li>OAuth <code>state</code> is a signed JWT (10 min) — replaces cookie-based CSRF</li>
+            <li>Backend + frontend live on different origins → cookies unreliable for CSRF</li>
+            <li>Exchange token <span class="h">jti</span> tracked in Redis (with in-memory fallback)</li>
+            <li>Refresh tokens are opaque → no signature to forge</li>
+            <li>JWT decoded with explicit algorithm whitelist (no algorithm confusion)</li>
+        </ul>
+    </section>
+
+    <!-- 11 RBAC -->
+    <section class="panel c5 span-6">
+        <h2><span class="num">11</span> AUTHN vs AUTHZ</h2>
+        <table>
+            <tr><th>Layer</th><th>What</th></tr>
+            <tr><td>AuthN</td><td>"Who are you?" — bcrypt verify · OAuth</td></tr>
+            <tr><td>JWT</td><td>"Proof you're you" — short-lived bearer</td></tr>
+            <tr><td>AuthZ v1.0</td><td>3-tier role on User row · admin/editor/viewer</td></tr>
+            <tr><td>AuthZ v2.0</td><td>7×12 matrix · per-tenant via compliance_memberships</td></tr>
+            <tr><td>Tenant</td><td><code>X-Client-Id</code> → ContextVar → RLS</td></tr>
+        </table>
+    </section>
+
+    <!-- 12 EDGE CASES -->
+    <section class="panel c6 span-6">
+        <h2><span class="num">12</span> EDGE CASES TO REMEMBER</h2>
+        <ul>
+            <li><strong>OAuth + local pwd</strong>: if email already has a password, OAuth link is refused with 409. User must log in with password first to prove ownership, then link OAuth from settings.</li>
+            <li><strong>Microsoft no verified_email</strong>: rely on UPN / mail field; lowercase normalized.</li>
+            <li><strong>First user is admin</strong>: skip registration gate; subsequent users default to <code>editor</code>.</li>
+            <li><strong>Race on concurrent refresh</strong>: <code>FOR UPDATE</code> serializes; second caller hits "reuse detected".</li>
+            <li><strong>Redis down for exchange replay</strong>: in-memory dict fallback (single-worker safe).</li>
+            <li><strong>OAuth user creation conflict</strong>: re-fetch by email if <code>IntegrityError</code> (concurrent register).</li>
+        </ul>
+    </section>
+
+</div>
+
+<div class="protip">
+    <div class="badge">PRO<br>TIP</div>
+    <div>
+        <h3>WHY OPAQUE REFRESH + JWT ACCESS?</h3>
+        <ul>
+            <li>JWT access is fast (no DB read) and short-lived (30 min)</li>
+            <li>Opaque refresh is stateful → can revoke instantly + detect reuse</li>
+            <li>You can't have BOTH stateless and revocable, so split the responsibility</li>
+            <li>Rotation chain via <code>replaced_by</code> lets you trace a stolen-token tree</li>
+        </ul>
+    </div>
+    <div class="footer-quote">"Stateless tokens scale.<br>Stateful tokens revoke.<br>The right design uses both."</div>
+</div>
+
+</div>
+</body>
+</html>

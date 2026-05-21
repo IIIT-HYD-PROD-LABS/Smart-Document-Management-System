@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TaxSync · ML / AI</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="page">
+
+<nav class="topic-nav">
+    <a href="index.html">⌂ Index</a>
+    <a href="01-architecture.html">01 Architecture</a>
+    <a href="02-frontend.html">02 Frontend</a>
+    <a href="03-backend.html">03 Backend</a>
+    <a href="04-database-schema.html">04 DB Schema</a>
+    <a href="05-security.html">05 Security</a>
+    <a href="06-deployment.html">06 Deployment</a>
+    <a href="07-ml-ai.html" class="cur">07 ML / AI</a>
+    <a href="08-compliance-workflow.html">08 Compliance</a>
+    <a href="09-api-reference.html">09 API Ref</a>
+    <a href="10-auth-deep-dive.html">10 Auth</a>
+</nav>
+
+<header class="title-strip">
+    <div class="logo" style="background:var(--c6)">ML</div>
+    <div>
+        <h1>HOW <span class="accent">ML</span> AND <span class="accent2">AI</span> WORK</h1>
+        <div class="tagline">OCR · LinearSVC classifier (85.06%) · BERT + spaCy NER · XGBoost risk scoring · BYOK LLM (Anthropic / Gemini / OpenAI / Ollama)</div>
+    </div>
+    <div class="remember">
+        <h4>★ REMEMBER</h4>
+        <ul>
+            <li>4-stage pipeline</li>
+            <li>Tesseract + OpenCV preprocess</li>
+            <li>Local SVC for v1 categories</li>
+            <li>BERT + risk-score for notices</li>
+            <li>BYOK = tenant's API keys</li>
+        </ul>
+    </div>
+</header>
+
+<div class="grid">
+
+    <!-- 1 PIPELINE -->
+    <section class="panel c1 span-12">
+        <h2><span class="num">1</span> FULL PIPELINE</h2>
+<pre class="ascii">
+                ┌─────────────┐
+   USER ──────► │ /upload     │ ──► Document row PENDING + Celery enqueue
+                └─────────────┘
+                                                       │
+                                                       ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Celery: process_document_task                                            │
+│                                                                           │
+│  Stage 1 (10%)  read_file        path-traversal-safe FS access            │
+│  Stage 2 (30%)  extract_text     PDF/DOCX/Image → Tesseract+OpenCV        │
+│  Stage 3 (60%)  classify         LinearSVC + TF-IDF · category +conf      │
+│  Stage 4 (80%)  metadata         dateparser · regex · vendor / amount     │
+│  Stage 5 (90%)  LLM enrichment   multi-provider · summary + fields        │
+│  Stage 6 (100%) commit           UPDATE documents SET status='completed'  │
+└──────────────────────────────────────────────────────────────────────────┘
+
+For COMPLIANCE notices (compliance_worker · 2 GB RAM):
+                ┌─────────────┐
+   USER ──────► │/notices/up… │ ──► same pipeline + ML compliance fork
+                └─────────────┘
+                                                       │
+                                                       ▼
+   BERT (InLegalBERT, deferred) ─► authority + notice_type
+   spaCy NER                     ─► entities → ner_extracted_fields
+   XGBoost-roadmap risk_scorer  ─► risk_score + risk_tier + SHAP factors
+   CalibratedClassifier        ─► confidence  → review_queue if low
+   Risk tier == 'critical'      ─► auto-escalation + audit log</pre>
+    </section>
+
+    <!-- 2 OCR -->
+    <section class="panel c2 span-6">
+        <h2><span class="num">2</span> OCR PIPELINE</h2>
+        <ul class="tight">
+            <li><strong>PDF</strong> → pdfplumber text first; if empty → image render → OCR</li>
+            <li><strong>DOCX</strong> → python-docx walk + table extraction</li>
+            <li><strong>Image</strong> → OpenCV preprocess → Tesseract</li>
+        </ul>
+        <p class="dim">Tesseract preprocessing steps in <code>app/ml/ocr.py</code>:</p>
+<pre class="ascii">
+upscale_if_small    h &lt; 800px → bicubic
+grayscale           cvtColor → BGR2GRAY
+deskew              minAreaRect angle correction
+threshold           adaptive Gaussian
+morphological ops   open/close noise
+multi-PSM retry     PSMs 3, 4, 6 → best confidence wins</pre>
+    </section>
+
+    <!-- 3 CLASSIFIER -->
+    <section class="panel c3 span-6">
+        <h2><span class="num">3</span> CLASSIFIER (v1.0 docs)</h2>
+        <ul class="tight">
+            <li><strong>Model</strong>: <code>LinearSVC</code> + <code>CalibratedClassifierCV</code></li>
+            <li><strong>Vectorizer</strong>: TF-IDF (uni- + bi-grams)</li>
+            <li><strong>Categories</strong>: bills · upi · tickets · tax · bank · invoices · unknown</li>
+            <li><strong>Accuracy</strong>: <span class="ok">85.06 %</span> (exceeds 85 % target)</li>
+            <li><strong>Artifacts</strong>: <code>/app/models/document_classifier.pkl</code> + <code>tfidf_vectorizer.pkl</code></li>
+            <li><strong>Loader</strong>: lazy + double-checked locking <code>_model_lock</code></li>
+            <li><strong>Threshold</strong>: text &lt; 50 chars → return "unknown" with conf 0</li>
+            <li><strong>Training</strong>: <code>python -m app.ml.train</code> · Kaggle datasets</li>
+        </ul>
+    </section>
+
+    <!-- 4 LLM PROVIDERS -->
+    <section class="panel c4 span-6">
+        <h2><span class="num">4</span> LLM PROVIDERS</h2>
+        <table>
+            <tr><th>Provider</th><th>Where</th></tr>
+            <tr><td><code>ollama</code></td><td>self-hosted on host machine · <code>host.docker.internal:11434</code></td></tr>
+            <tr><td><code>gemini</code></td><td>Google AI Studio REST (httpx)</td></tr>
+            <tr><td><code>anthropic</code></td><td>official <code>anthropic</code> SDK</td></tr>
+            <tr><td><code>openai</code></td><td>official <code>openai</code> SDK</td></tr>
+            <tr><td><code>local</code></td><td>regex-only fallback · zero API cost</td></tr>
+        </table>
+        <p class="dim"><code>LLM_PROVIDER</code> env var selects. Degraded-mode flag set if only regex fallback works.</p>
+    </section>
+
+    <!-- 5 BYOK -->
+    <section class="panel c5 span-6">
+        <h2><span class="num">5</span> BYOK AI — Phase 16</h2>
+<pre class="ascii">
+ai_credentials  (one row per tenant)
+   client_id PK
+   provider   'anthropic' | 'gemini'
+   key_ciphertext  Fernet-encrypted
+   model
+   created_at / updated_at
+
+Flow:
+   /dashboard/settings/ai  → enter key → Test
+   POST /api/compliance/ai/test  ─► provider .test()
+   POST /api/compliance/ai/credential  ─► encrypt + save
+   Now: per-notice + per-invoice AI panels light up</pre>
+        <ul class="tight">
+            <li>5 task functions: summarize_notice · recommend_notice_actions · summarize_invoice · recommend_invoice_actions · suggest_invoice_payment_timing</li>
+            <li>Scope-locked SYSTEM prompt — out-of-scope returns <span class="warn">OUT_OF_SCOPE</span> → HTTP 422</li>
+            <li>Costs hit the tenant's provider account; TaxSync never bills</li>
+        </ul>
+    </section>
+
+    <!-- 6 RISK SCORER -->
+    <section class="panel c6 span-6">
+        <h2><span class="num">6</span> RISK SCORING (Phase 10)</h2>
+<pre class="ascii">
+score = (
+   authority_severity * 25     # max 25 pts
+ + penalty_log_points          # max 30 pts
+ + deadline_pressure_points    # max 25 pts
+ + critical_section_bonus      # 15 pts if regex match
+ + risk_tier_chain_bonus       # parent escalation
+)
+tier:
+  ≥ 85  critical
+  ≥ 60  high
+  ≥ 30  medium
+   else low</pre>
+        <p class="dim">Hand-crafted rules first (<code>rules-v1.0</code>), XGBoost mimic+improve once labeled data lands. SHAP-style explanations come from the explicit weights.</p>
+    </section>
+
+    <!-- 7 NER -->
+    <section class="panel c7 span-6">
+        <h2><span class="num">7</span> ENTITY EXTRACTION (NER)</h2>
+        <ul class="tight">
+            <li><code>spaCy 3.7.5</code> small English model</li>
+            <li>Custom rule-based section detector (e.g. GST sec 73, sec 74)</li>
+            <li>Regex bank: GSTIN · PAN · CIN · INR amounts · dates</li>
+            <li><code>dateparser</code> for natural-language deadlines</li>
+            <li>Output → <code>compliance_notices.ner_extracted_fields</code> JSONB</li>
+            <li>Surfaced in NoticeAISection panel</li>
+        </ul>
+    </section>
+
+    <!-- 8 REVIEW QUEUE -->
+    <section class="panel c1 span-6">
+        <h2><span class="num">8</span> REVIEW QUEUE</h2>
+        <ul class="tight">
+            <li>Calibrated confidence &lt; threshold → row inserted into <code>compliance_review_queue</code></li>
+            <li>Surfaced at <code>/dashboard/compliance/review</code></li>
+            <li>Senior reviewer accepts / overrides classification</li>
+            <li>Override re-runs risk_scorer</li>
+            <li>Activity logged in <code>compliance_notice_activity</code></li>
+            <li>Audit entry written (immutable trigger)</li>
+        </ul>
+    </section>
+
+    <!-- 9 SCOPE LOCK -->
+    <section class="panel c4 span-12">
+        <h2><span class="num">9</span> AI SCOPE LOCK (BYOK)</h2>
+<pre class="ascii">
+SYSTEM:
+  You are TaxSync's AI assistant. You may ONLY answer:
+   1. Indian regulatory notices (GST/IT/MCA/RBI/SEBI)
+   2. Compliance deadlines
+   3. Vendor invoices
+   4. The 4-stage approval chain
+   5. TaxSync workflow questions
+
+  For ANYTHING else (general chat, coding help, jokes, opinions,
+  competing products, personal advice, etc.) respond with
+  EXACTLY one line:
+      OUT_OF_SCOPE
+  No prefix, no apology, no quotes — exact 12 characters.
+
+USER:  <prompt>
+</pre>
+        <p class="dim">Router catches <code>OUT_OF_SCOPE</code> sentinel and returns HTTP 422 with a friendly toast in the UI.</p>
+    </section>
+
+    <!-- 10 PERF -->
+    <section class="panel c5 span-6">
+        <h2><span class="num">10</span> PERF NOTES</h2>
+        <ul class="tight">
+            <li>v1.0 OCR worker: 1 GB cap, 2 procs, <code>--max-memory-per-child=512MB</code></li>
+            <li>Compliance worker: 2.5 GB cap (BERT weights ~440 MB)</li>
+            <li>HF cache mounted at <code>/app/models/hf_cache</code> — survives restart</li>
+            <li>Torch CPU-only wheel — image stays &lt;3 GB</li>
+            <li><code>TOKENIZERS_PARALLELISM=false</code> avoids fork warnings</li>
+            <li>Heavy tasks NEVER block FastAPI request thread</li>
+        </ul>
+    </section>
+
+    <!-- 11 MODEL EVAL -->
+    <section class="panel c6 span-6">
+        <h2><span class="num">11</span> MODEL EVALUATION UI</h2>
+        <ul class="tight">
+            <li><code>/dashboard/model-evaluation</code> page</li>
+            <li>Shows live accuracy, confusion matrix, per-category precision/recall</li>
+            <li>Pulled from <code>app/ml/datasets/</code> + held-out test set</li>
+            <li>Manual retrain button (admin only) — runs <code>python -m app.ml.train</code></li>
+            <li>Model version tracked in <code>compliance_notices.model_version</code></li>
+        </ul>
+    </section>
+
+</div>
+
+<div class="protip">
+    <div class="badge">PRO<br>TIP</div>
+    <div>
+        <h3>WHY THE PIPELINE LOOKS THIS WAY</h3>
+        <ul>
+            <li>OCR is sequential per file → CPU bound → fork pool</li>
+            <li>Classification is independent of OCR success — feeds on whatever text exists</li>
+            <li>LLM is the slowest and least reliable → comes last, soft-fails</li>
+            <li>Two queues isolate v1.0 throughput from heavy BERT inference</li>
+        </ul>
+    </div>
+    <div class="footer-quote">"Old-school ML for known categories.<br>LLM for narrative summary. Never the other way around."</div>
+</div>
+
+</div>
+</body>
+</html>

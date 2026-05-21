@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TaxSync · API Reference</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="page">
+
+<nav class="topic-nav">
+    <a href="index.html">⌂ Index</a>
+    <a href="01-architecture.html">01 Architecture</a>
+    <a href="02-frontend.html">02 Frontend</a>
+    <a href="03-backend.html">03 Backend</a>
+    <a href="04-database-schema.html">04 DB Schema</a>
+    <a href="05-security.html">05 Security</a>
+    <a href="06-deployment.html">06 Deployment</a>
+    <a href="07-ml-ai.html">07 ML / AI</a>
+    <a href="08-compliance-workflow.html">08 Compliance</a>
+    <a href="09-api-reference.html" class="cur">09 API Ref</a>
+    <a href="10-auth-deep-dive.html">10 Auth</a>
+</nav>
+
+<header class="title-strip">
+    <div class="logo" style="background:var(--c7)">API</div>
+    <div>
+        <h1>HOW THE <span class="accent">API</span> WORKS</h1>
+        <div class="tagline">REST · JSON · JWT-Bearer · X-Client-Id header for tenant · /docs in dev only · 14 compliance routers</div>
+    </div>
+    <div class="remember">
+        <h4>★ REMEMBER</h4>
+        <ul>
+            <li>5 v1 routers + 14 compliance + 6 email</li>
+            <li>Always JWT in Authorization</li>
+            <li>Tenant via X-Client-Id</li>
+            <li>202 = enqueued, poll for result</li>
+            <li>422 = OUT_OF_SCOPE on AI</li>
+        </ul>
+    </div>
+</header>
+
+<div class="grid">
+
+    <!-- 1 ROOT -->
+    <section class="panel c1 span-4">
+        <h2><span class="num">1</span> ROOT &amp; HEALTH</h2>
+        <table>
+            <tr><th>Method · Path</th><th>Purpose</th></tr>
+            <tr><td>GET <code>/</code></td><td>app banner</td></tr>
+            <tr><td>GET <code>/api/health</code></td><td>db + redis check</td></tr>
+            <tr><td>GET <code>/docs</code></td><td>Swagger (dev only)</td></tr>
+            <tr><td>GET <code>/redoc</code></td><td>Redoc (dev only)</td></tr>
+        </table>
+    </section>
+
+    <!-- 2 AUTH -->
+    <section class="panel c2 span-4">
+        <h2><span class="num">2</span> AUTH <code>/api/auth</code></h2>
+        <table>
+            <tr><td>POST <code>/register</code></td><td>create + token pair · 201</td></tr>
+            <tr><td>POST <code>/login</code></td><td>token pair · 200</td></tr>
+            <tr><td>POST <code>/refresh</code></td><td>rotate + reuse-detect</td></tr>
+            <tr><td>POST <code>/logout</code></td><td>revoke refresh</td></tr>
+            <tr><td>GET <code>/providers</code></td><td>list local/google/microsoft</td></tr>
+            <tr><td>GET <code>/oauth/diag</code></td><td>redirect URI hints</td></tr>
+            <tr><td>GET <code>/oauth/google</code></td><td>provider URL + state JWT</td></tr>
+            <tr><td>GET <code>/callback/google</code></td><td>provider returns code</td></tr>
+            <tr><td>GET <code>/oauth/microsoft</code></td><td>provider URL + state JWT</td></tr>
+            <tr><td>GET <code>/callback/microsoft</code></td><td>provider returns code</td></tr>
+            <tr><td>POST <code>/oauth/exchange</code></td><td>code → token pair</td></tr>
+        </table>
+    </section>
+
+    <!-- 3 DOCS -->
+    <section class="panel c3 span-4">
+        <h2><span class="num">3</span> DOCS <code>/api/documents</code></h2>
+        <table>
+            <tr><td>POST <code>/upload</code></td><td>202 + celery_task_id</td></tr>
+            <tr><td>GET <code>/all</code></td><td>list + filter + source filter</td></tr>
+            <tr><td>GET <code>/shared-with-me</code></td><td>docs shared TO me</td></tr>
+            <tr><td>GET <code>/search</code></td><td>FTS query</td></tr>
+            <tr><td>GET <code>/category/{c}</code></td><td>filter by category</td></tr>
+            <tr><td>GET <code>/stats</code> + <code>/stats/trends</code></td><td>aggregates</td></tr>
+            <tr><td>POST <code>/batch-delete</code></td><td>bulk soft-delete</td></tr>
+            <tr><td>GET <code>/{id}</code></td><td>detail</td></tr>
+            <tr><td>GET <code>/{id}/status</code></td><td>poll celery state</td></tr>
+            <tr><td>GET <code>/{id}/download</code></td><td>raw file</td></tr>
+            <tr><td>GET <code>/{id}/preview</code></td><td>inline preview</td></tr>
+            <tr><td>PUT <code>/{id}/highlights</code></td><td>save spans</td></tr>
+            <tr><td>POST <code>/{id}/share</code></td><td>add permission</td></tr>
+            <tr><td>GET <code>/{id}/permissions</code></td><td>list shares</td></tr>
+            <tr><td>DELETE <code>/{id}/share/{pid}</code></td><td>revoke share</td></tr>
+            <tr><td>GET <code>/{id}/versions</code></td><td>version history</td></tr>
+            <tr><td>POST <code>/{id}/rollback</code></td><td>restore version</td></tr>
+            <tr><td>DELETE <code>/{id}</code></td><td>soft-delete</td></tr>
+        </table>
+    </section>
+
+    <!-- 4 ADMIN -->
+    <section class="panel c4 span-4">
+        <h2><span class="num">4</span> ADMIN <code>/api/admin</code></h2>
+        <table>
+            <tr><td>GET <code>/users</code></td><td>list users</td></tr>
+            <tr><td>GET <code>/users/{id}</code></td><td>one user</td></tr>
+            <tr><td>PATCH <code>/users/{id}/role</code></td><td>change role</td></tr>
+            <tr><td>PATCH <code>/users/{id}/status</code></td><td>activate / deactivate</td></tr>
+            <tr><td>DELETE <code>/users/{id}</code></td><td>soft-delete + anonymize</td></tr>
+            <tr><td>GET <code>/stats</code></td><td>system stats</td></tr>
+            <tr><td>GET <code>/audit</code></td><td>read audit_logs</td></tr>
+            <tr><td>GET <code>/early-access</code></td><td>signup queue</td></tr>
+            <tr><td>GET <code>/early-access/stats</code></td><td>signup metrics</td></tr>
+            <tr><td>PATCH <code>/early-access/{rid}</code></td><td>approve / reject</td></tr>
+        </table>
+    </section>
+
+    <!-- 5 ML -->
+    <section class="panel c5 span-4">
+        <h2><span class="num">5</span> ML <code>/api/ml</code></h2>
+        <table>
+            <tr><td>GET <code>/evaluation</code></td><td>live accuracy + matrix</td></tr>
+        </table>
+        <p class="dim">Frontend page <code>/dashboard/model-evaluation</code> consumes this.</p>
+    </section>
+
+    <!-- 6 EARLY ACCESS -->
+    <section class="panel c6 span-4">
+        <h2><span class="num">6</span> EARLY ACCESS <code>/api/early-access</code></h2>
+        <table>
+            <tr><td>POST <code>/</code></td><td>submit signup (public)</td></tr>
+        </table>
+        <p class="dim">Approval / listing lives under <code>/api/admin/early-access</code>.</p>
+    </section>
+
+    <!-- 7 COMPLIANCE CLIENTS -->
+    <section class="panel c7 span-6">
+        <h2><span class="num">7</span> COMPLIANCE CLIENTS <code>/api/compliance/clients</code></h2>
+        <table>
+            <tr><td>GET <code>/me</code></td><td>my memberships</td></tr>
+            <tr><td>POST <code>/</code></td><td>create client (CLIENT_CREATE)</td></tr>
+            <tr><td>GET <code>/{id}</code></td><td>client detail</td></tr>
+            <tr><td>GET <code>/{id}/members</code></td><td>list members</td></tr>
+            <tr><td>PATCH <code>/{id}/branding</code></td><td>logo url · website · address</td></tr>
+            <tr><td>POST <code>/{id}/logo</code></td><td>multipart PNG/JPEG/WEBP</td></tr>
+            <tr><td>DELETE <code>/{id}/logo</code></td><td>clear logo</td></tr>
+        </table>
+    </section>
+
+    <!-- 8 NOTICES -->
+    <section class="panel c1 span-6">
+        <h2><span class="num">8</span> NOTICES <code>/api/compliance/notices</code></h2>
+        <table>
+            <tr><td>GET <code>/</code></td><td>paginated list w/ filters</td></tr>
+            <tr><td>POST <code>/</code></td><td>create (NOTICE_CREATE)</td></tr>
+            <tr><td>GET <code>/{id}</code></td><td>full detail</td></tr>
+            <tr><td>PATCH <code>/{id}</code></td><td>edit fields</td></tr>
+            <tr><td>PATCH <code>/{id}/status</code></td><td>state machine transition</td></tr>
+            <tr><td>POST <code>/{id}/upload</code></td><td>attach file · feeds OCR queue</td></tr>
+            <tr><td>GET <code>/{id}/chain</code></td><td>recursive CTE chain</td></tr>
+            <tr><td>GET <code>/{id}/activity</code></td><td>timeline events</td></tr>
+            <tr><td>POST <code>/bulk</code></td><td>bulk update (NOTICE_BULK_UPDATE)</td></tr>
+        </table>
+    </section>
+
+    <!-- 9 RESPONSES -->
+    <section class="panel c2 span-6">
+        <h2><span class="num">9</span> RESPONSES <code>/api/compliance/{notice_id}</code></h2>
+        <table>
+            <tr><td>GET <code>/responses</code></td><td>get current draft</td></tr>
+            <tr><td>POST <code>/responses</code></td><td>create draft (Drafter)</td></tr>
+            <tr><td>PATCH <code>/responses</code></td><td>edit draft</td></tr>
+            <tr><td>POST <code>/responses/submit</code></td><td>advance approval stage</td></tr>
+            <tr><td>POST <code>/responses/approve</code></td><td>reviewer/legal/cfo approve</td></tr>
+            <tr><td>POST <code>/responses/reject</code></td><td>send back</td></tr>
+            <tr><td>POST <code>/responses/withdraw</code></td><td>drafter rescind</td></tr>
+            <tr><td>POST <code>/responses/rollback</code></td><td>restore prior version</td></tr>
+            <tr><td>GET <code>/evidence</code></td><td>list attached docs</td></tr>
+            <tr><td>POST <code>/evidence</code></td><td>attach document</td></tr>
+            <tr><td>DELETE <code>/evidence/{doc_id}</code></td><td>detach</td></tr>
+        </table>
+    </section>
+
+    <!-- 10 REPORTS + SEARCH + AI -->
+    <section class="panel c4 span-6">
+        <h2><span class="num">10</span> REPORTS · SEARCH · AI</h2>
+        <table>
+            <tr><th>Path</th><th>Purpose</th></tr>
+            <tr><td>POST <code>/api/compliance/reports/health-summary</code></td><td>Generate-summary (REPORT_VIEW)</td></tr>
+            <tr><td>GET <code>/api/compliance/reports/penalty-by-authority</code></td><td>analytics #1</td></tr>
+            <tr><td>GET <code>/api/compliance/reports/notice-volume-by-status</code></td><td>analytics #2</td></tr>
+            <tr><td>GET <code>/api/compliance/reports/response-time-percentiles</code></td><td>analytics #3</td></tr>
+            <tr><td>GET <code>/api/compliance/reports/export.csv</code></td><td>CSV stream (v2.0.1)</td></tr>
+            <tr><td>GET <code>/api/compliance/search</code></td><td>unified FTS notices+docs</td></tr>
+            <tr><td>GET <code>/api/compliance/ai/credentials</code></td><td>BYOK key state</td></tr>
+            <tr><td>POST <code>/api/compliance/ai/credentials</code></td><td>save key (Fernet)</td></tr>
+            <tr><td>DELETE <code>/api/compliance/ai/credentials</code></td><td>clear key</td></tr>
+            <tr><td>POST <code>/api/compliance/ai/test</code></td><td>ping provider</td></tr>
+            <tr><td>POST <code>/api/compliance/ai/notice/{id}/summary</code></td><td>scope-locked</td></tr>
+            <tr><td>POST <code>/api/compliance/ai/notice/{id}/actions</code></td><td>recommended actions</td></tr>
+            <tr><td>POST <code>/api/compliance/ai/invoice/{id}/summary</code></td><td></td></tr>
+            <tr><td>POST <code>/api/compliance/ai/invoice/{id}/actions</code></td><td></td></tr>
+            <tr><td>POST <code>/api/compliance/ai/invoice/{id}/timing</code></td><td>payment timing</td></tr>
+            <tr><td>POST <code>/api/compliance/ai/chat</code></td><td>scope-locked Q&amp;A</td></tr>
+        </table>
+    </section>
+
+    <!-- 11 OTHER COMPLIANCE -->
+    <section class="panel c5 span-6">
+        <h2><span class="num">11</span> REMAINING COMPLIANCE</h2>
+        <table>
+            <tr><th>Router</th><th>Purpose</th></tr>
+            <tr><td><code>/memberships</code></td><td>add / remove team members</td></tr>
+            <tr><td><code>/notice_types</code></td><td>CRUD taxonomy</td></tr>
+            <tr><td><code>/regulatory_calendar</code></td><td>list FY 25-26 deadlines</td></tr>
+            <tr><td><code>/calendar</code></td><td>per-client deadline mgmt</td></tr>
+            <tr><td><code>/alerts</code></td><td>schedule/cancel APScheduler jobs</td></tr>
+            <tr><td><code>/review_queue</code></td><td>low-confidence triage list/accept/override</td></tr>
+            <tr><td><code>/audit</code></td><td>compliance audit read (AUDIT_VIEW)</td></tr>
+            <tr><td>WS <code>/ws/notifications</code></td><td>real-time bell · auto-reconnect</td></tr>
+        </table>
+    </section>
+
+    <!-- 12 EMAIL -->
+    <section class="panel c6 span-12">
+        <h2><span class="num">12</span> EMAIL · GMAIL MCP <code>/api/email</code></h2>
+        <table>
+            <tr><th>Router</th><th>Endpoints</th></tr>
+            <tr><td><code>oauth</code></td><td><code>GET /gmail/oauth/authorize</code> · <code>GET /gmail/oauth/callback</code></td></tr>
+            <tr><td><code>credentials</code></td><td><code>GET/POST/DELETE /gmail/credentials</code> (Fernet)</td></tr>
+            <tr><td><code>filter_rules</code></td><td>CRUD ingestion rules</td></tr>
+            <tr><td><code>activity</code></td><td><code>GET /activity</code> ingestion log</td></tr>
+            <tr><td><code>bills</code></td><td><code>/email/bills/*</code> (rebranded "Vendor invoices" — paths unchanged)</td></tr>
+            <tr><td><code>view_email</code></td><td><code>GET /view-email/{message_id}</code></td></tr>
+        </table>
+        <p class="dim">All gated on <code>EMAIL_INTEGRATION_USE</code> permission.</p>
+    </section>
+
+</div>
+
+<div class="protip">
+    <div class="badge">PRO<br>TIP</div>
+    <div>
+        <h3>STATUS CODES YOU'LL SEE</h3>
+        <ul>
+            <li><code>200/201/204</code> happy paths</li>
+            <li><code>202</code> upload accepted, work enqueued</li>
+            <li><code>207</code> bulk partial-success</li>
+            <li><code>400</code> bad input · <code>401</code> bad token · <code>403</code> AuthZ deny</li>
+            <li><code>409</code> conflict (e.g. email exists, OAuth-link refused)</li>
+            <li><code>422</code> Pydantic validation OR AI OUT_OF_SCOPE</li>
+            <li><code>429</code> rate limit · <code>503</code> DB/redis down</li>
+        </ul>
+    </div>
+    <div class="footer-quote">"In dev hit /docs for the live OpenAPI.<br>In prod that's hidden — read this page instead."</div>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,7 +1,49 @@
 # Smart Document Management System — Status Report
 
 **Organization:** Product Labs, IIIT Hyderabad
-**Last Updated:** 2026-05-09 (v2.1.1 IA reset + perf hardening + CI repair)
+**Last Updated:** 2026-05-18 (Repo consolidation + 5-agent end-to-end audit + Tier 1 fixes)
+
+**Repo consolidation + 5-agent audit pass (2026-05-18) — Tier 1 fixes applied; CI re-run pending**
+
+Doc layout was scattered (10+ markdown / html / pdf / docx files at repo root, plus 6 UI screenshots in the parent directory). Consolidated everything under `docs/` with a clean subfolder structure (`deployment/`, `security/`, `reference/`, `status/`, `operations/`, `exports/`, `screenshots/`); rewrote the 2 cross-references in `README.md`; updated all 4 build scripts (`scripts/build_*.py`, `scripts/md_to_docx.py`) to point at the new source + output paths; created `docs/README.md` as the index; added `.pytest_cache/` and `.ruff_cache/` to `.gitignore`. Top-level is now 9 entries (3 dirs, 4 config files, README, vercel.json) versus 27 before.
+
+Five parallel audit agents (`backend functional`, `frontend functional`, `security`, `code quality`, `repo hygiene`) produced a combined report covering 159 backend `.py` files and 116 frontend `.ts/.tsx` files. Tier 1 fixes applied this session (12 files + 1 new migration):
+
+1. **`fix(ws): notification stream now reads token from the cookie, not localStorage`** — `frontend/src/hooks/useNotificationStream.ts:43`. The hook was reading `localStorage.getItem("access_token")`; tokens have always been stored as the `Cookies.get("token")` cookie. Effect: the notification bell was silently dead on every dashboard page — every D-16 alert (deadline_t7/t3/t1, overdue, escalation) failed to render. Switched to `Cookies.get("token") ?? null`.
+2. **`fix(dashboard): rebrand stale "Bills" category label to "Vendor invoices"`** — `frontend/src/app/dashboard/page.tsx:42`. Sole user-visible string that survived the 2026-05-08 rename.
+3. **`fix(bills): de-dupe merged buckets in the "all" view`** — `frontend/src/components/email/BillDashboard.tsx:113-125`. A bill on a boundary date could appear in `due_soon` and `upcoming` server-side; `responses.flatMap()` rendered it twice. Replaced with id-Set dedup.
+4. **`fix(api): add 30s axios timeout (instance + raw refresh) and remove duplicate API_URL_BASE`** — `frontend/src/lib/api.ts:6-11, 88-94, 259`. Without a timeout, an unreachable `/auth/refresh` left every queued request hanging and `AuthContext.isLoading` stuck on `true`, producing an infinite global spinner. Also re-used the existing `API_URL` constant for `earlyAccessApi` instead of redeclaring.
+5. **`fix(bills): bulk_mark_bills_paid no longer wraps committed work in begin_nested`** — `backend/app/email/routers/bills.py:140-180`. `mark_paid` issues `db.commit()`; wrapping it in `db.begin_nested()` ends the savepoint context and raises `InvalidRequestError` on SQLAlchemy 2.x. Loop now calls `mark_paid` plainly with per-row try/except + `db.rollback()`; the final outer commit became a no-op and was removed.
+6. **`fix(ai): walk anthropic content blocks for first TextBlock`** — `backend/app/compliance/services/ai_providers.py:128-140`. SDK 0.52 can return `ToolUseBlock` / `ThinkingBlock` at index 0; the code raised `unexpected content block type` (HTTP 502). Now iterates and returns the first block with a `.text`.
+7. **`fix(rls): ai_credentials gets RLS + GRANT (Phase 16 ship-blocker)`** — new migration `backend/alembic/versions/0033_ai_credentials_rls.py`. Migration `0032` created the table without the RLS bootstrap + `app_runtime` grants every other tenant table got in `0017` / `0025`. Effect when running as `app_runtime`: every AI endpoint replies HTTP 412 because `SELECT` lacks privilege. Effect when running as a superuser: encrypted keys are reachable cross-tenant via integer-ID enumeration. `0033` is additive (DO-block-guarded so it's a no-op on Postgres without the role chain), mirrors the 0025 pattern exactly, and includes a `downgrade()`.
+8. **`fix(byok): Pydantic protected_namespaces=() on AICredentialCreate + AICredentialOut`** — `backend/app/compliance/schemas/ai.py:26-43`. Pydantic 2.13 warns on `model_*` field names; `model` is the canonical LLM-model field. Opt out explicitly.
+9. **`fix(config): validate FERNET_KEY format if set`** — `backend/app/config.py:129-145`. Empty is still allowed (dev), but a malformed key fails fast at startup instead of crashing on first BYOK request.
+10. **`fix(audit): log audit_rollback failures instead of pass`** — `backend/app/services/audit_service.py:128-134`. Rollback-after-commit-failure now logs via `logger.exception("audit_rollback_failed")`. The other `except Exception: pass` sites in `app/` are intentional best-effort post-commit cleanup paths (audit dead-letter fallback, ContextVar reset).
+11. **`build(frontend): add typecheck script`** — `frontend/package.json:5-11`. `next build` was the only TS gate. `npm run typecheck` (= `tsc --noEmit`) now usable in CI and pre-commit.
+
+**Verification this patch:**
+- All 10 modified `.py` files + the new migration pass `python -m py_compile`.
+- `frontend/package.json` valid JSON.
+- `tsc --noEmit` on frontend completes with zero errors.
+- Doc moves verified: 21 expected files at their new paths; no broken cross-references in `README.md` or `docs/README.md`.
+- All 4 build scripts (`build_features_docx.py`, `build_features_pdf.py`, `build_tech_pdf.py`, `md_to_docx.py`) updated to point at `docs/reference/*` sources and `docs/exports/*` outputs.
+
+**Findings flagged but not auto-applied (in-flight or architectural):**
+
+- `backend/app/database.py:8` — uses `DATABASE_URL` rather than `DATABASE_URL_RUNTIME`. If the deployment wires `DATABASE_URL` to a BYPASSRLS account, every Phase 9-15 RLS policy is silently bypassed. **File is in the user's WIP (`git M`); fix likely already in progress.**
+- `docker-compose.yml:14` — `${POSTGRES_PASSWORD:-postgres}` weak default + 0.0.0.0 host bind. **File is in the user's WIP.**
+- `backend/app/compliance/services/scheduler.py` — bare excepts at lines 106 / 129 / 163. **File is in the user's WIP.**
+- `backend/app/compliance/routers/notifications.py:100` — JWT in WebSocket URL query string. Move to first-message handshake or one-time exchange code. (HIGH security; needs design discussion.)
+- `frontend/next.config.mjs:9-11` — `ignoreDuringBuilds: true` for ESLint plus no typecheck script meant the cookie-vs-localStorage bug above slipped through; `typecheck` script added (#11). ESLint re-enable deferred because the comment notes 5 pre-existing v1.0 hook errors that need to be fixed first.
+- `frontend/src/middleware.ts` + `Cookies.set(...)` — JWTs in non-`HttpOnly` cookies. Needs BFF pattern to fix — architectural.
+- `backend/app/services/oauth_service.py` + `routers/auth.py:362-367, 497-504` — login-OAuth state JWT has no per-user binding. Gmail-OAuth path already binds `user_id + client_id`; backport that pattern.
+- **`npm audit fix` (Next.js 15.5.15 → 15.5.16+)** — patches middleware-bypass `GHSA-26hh-7cqf-hhc6`. Defer to the human so the lockfile update is reviewed before commit.
+- Code-quality god-files: `backend/app/routers/documents.py` (1,228 lines), `frontend/src/app/dashboard/documents/[id]/page.tsx` (1,010 lines). Refactor as a dedicated phase.
+- Phase 16 BYOK has zero unit tests. Add `tests/test_ai_service.py` covering credential round-trip, OUT_OF_SCOPE handling, JSON-fence parsing.
+
+---
+
+
 **Overall Progress:** v1.0 shipped (8/8 phases, March 2026). v2.0 Phase 9 shipped 2026-04-28. v2.0 Phases 10 + 11 + 12 + 13 CODE-COMPLETE 2026-05-05; Phase 10 + Phase 12 + Phase 13 end-to-end smokes PASSED. Two consecutive hardening passes shipped (5-agent end-to-end audit covering Phases 1-13): first pass landed 13 fixes between Phases 11 and 12; second pass landed 5 CRITICAL + 9 HIGH fixes including a regressed APScheduler RLS bypass and a cross-user document leak in Phase 13 unified search. UI polish pass landed IBM Plex typography system + design tokens + refined sidebar grouping + brand mark. v2.1.1 (2026-05-09) consolidated the sidebar to a 5-group / 14-item IA, introduced a Profile section, and shipped a backend listener fix that roughly halves WAN round-trips per request. **502+ backend tests GREEN; CI green on `main`**. Phase 14 CONTEXT seeded; external-credential blockers documented (GSP empanelment, IT API access). Phase 15 CONTEXT seeded 2026-04-28.
 
 **v2.1.1 patch (2026-05-09) — IA reset + perf hardening + CI repair**
