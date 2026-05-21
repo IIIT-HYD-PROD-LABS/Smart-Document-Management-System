@@ -5,9 +5,15 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    # Block major-version bumps for libraries that own large API surfaces
-    # or ship breaking releases routinely. Patch + minor still get PRs.
+    # Block ALL major-version bumps by default. Major bumps in Python
+    # frequently ship breaking API changes and our test suite does not
+    # cover enough surface to catch them at CI time (3 dependabot PRs
+    # passed CI for breaking majors before we noticed downstream). Patch
+    # + minor still get PRs; major bumps go through a planned migration.
+    # Explicit entries below remain as documentation for the riskiest deps.
     ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
       - dependency-name: "anthropic"
         update-types: ["version-update:semver-major"]
       - dependency-name: "starlette"
@@ -39,10 +45,13 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     ignore:
-      # Next 16, Tailwind 4, TS 6 all ship breaking changes that need a
-      # planned migration (turbopack default, CSS plugin overhaul, stricter
-      # CSS-side-effect imports). Hold the major on those + the @types/node
-      # major which tracks Node LTS bumps the runtime hasn't moved to.
+      # Block ALL major-version bumps by default. Frontend majors (Next 16,
+      # Tailwind 4, TS 6, zod 4, react-dropzone 15, framer-motion 12,
+      # react-day-picker 10, redis 7) routinely break our build OR pass
+      # CI but ship runtime breaking changes our tests do not catch.
+      # Major bumps go through a planned migration.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
       - dependency-name: "next"
         update-types: ["version-update:semver-major"]
       - dependency-name: "eslint-config-next"
