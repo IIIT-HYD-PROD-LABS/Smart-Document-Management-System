@@ -365,6 +365,158 @@ def update_notice(
     return n
 
 
+def _notify_notice_assigned(
+    *,
+    client_id: int,
+    notice: ComplianceNotice,
+    assignee_user_id: int,
+    inviter_user_id: int,
+) -> None:
+    """Publish a WebSocket notification to the assignee.
+
+    Re-uses the `notifications:{client_id}` Redis pubsub channel that
+    `NotificationBell` subscribes to via `/api/compliance/ws/notifications`,
+    so the assignee gets a real-time toast without a page refresh. We
+    intentionally bypass `dispatch_alert` because the
+    `notice_alert_log.alert_type` column has a CHECK constraint and a
+    new `notice_assigned` value would require a migration; the websocket
+    envelope is enough for in-app surfacing and the standard audit row
+    still records the assignment immutably.
+    """
+    try:
+        import json
+        import redis as redis_lib
+        from app.config import settings
+
+        r = redis_lib.from_url(settings.REDIS_URL)
+        envelope = {
+            "type": "notice_assigned",
+            "recipient_user_id": assignee_user_id,
+            "payload": {
+                "client_id": client_id,
+                "notice_id": notice.id,
+                "notice_number": notice.notice_number,
+                "authority": notice.authority,
+                "response_deadline": (
+                    notice.response_deadline.isoformat()
+                    if notice.response_deadline else None
+                ),
+                "inviter_user_id": inviter_user_id,
+            },
+        }
+        r.publish(f"notifications:{client_id}", json.dumps(envelope))
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "notice_assigned_notify_failed notice_id=%s assignee=%s",
+            notice.id, assignee_user_id,
+        )
+
+
+@router.post("/{notice_id}/assign", response_model=NoticeOut)
+def assign_notice(
+    notice_id: int,
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    membership: ClientMembership = Depends(
+        require_compliance_permission(CompliancePermission.NOTICE_CREATE)
+    ),
+):
+    """Assign (or reassign) a notice to a team member.
+
+    Body: `{"assigned_user_id": <int> | null}`. Passing null clears the
+    assignment. The assignee must hold an active ClientMembership on the
+    notice's client; otherwise we refuse with 400 (the FK alone would
+    accept any users.id, including someone from a different tenant who
+    should never see this notice).
+
+    Side effects: writes a `notice_assigned` NoticeActivity row, an
+    immutable AuditLog entry, and pushes a real-time WebSocket
+    notification to the new assignee.
+    """
+    n = (
+        db.query(ComplianceNotice)
+        .filter(ComplianceNotice.id == notice_id)
+        .first()
+    )
+    if not n:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notice not found",
+        )
+
+    if "assigned_user_id" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="assigned_user_id is required (use null to clear)",
+        )
+    new_assignee_id = payload.get("assigned_user_id")
+
+    if new_assignee_id is not None:
+        member = (
+            db.query(ClientMembership)
+            .filter(
+                ClientMembership.user_id == new_assignee_id,
+                ClientMembership.client_id == n.client_id,
+            )
+            .first()
+        )
+        if member is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"User {new_assignee_id} has no membership on this client. "
+                    "Invite them first via "
+                    f"POST /api/compliance/clients/{n.client_id}/memberships."
+                ),
+            )
+
+    before = n.assigned_user_id
+    n.assigned_user_id = new_assignee_id
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to assign notice",
+        )
+    db.refresh(n)
+
+    log_activity(
+        db=db,
+        notice_id=n.id,
+        activity_type="notice_assigned",
+        user_id=current_user.id,
+        details={
+            "before_assigned_user_id": before,
+            "after_assigned_user_id": new_assignee_id,
+        },
+    )
+    log_audit_event(
+        user_id=current_user.id,
+        action="notice_assigned",
+        resource_type="ComplianceNotice",
+        resource_id=n.id,
+        details={
+            "client_id": n.client_id,
+            "before_value": {"assigned_user_id": before},
+            "after_value": {"assigned_user_id": new_assignee_id},
+        },
+    )
+
+    if new_assignee_id is not None and new_assignee_id != before:
+        _notify_notice_assigned(
+            client_id=n.client_id,
+            notice=n,
+            assignee_user_id=new_assignee_id,
+            inviter_user_id=current_user.id,
+        )
+
+    return n
+
+
 @router.patch("/{notice_id}/status", response_model=NoticeOut)
 def transition_status(
     notice_id: int,
