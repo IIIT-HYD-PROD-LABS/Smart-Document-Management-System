@@ -18,12 +18,17 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.compliance.dependencies import require_compliance_permission
+from app.compliance.models.client import Client
 from app.compliance.models.membership import ClientMembership
 from app.compliance.schemas.client import MembershipCreate, MembershipOut
 from app.compliance.services.permission_registry import CompliancePermission
 from app.database import get_db
 from app.models.user import User
 from app.services.audit_service import log_audit_event
+from app.services.invitation_service import (
+    InvitationError,
+    resolve_or_invite,
+)
 from app.utils.security import get_current_user
 
 
@@ -47,22 +52,58 @@ def add_member(
         require_compliance_permission(CompliancePermission.CLIENT_MANAGE_TEAM)
     ),
 ):
-    """Add a team member to a client (CLIENT-05 team step)."""
+    """Add a team member to a client (CLIENT-05 team step).
+
+    Resolution rule (see services/invitation_service.py):
+      * payload.email + existing TaxSync account  -> attach membership
+      * payload.email + no account                -> create pending User
+                                                     + send accept-invite email
+      * payload.user_id                           -> attach by ID (legacy)
+
+    The pending-User path means an admin can add anyone by email without
+    first asking them to self-register. The invitee completes signup via
+    POST /api/auth/accept-invite (set password + auto-login).
+    """
+    client = db.get(Client, client_id)
+    if client is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Client {client_id} not found",
+        )
+
+    try:
+        resolved_user_id, invited, dev_token = resolve_or_invite(
+            db,
+            client_id=client_id,
+            client_name=client.name,
+            inviter=current_user,
+            email=payload.email,
+            user_id=payload.user_id,
+            full_name=payload.full_name,
+        )
+    except InvitationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
+
     existing = (
         db.query(ClientMembership)
         .filter(
-            ClientMembership.user_id == payload.user_id,
+            ClientMembership.user_id == resolved_user_id,
             ClientMembership.client_id == client_id,
         )
         .first()
     )
     if existing:
+        # Roll back the pending-User write done by resolve_or_invite; the
+        # caller asked to add an existing member, which is a no-op.
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="User already has a membership for this client",
         )
     m = ClientMembership(
-        user_id=payload.user_id,
+        user_id=resolved_user_id,
         client_id=client_id,
         compliance_role=payload.compliance_role,
         access_start=payload.access_start,
@@ -78,7 +119,6 @@ def add_member(
             detail="Failed to create membership",
         )
     db.refresh(m)
-    # Audit log — fire-and-forget; failures don't roll back the business op.
     log_audit_event(
         user_id=current_user.id,
         action="membership_added",
@@ -86,10 +126,17 @@ def add_member(
         resource_id=m.id,
         details={
             "client_id": client_id,
-            "user_id": payload.user_id,
+            "user_id": resolved_user_id,
             "compliance_role": payload.compliance_role,
+            "via_email": bool(payload.email),
+            "invited": invited,
         },
     )
+    # Attach the side-channel fields onto the ORM object so MembershipOut
+    # picks them up; default False / None are coerced if the ORM mapping
+    # path is followed instead.
+    setattr(m, "invited", invited)
+    setattr(m, "accept_invite_token", dev_token)
     return m
 
 

@@ -107,6 +107,63 @@ def send_approval_email(to_email: str, full_name: str, invitation_token: str) ->
     return send_email(to_email, "Your TaxSync Early Access is Approved!", html)
 
 
+def send_tenant_invite_email(
+    *,
+    to_email: str,
+    invitee_name: str,
+    inviter_name: str,
+    client_name: str,
+    invite_token: str,
+) -> bool:
+    """Send a tenant-team invitation email.
+
+    The link lands on `${FRONTEND_URL}/accept-invite?token=<JWT>`. The
+    invitee sets a password there; the backend flips is_active=True and
+    issues access + refresh tokens.
+    """
+    accept_url = f"{settings.FRONTEND_URL}/accept-invite?token={invite_token}"
+
+    if not settings.SMTP_HOST and settings.DEBUG:
+        logger.warning(
+            "tenant_invite_url_for_dev",
+            to=to_email,
+            invitee_name=invitee_name,
+            inviter=inviter_name,
+            client=client_name,
+            url=accept_url,
+            hint="SMTP not configured. Copy this URL into the browser to test the flow locally.",
+        )
+
+    html = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+        <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="font-size: 20px; font-weight: 600; color: #111; margin: 0;">TaxSync</h1>
+        </div>
+        <p style="color: #555; font-size: 14px; line-height: 1.6;">Hi {invitee_name},</p>
+        <p style="color: #555; font-size: 14px; line-height: 1.6;">
+            <strong style="color: #111;">{inviter_name}</strong> invited you to join
+            <strong style="color: #111;">{client_name}</strong> on TaxSync, the AI-powered tax compliance workspace.
+        </p>
+        <div style="text-align: center; margin: 32px 0;">
+            <a href="{accept_url}" style="display: inline-block; padding: 12px 32px; background: #111; color: #fff; font-size: 14px; font-weight: 500; text-decoration: none; border-radius: 6px;">
+                Accept invitation
+            </a>
+        </div>
+        <p style="color: #999; font-size: 12px; line-height: 1.6;">
+            This link expires in 7 days. After you click it, you will set your password and be signed in automatically.
+        </p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;" />
+        <p style="color: #bbb; font-size: 11px; text-align: center;">TaxSync, AI-powered tax compliance intelligence</p>
+    </div>
+    """
+
+    return send_email(
+        to_email,
+        f"You are invited to join {client_name} on TaxSync",
+        html,
+    )
+
+
 def send_rejection_email(to_email: str, full_name: str, note: str | None = None) -> bool:
     """Send early access rejection email."""
     note_html = f'<p style="color: #555; font-size: 14px; line-height: 1.6;"><em>Note from our team: {note}</em></p>' if note else ""

@@ -122,6 +122,48 @@ def register(request: Request, response: Response, payload: UserRegister, db: Se
     return _create_token_pair(user, db)
 
 
+@router.post("/accept-invite", response_model=TokenPairResponse)
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+def accept_invite(
+    request: Request,
+    response: Response,
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    """Complete a tenant-team invitation: set password + activate + sign in.
+
+    Body shape: `{"token": "<JWT from invite email>", "password": "<chosen>"}`.
+
+    Token is the JWT created by `services.invitation_service` and
+    delivered via `utils.email.send_tenant_invite_email`. On success the
+    user is marked is_active=True with the chosen password hashed and
+    stored; we then return the standard access + refresh pair, so the
+    invitee lands signed-in on the frontend.
+
+    Idempotency: a second call with the same token (now that the user
+    is active) returns 400 with a "sign in normally" hint, rather than
+    silently overwriting the password.
+    """
+    token = (payload or {}).get("token") or ""
+    new_password = (payload or {}).get("password") or ""
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="token is required",
+        )
+
+    from app.services.invitation_service import InvitationError, accept_invite as _accept
+
+    try:
+        user = _accept(db, token=token, new_password=new_password)
+    except InvitationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
+
+    return _create_token_pair(user, db)
+
+
 @router.post("/login", response_model=TokenPairResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
 def login(request: Request, response: Response, payload: UserLogin, db: Session = Depends(get_db)):

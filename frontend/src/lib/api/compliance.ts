@@ -76,10 +76,26 @@ export interface OnboardClientPayload {
 }
 
 export interface AddMemberPayload {
-    user_id: number;
+    // Exactly one of email or user_id. Email is preferred: when the
+    // invitee has no TaxSync account yet the backend pre-creates a
+    // pending User and sends an accept-invite link.
+    email?: string;
+    user_id?: number;
+    full_name?: string;
     compliance_role: string;
     access_start?: string;
     access_end?: string;
+}
+
+export interface AddMemberResponse {
+    id: number;
+    user_id: number;
+    client_id: number;
+    compliance_role: string;
+    invited: boolean;
+    // Set only in DEBUG mode when SMTP is unconfigured; lets dev paste
+    // the accept-invite URL into the browser manually.
+    accept_invite_token?: string | null;
 }
 
 export interface ListNoticesParams {

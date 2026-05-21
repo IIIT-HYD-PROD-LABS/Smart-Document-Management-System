@@ -7,7 +7,7 @@ import re
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.compliance.utils.indian_validators import (
     CIN_RX,
@@ -72,9 +72,23 @@ class RegistrationOut(BaseModel):
 
 
 class MembershipCreate(BaseModel):
-    """One row in the team[] step of onboarding."""
+    """One row in the team[] step of onboarding OR a POST to
+    /clients/{id}/memberships.
 
-    user_id: int
+    Provide exactly one of `email` or `user_id`. `email` is the
+    preferred form: if the invitee does not yet have a TaxSync account,
+    the backend will pre-create a pending User row and email them an
+    accept-invite link. `user_id` is kept as an escape hatch for tools
+    that already know the numeric ID (e.g., the auto-add of the
+    onboarding admin).
+
+    `full_name` is only used when pre-creating a new User; ignored for
+    existing accounts.
+    """
+
+    email: Optional[str] = Field(None, max_length=255)
+    user_id: Optional[int] = None
+    full_name: Optional[str] = Field(None, max_length=200)
     compliance_role: Literal[
         "compliance_head",
         "legal_team",
@@ -87,6 +101,23 @@ class MembershipCreate(BaseModel):
     access_start: Optional[datetime] = None
     access_end: Optional[datetime] = None
 
+    @field_validator("email")
+    @classmethod
+    def _validate_email_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        if not _EMAIL_RX.match(v):
+            raise ValueError(f"Invalid email format: {v}")
+        return v.strip().lower()
+
+    @model_validator(mode="after")
+    def _exactly_one_identifier(self):
+        if not self.email and not self.user_id:
+            raise ValueError("Provide either email or user_id")
+        if self.email and self.user_id:
+            raise ValueError("Provide either email or user_id, not both")
+        return self
+
 
 class MembershipOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -98,6 +129,15 @@ class MembershipOut(BaseModel):
     access_start: Optional[datetime] = None
     access_end: Optional[datetime] = None
     created_at: datetime
+    # Optional surface for the immediate add response: true when the
+    # backend pre-created a User and sent an invite email. The list
+    # endpoint (`GET /clients/me`) reads this field from the DB row
+    # where it is always omitted, so default False is correct.
+    invited: bool = False
+    # Echoed only in DEBUG mode when SMTP is not configured so the
+    # caller can complete the accept-invite flow manually. Production
+    # responses leave this None.
+    accept_invite_token: Optional[str] = None
 
 
 class ClientCreate(BaseModel):

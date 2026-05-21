@@ -146,6 +146,9 @@ export const authApi = {
 
     getProviders: () =>
         api.get("/auth/providers"),
+
+    acceptInvite: (data: { token: string; password: string }) =>
+        api.post("/auth/accept-invite", data),
 };
 
 // ──── Documents API ────

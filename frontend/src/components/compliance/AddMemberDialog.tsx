@@ -2,19 +2,29 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { complianceApi } from "@/lib/api/compliance";
+import { complianceApi, type AddMemberResponse } from "@/lib/api/compliance";
 import {
     COMPLIANCE_ROLE_LABELS,
     type ComplianceRole,
 } from "@/types/compliance";
 import { extractErrorMessage } from "@/lib/api";
 
+const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /**
  * Modal dialog to add a member to a client (RBAC-01..06).
  *
+ * Invitation flow (2026-05-21):
+ *   The dialog asks for the invitee's email + optional full name.
+ *   When the email matches an existing TaxSync account, the membership
+ *   is attached directly. Otherwise the backend pre-creates a pending
+ *   User and emails an accept-invite link; the invitee sets a password
+ *   on /accept-invite and is signed in. The toast confirms which path
+ *   was taken so the admin knows whether to chase the invitee.
+ *
  * For Auditor role, exposes access_start/access_end date pickers (D-27).
- * Closes on Escape (WCAG 2.1.1 keyboard accessible). The parent invokes
- * onAdded() so it can invalidate its react-query cache and re-render the team list.
+ * Closes on Escape (WCAG 2.1.1). The parent invokes onAdded() so it can
+ * invalidate its react-query cache and re-render the team list.
  */
 export function AddMemberDialog({
     clientId,
@@ -25,13 +35,13 @@ export function AddMemberDialog({
     onClose: () => void;
     onAdded: () => void;
 }) {
-    const [userId, setUserId] = useState<number>(0);
+    const [email, setEmail] = useState("");
+    const [fullName, setFullName] = useState("");
     const [role, setRole] = useState<ComplianceRole>("staff");
     const [accessStart, setAccessStart] = useState("");
     const [accessEnd, setAccessEnd] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
-    // Close on Escape
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (e.key === "Escape" && !submitting) onClose();
@@ -41,8 +51,13 @@ export function AddMemberDialog({
     }, [onClose, submitting]);
 
     const submit = async () => {
-        if (!userId) {
-            toast.error("User ID is required");
+        const trimmedEmail = email.trim().toLowerCase();
+        if (!trimmedEmail) {
+            toast.error("Email is required");
+            return;
+        }
+        if (!EMAIL_RX.test(trimmedEmail)) {
+            toast.error("Enter a valid email address");
             return;
         }
         if (
@@ -56,8 +71,9 @@ export function AddMemberDialog({
         }
         setSubmitting(true);
         try {
-            await complianceApi.addMember(clientId, {
-                user_id: userId,
+            const res = await complianceApi.addMember(clientId, {
+                email: trimmedEmail,
+                full_name: fullName.trim() || undefined,
                 compliance_role: role,
                 access_start:
                     role === "auditor" && accessStart
@@ -68,7 +84,23 @@ export function AddMemberDialog({
                         ? accessEnd
                         : undefined,
             });
-            toast.success("Member added");
+            const data = (res.data as unknown) as AddMemberResponse;
+            if (data?.invited) {
+                toast.success(
+                    `Invitation sent to ${trimmedEmail}. They will receive an email link to set a password and sign in.`,
+                    { duration: 6000 },
+                );
+                if (data.accept_invite_token) {
+                    // DEBUG-only echo so a developer without SMTP can
+                    // still complete the loop end-to-end locally.
+                    // Production never sets accept_invite_token.
+                    console.info(
+                        `[dev] accept-invite URL: ${window.location.origin}/accept-invite?token=${data.accept_invite_token}`,
+                    );
+                }
+            } else {
+                toast.success("Member added");
+            }
             onAdded();
             onClose();
         } catch (err) {
@@ -85,7 +117,6 @@ export function AddMemberDialog({
             aria-modal="true"
             aria-labelledby="add-member-title"
             onClick={(e) => {
-                // Close on backdrop click (only the backdrop, not bubbled)
                 if (e.target === e.currentTarget && !submitting) onClose();
             }}
         >
@@ -96,26 +127,52 @@ export function AddMemberDialog({
                 >
                     Add team member
                 </h2>
+                <p className="text-[12px] text-[var(--text-muted)] mb-4">
+                    The invitee gets an email with a link to set their password.
+                    If they already have a TaxSync account, they are added to
+                    the team immediately.
+                </p>
                 <div className="space-y-3">
                     <div>
                         <label
-                            htmlFor="add-member-user-id"
+                            htmlFor="add-member-email"
                             className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1"
                         >
-                            User ID *
+                            Email *
                         </label>
                         <input
-                            id="add-member-user-id"
-                            type="number"
-                            min={1}
-                            placeholder="42"
-                            value={userId || ""}
-                            onChange={(e) =>
-                                setUserId(parseInt(e.target.value, 10) || 0)
-                            }
+                            id="add-member-email"
+                            type="email"
+                            autoComplete="email"
+                            placeholder="name@example.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                             className="
                                 w-full px-3 py-2 rounded bg-[var(--bg-elevated)]
-                                border border-[var(--border-default)] text-[var(--text-primary)] text-sm tabular-nums
+                                border border-[var(--border-default)] text-[var(--text-primary)] text-sm
+                                placeholder:text-[var(--text-disabled)]
+                                focus:outline-none focus:border-[var(--accent)]
+                                focus:ring-2 focus:ring-[var(--accent-edge)]
+                            "
+                        />
+                    </div>
+                    <div>
+                        <label
+                            htmlFor="add-member-full-name"
+                            className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1"
+                        >
+                            Full name (optional)
+                        </label>
+                        <input
+                            id="add-member-full-name"
+                            type="text"
+                            placeholder="Jane Doe"
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                            maxLength={200}
+                            className="
+                                w-full px-3 py-2 rounded bg-[var(--bg-elevated)]
+                                border border-[var(--border-default)] text-[var(--text-primary)] text-sm
                                 placeholder:text-[var(--text-disabled)]
                                 focus:outline-none focus:border-[var(--accent)]
                                 focus:ring-2 focus:ring-[var(--accent-edge)]
@@ -204,7 +261,7 @@ export function AddMemberDialog({
                                 disabled:opacity-60 disabled:cursor-not-allowed
                             "
                         >
-                            {submitting ? "Adding…" : "Add member"}
+                            {submitting ? "Sending invite…" : "Send invite"}
                         </button>
                     </div>
                 </div>

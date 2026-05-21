@@ -91,6 +91,15 @@ def onboard_client(
             {"user_id": actor.id, "compliance_role": "compliance_head"},
         )
 
+    # Email-based rows: resolved + emailed after the client row exists
+    # (resolve_or_invite needs client_id + client_name for the invite).
+    email_team: list[dict] = [m for m in team if m.get("email")]
+
+    from app.services.invitation_service import (
+        InvitationError,
+        resolve_or_invite,
+    )
+
     try:
         client = Client(
             name=details["name"],
@@ -116,6 +125,37 @@ def onboard_client(
             db.add(
                 ClientMembership(
                     user_id=member["user_id"],
+                    client_id=client.id,
+                    compliance_role=member["compliance_role"],
+                    access_start=member.get("access_start"),
+                    access_end=member.get("access_end"),
+                )
+            )
+
+        # Email-based team rows: resolve_or_invite within the same
+        # transaction so a Pending User + Membership land together. The
+        # invitation email is best-effort (failures logged, not raised)
+        # because the wrapper commit must still go through.
+        for member in email_team:
+            try:
+                uid, _invited, _dev_token = resolve_or_invite(
+                    db,
+                    client_id=client.id,
+                    client_name=client.name,
+                    inviter=actor,
+                    email=member.get("email"),
+                    full_name=member.get("full_name"),
+                )
+            except InvitationError:
+                # Bad email in the team payload should not roll back the
+                # whole onboarding; skip the row.
+                continue
+            if uid in seen_user_ids:
+                continue
+            seen_user_ids.add(uid)
+            db.add(
+                ClientMembership(
+                    user_id=uid,
                     client_id=client.id,
                     compliance_role=member["compliance_role"],
                     access_start=member.get("access_start"),

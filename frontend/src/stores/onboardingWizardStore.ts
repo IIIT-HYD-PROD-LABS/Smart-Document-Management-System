@@ -33,7 +33,13 @@ export interface WizardRegistration {
 }
 
 export interface WizardTeamMember {
-    user_id: number;
+    // Exactly one of email or user_id, matching the backend's
+    // MembershipCreate schema. New onboarding flows should use email;
+    // user_id is kept for back-compat with the auto-add of the creating
+    // admin (filled in by client_service.onboard_client).
+    email?: string;
+    user_id?: number;
+    full_name?: string;
     compliance_role: ComplianceRole;
     access_start?: string;
     access_end?: string;

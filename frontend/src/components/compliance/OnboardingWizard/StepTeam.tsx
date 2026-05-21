@@ -33,15 +33,21 @@ export function StepTeam() {
     const [accessEnd, setAccessEnd] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
 
+    const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     // The backend auto-adds the current user as compliance_head if they
     // aren't already on the team list. Surface that here so the user
     // knows they don't need to do anything to be added.
     const currentUserOnTeam = currentUser
-        ? team.some((m) => m.user_id === currentUser.id)
+        ? team.some(
+              (m) =>
+                  m.user_id === currentUser.id ||
+                  (m.email && m.email.toLowerCase() === currentUser.email.toLowerCase()),
+          )
         : false;
 
     const beginAdd = () => {
-        setDraft({ user_id: 0, compliance_role: "staff" });
+        setDraft({ email: "", full_name: "", compliance_role: "staff" });
         setAccessStart("");
         setAccessEnd("");
         setError(null);
@@ -55,8 +61,14 @@ export function StepTeam() {
     };
 
     const addMember = () => {
-        if (!draft || !draft.user_id) {
-            setError("User ID is required");
+        if (!draft) return;
+        const email = (draft.email || "").trim().toLowerCase();
+        if (!email) {
+            setError("Email is required");
+            return;
+        }
+        if (!EMAIL_RX.test(email)) {
+            setError("Enter a valid email");
             return;
         }
         if (
@@ -69,7 +81,8 @@ export function StepTeam() {
             return;
         }
         const newMember: WizardTeamMember = {
-            user_id: draft.user_id,
+            email,
+            full_name: draft.full_name?.trim() || undefined,
             compliance_role: draft.compliance_role,
             access_start:
                 draft.compliance_role === "auditor" && accessStart
@@ -143,7 +156,7 @@ export function StepTeam() {
             <div className="space-y-2">
                 {team.map((m, idx) => (
                     <div
-                        key={`${m.user_id}-${idx}`}
+                        key={`${m.email || m.user_id}-${idx}`}
                         className="flex items-center gap-3 p-3 rounded-md bg-[var(--bg-elevated)] border border-[var(--border-default)]"
                     >
                         <span
@@ -158,7 +171,7 @@ export function StepTeam() {
                             {COMPLIANCE_ROLE_LABELS[m.compliance_role]}
                         </span>
                         <span className="text-sm text-[var(--text-primary)]">
-                            User #{m.user_id}
+                            {m.email || `User #${m.user_id}`}
                         </span>
                         {m.access_end && (
                             <span className="text-xs text-[var(--text-muted)] ml-auto">
@@ -179,7 +192,7 @@ export function StepTeam() {
                             className={`p-2 text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors ${
                                 m.access_end ? "" : "ml-auto"
                             }`}
-                            aria-label={`Remove user ${m.user_id}`}
+                            aria-label={`Remove ${m.email || `user ${m.user_id}`}`}
                         >
                             <FiTrash2 className="w-3.5 h-3.5" />
                         </button>
@@ -203,22 +216,24 @@ export function StepTeam() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                             <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                                User ID *
+                                Email *
                             </label>
                             <input
-                                type="number"
-                                min={1}
-                                placeholder="42"
-                                value={draft.user_id || ""}
+                                type="email"
+                                autoComplete="email"
+                                placeholder="name@example.com"
+                                value={draft.email || ""}
                                 onChange={(e) =>
                                     setDraft({
                                         ...draft,
-                                        user_id:
-                                            parseInt(e.target.value, 10) || 0,
+                                        email: e.target.value,
                                     })
                                 }
-                                className={`${draftInputClass} tabular-nums`}
+                                className={draftInputClass}
                             />
+                            <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                                Invitee gets an email link to set their password.
+                            </p>
                         </div>
                         <div>
                             <label className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
