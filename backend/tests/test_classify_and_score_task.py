@@ -247,14 +247,20 @@ def test_classify_persists_risk_top_factors_in_ner_extracted_fields():
         assert "phrase" in f
 
 
-def test_no_review_queue_enqueue_when_classifier_confidences_null():
-    """v2.0 default — both classifier confidences are NULL → no enqueue."""
+def test_review_queue_enqueue_uses_heuristic_when_classifier_confidences_null():
+    """Updated 2026-05-21 — when BERT confidences are NULL, the rule-based
+    heuristic synthesises confidences from the ner extractor output and
+    calls enqueue_low_confidence. The threshold gate inside enqueue
+    decides whether to actually insert; the wrapper task always invokes
+    it, so the queue populates today instead of waiting for v2.1.
+    """
     notice = _make_notice(
         authority="GST",
         penalty=Decimal("100000"),
     )
     notice.classifier_authority_confidence = None
     notice.classifier_type_confidence = None
+    notice.notice_type_id = None
     session = _patched_session({1: notice})
 
     with patch("app.database.SessionLocal", return_value=session), \
@@ -263,5 +269,11 @@ def test_no_review_queue_enqueue_when_classifier_confidences_null():
          ) as mock_enqueue:
         classify_and_score_notice.run(1)
 
-    # Hook is wired but must NOT call enqueue when both confidences are NULL.
-    mock_enqueue.assert_not_called()
+    # Heuristic path runs: with notice_type_id=None and no extracted
+    # gstins, both heuristic confidences are below 0.75 so the task
+    # invokes enqueue_low_confidence with the heuristic model_version.
+    mock_enqueue.assert_called_once()
+    kwargs = mock_enqueue.call_args.kwargs
+    assert kwargs["model_version"] == "rule_based_heuristic_v1"
+    assert kwargs["predicted_authority_confidence"] is not None
+    assert kwargs["predicted_type_confidence"] is not None
