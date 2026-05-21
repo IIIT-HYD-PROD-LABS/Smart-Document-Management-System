@@ -253,6 +253,15 @@ def _get_health_redis():
     return _health_redis_client
 
 
+@app.get("/api/health/live", tags=["Health"])
+def liveness_check():
+    """Kubernetes-style liveness probe: the process is up and the event loop
+    is responsive. Does NOT touch the DB or Redis, so it stays cheap and
+    cannot flip the container to unhealthy when an external dependency has
+    a transient outage. Used as the docker-compose healthcheck."""
+    return {"status": "alive"}
+
+
 @app.get("/api/health", tags=["Health"])
 def health_check():
     """Detailed health check for monitoring."""
