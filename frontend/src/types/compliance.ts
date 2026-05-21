@@ -144,7 +144,11 @@ export interface ReviewQueueItem {
     predicted_type_id: number | null;
     predicted_type_confidence: string | null;
     model_version: string;
-    reason: "low_authority_confidence" | "low_type_confidence" | "both";
+    // `manual_flag` and `manual_flag:<note>` come from the operator-flag
+    // endpoint (POST /api/compliance/review/manual-enqueue/{notice_id}).
+    // The string is opaque past the colon, so the type stays as `string`
+    // and the page-level helpers normalize it to one of four buckets.
+    reason: string;
     reviewer_id: number | null;
     reviewed_at: string | null;
     reviewer_assigned_authority: Authority | null;

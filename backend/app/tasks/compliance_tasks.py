@@ -166,37 +166,48 @@ def classify_and_score_notice(self, notice_id: int) -> dict:
         db.commit()
         db.refresh(notice)
 
-        # Step 8b: Review queue enqueue when EITHER classifier confidence is
-        # below threshold. v2.0: confidences stay NULL (BERT deferred to v2.1)
-        # so this is a no-op today. The hook is wired so v2.1 just produces
-        # confidences and the queue starts populating automatically.
-        if (
-            notice.classifier_authority_confidence is not None
-            or notice.classifier_type_confidence is not None
-        ):
-            try:
-                from app.compliance.services.review_queue_service import (
-                    enqueue_low_confidence,
-                )
-                enqueue_low_confidence(
-                    db,
-                    notice=notice,
-                    predicted_authority=notice.authority,
-                    predicted_authority_confidence=(
-                        notice.classifier_authority_confidence
-                    ),
-                    predicted_type_id=notice.notice_type_id,
-                    predicted_type_confidence=notice.classifier_type_confidence,
-                    model_version=notice.model_version or "unknown",
-                )
-                db.commit()
-            except Exception:
-                logger.exception(
-                    "review queue enqueue failed for notice %d "
-                    "(non-fatal — risk score already persisted)",
-                    notice_id,
-                )
-                db.rollback()
+        # Step 8b: Review queue enqueue. Two paths now:
+        #   A. BERT classifier (v2.1+) writes real confidences -> use those.
+        #   B. v2.0 rule-based ingestion -> synthesise heuristic confidences
+        #      from the extractor output (entities + notice_type_id) so the
+        #      queue is non-empty before BERT ships. The model_version tag
+        #      lets the UI render the source distinctly.
+        try:
+            from app.compliance.services.review_queue_service import (
+                HEURISTIC_MODEL_VERSION,
+                compute_heuristic_confidence,
+                enqueue_low_confidence,
+            )
+
+            using_classifier = (
+                notice.classifier_authority_confidence is not None
+                or notice.classifier_type_confidence is not None
+            )
+            if using_classifier:
+                auth_conf = notice.classifier_authority_confidence
+                type_conf = notice.classifier_type_confidence
+                used_model_version = notice.model_version or "unknown"
+            else:
+                auth_conf, type_conf = compute_heuristic_confidence(notice)
+                used_model_version = HEURISTIC_MODEL_VERSION
+
+            enqueue_low_confidence(
+                db,
+                notice=notice,
+                predicted_authority=notice.authority,
+                predicted_authority_confidence=auth_conf,
+                predicted_type_id=notice.notice_type_id,
+                predicted_type_confidence=type_conf,
+                model_version=used_model_version,
+            )
+            db.commit()
+        except Exception:
+            logger.exception(
+                "review queue enqueue failed for notice %d "
+                "(non-fatal, risk score already persisted)",
+                notice_id,
+            )
+            db.rollback()
 
         # Step 7: Escalation — Phase 10 Plan 10-02 implementation.
         # Critical tier auto-reassigns to compliance_head + writes activity +

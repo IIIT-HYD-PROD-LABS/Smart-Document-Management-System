@@ -330,6 +330,13 @@ export const complianceApi = {
             withTenant()
         ),
 
+    manualEnqueueReview: (noticeId: number, reasonNote?: string) =>
+        api.post<ReviewQueueItem>(
+            `/compliance/review/manual-enqueue/${noticeId}`,
+            reasonNote ? { reason: reasonNote } : {},
+            withTenant(),
+        ),
+
     assignReviewLabel: (reviewId: number, payload: ReviewAssignRequest) =>
         api.patch<{
             review_id: number;

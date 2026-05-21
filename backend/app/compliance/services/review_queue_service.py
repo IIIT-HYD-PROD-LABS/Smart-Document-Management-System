@@ -32,6 +32,14 @@ from app.services.audit_service import log_audit_event
 
 CONFIDENCE_THRESHOLD = Decimal("0.7500")
 
+# Until the BERT classifier (v2.1) ships, the rule-based ingestion path emits
+# heuristic confidences derived from how strongly the extracted entities
+# corroborate the authority + whether a notice_type_id was assigned. Tagged
+# with this model_version so the frontend can render the source explicitly
+# ("Heuristic" pill) and downstream metrics distinguish heuristic from BERT.
+HEURISTIC_MODEL_VERSION = "rule_based_heuristic_v1"
+MANUAL_MODEL_VERSION = "manual"
+
 
 def derive_reason(
     authority_confidence: Optional[Decimal],
@@ -52,6 +60,112 @@ def derive_reason(
     if auth_low:
         return "low_authority_confidence"
     return "low_type_confidence"
+
+
+def compute_heuristic_confidence(
+    notice: ComplianceNotice,
+) -> tuple[Decimal, Decimal]:
+    """Synthesise (authority_confidence, type_confidence) from rule-based
+    signals already present on the notice. Used until BERT confidences land.
+
+    Authority confidence (anchors on the regex extractor's hit list):
+      * 0.92 if the extracted entity matches the authority
+        (GST + gstins, IT + pans, MCA + cins)
+      * 0.85 if RBI/SEBI with any extracted financial identifier (regex
+        extractor does not yet have authority-specific patterns for them)
+      * 0.55 otherwise (manual entry only, nothing to corroborate)
+
+    Type confidence:
+      * 0.90 if notice_type_id is set
+      * 0.40 if notice_type_id is None (will trip the threshold gate)
+
+    The thresholds match `CONFIDENCE_THRESHOLD = 0.7500`, so any notice
+    lacking corroborating entities OR a type assignment will enqueue.
+    """
+    ner = dict(notice.ner_extracted_fields or {})
+    gstins = ner.get("gstins") or []
+    pans = ner.get("pans") or []
+    cins = ner.get("cins") or []
+    auth = (notice.authority or "").upper()
+    has_any_entity = bool(gstins or pans or cins)
+
+    if auth == "GST" and gstins:
+        auth_conf = Decimal("0.9200")
+    elif auth == "IT" and pans:
+        auth_conf = Decimal("0.9200")
+    elif auth == "MCA" and cins:
+        auth_conf = Decimal("0.9200")
+    elif auth in {"RBI", "SEBI"} and has_any_entity:
+        auth_conf = Decimal("0.8500")
+    else:
+        auth_conf = Decimal("0.5500")
+
+    if notice.notice_type_id is not None:
+        type_conf = Decimal("0.9000")
+    else:
+        type_conf = Decimal("0.4000")
+
+    return auth_conf, type_conf
+
+
+def enqueue_manual(
+    db: Session,
+    *,
+    notice: ComplianceNotice,
+    flagged_by_user_id: int,
+    reason_note: Optional[str] = None,
+) -> NoticeReviewQueue:
+    """Operator-driven enqueue: a team member flags a notice they think
+    the classifier got wrong, even if confidence was above the threshold.
+
+    Bypasses the threshold check (this is an explicit "please look again"
+    signal). Idempotent on notice_id like enqueue_low_confidence.
+    """
+    reason = "manual_flag"
+    if reason_note:
+        # Persist a short prefix of the user-supplied note inside the
+        # 50-char reason field so the UI can show context without a
+        # second query. Format: "manual_flag:<first 36 chars>".
+        reason = f"manual_flag:{reason_note[:36]}"
+
+    stmt = (
+        pg_insert(NoticeReviewQueue)
+        .values(
+            notice_id=notice.id,
+            client_id=notice.client_id,
+            predicted_authority=notice.authority,
+            predicted_authority_confidence=None,
+            predicted_type_id=notice.notice_type_id,
+            predicted_type_confidence=None,
+            model_version=MANUAL_MODEL_VERSION,
+            reason=reason,
+        )
+        .on_conflict_do_update(
+            index_elements=["notice_id"],
+            set_={
+                "predicted_authority": notice.authority,
+                "predicted_type_id": notice.notice_type_id,
+                "model_version": MANUAL_MODEL_VERSION,
+                "reason": reason,
+                "reviewer_id": None,
+                "reviewed_at": None,
+                "reviewer_assigned_authority": None,
+                "reviewer_assigned_type_id": None,
+            },
+        )
+        .returning(NoticeReviewQueue.id)
+    )
+    row_id = db.execute(stmt).scalar_one()
+    db.commit()
+
+    log_audit_event(
+        user_id=flagged_by_user_id,
+        action="review_queue_manual_flag",
+        resource_type="ComplianceNotice",
+        resource_id=notice.id,
+        details={"reason_note": reason_note, "review_id": row_id},
+    )
+    return db.get(NoticeReviewQueue, row_id)
 
 
 def enqueue_low_confidence(

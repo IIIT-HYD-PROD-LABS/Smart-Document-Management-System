@@ -24,8 +24,10 @@ from app.compliance.schemas.review_queue import (
     ReviewQueueOut,
 )
 from app.compliance.services.permission_registry import CompliancePermission
+from app.compliance.models.notice import ComplianceNotice
 from app.compliance.services.review_queue_service import (
     assign_reviewer_label,
+    enqueue_manual,
     list_pending,
 )
 from app.database import get_db
@@ -84,6 +86,52 @@ def get_review(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Review queue row {review_id} not found",
         )
+    return ReviewQueueOut.model_validate(row)
+
+
+@router.post(
+    "/manual-enqueue/{notice_id}",
+    response_model=ReviewQueueOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Operator flags a notice for human review",
+)
+def manual_enqueue(
+    notice_id: int,
+    body: dict | None = None,
+    membership: ClientMembership = Depends(
+        require_compliance_permission(CompliancePermission.NOTICE_VIEW)
+    ),
+    db: Session = Depends(get_db),
+):
+    """Flag a notice for human re-classification.
+
+    Useful when the rule-based or BERT classifier was confident but the
+    operator disagrees (the predicted authority or type looks wrong, or
+    the ner extractor missed key entities). Bypasses the 0.75 confidence
+    gate; the row lands with `reason="manual_flag"` and
+    `model_version="manual"` so it sorts separately in the UI.
+
+    Body (optional): `{"reason": "<= 36 char free-text note>"}`. The note
+    is appended to the reason field as `manual_flag:<note>` so the
+    reviewer sees the operator's hint without a second fetch.
+    """
+    notice = (
+        db.query(ComplianceNotice)
+        .filter(ComplianceNotice.id == notice_id)
+        .first()
+    )
+    if notice is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Notice {notice_id} not found",
+        )
+    reason_note = (body or {}).get("reason") if isinstance(body, dict) else None
+    row = enqueue_manual(
+        db,
+        notice=notice,
+        flagged_by_user_id=membership.user_id,
+        reason_note=str(reason_note) if reason_note else None,
+    )
     return ReviewQueueOut.model_validate(row)
 
 
