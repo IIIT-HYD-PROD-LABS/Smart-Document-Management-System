@@ -1,7 +1,93 @@
 # Smart Document Management System, Status Report
 
 **Organization:** Product Labs, IIIT Hyderabad
-**Last Updated:** 2026-05-21 (production-readiness audit sweep, slowapi 500 fix, dependabot churn cleanup, Next.js + python-multipart CVE patches)
+**Last Updated:** 2026-05-21 (compliance overhaul, admin-only client creation, email-based team invites, notice-assign endpoint, review-queue heuristic + triage workbench)
+
+## 2026-05-21 (PM), compliance flow rewired end-to-end
+
+The morning sweep stopped 500s and CI churn; the afternoon went deeper into the compliance domain after the user flagged structural bugs ("review queue is not working at all", "the email is not there by user id how can they login", "only admin can create a client then client can add the rest of the team"). Five commits shipped, CI + Deploy green, live E2E verified against Supabase.
+
+### Admin-only client creation + email-based team invite
+
+The team-add flow was broken at a structural level: admins added members by typing a numeric user_id into a form, which only worked if the invitee had already self-registered. There was no way to invite someone who did not yet have a TaxSync account, so the natural "I am setting up the workspace for my team" path was impossible.
+
+New shape (`backend/app/services/invitation_service.py`):
+
+1. system admin (`users.role='admin'`) calls `POST /api/compliance/clients` to provision a workspace. Earlier paths (bootstrap-no-memberships, ca_consultant CLIENT_CREATE) are gone, removing the tenant-sprawl risk.
+2. admin or compliance_head calls `POST /api/compliance/clients/{id}/memberships` with `{email, full_name?, compliance_role}`.
+3. the resolver decides: existing TaxSync account, attach directly; no account, pre-create a pending User (`is_active=False`, `hashed_password=NULL`) plus a 7-day signed JWT emailed via Resend.
+4. invitee opens `/accept-invite?token=<JWT>`, sets a password, the backend flips `is_active=True` and returns the standard access + refresh pair. The invitee lands signed-in on `/dashboard` with the membership granted in step 2.
+5. idempotency: a second accept-invite call returns 400 with "sign in with your existing password" instead of overwriting silently.
+
+`compliance/schemas/client.py` enforces exactly-one-of email/user_id with a Pydantic model_validator. `compliance/services/client_service.py:onboard_client` resolves email-keyed team rows the same way, so the onboarding wizard's team step can invite by email too. `compliance/dependencies.py:require_client_create_or_first_onboard` collapsed from 100 lines of conditional gates to a single admin check.
+
+Frontend: `AddMemberDialog` swapped the numeric input for email + optional full name, and the toast now reports whether the path was attach vs invite-sent. `OnboardingWizard/StepTeam` and `onboardingWizardStore` track the same shape. New `/accept-invite` page wires `setTokensFromOAuth` so the invitee is signed-in immediately after setting their password.
+
+Commit: `f6447d8` (13 files, 854 insertions, 139 deletions).
+
+### Dedicated notice-assign endpoint + WebSocket notification
+
+Reassigning a notice used to mean calling `PATCH /notices/{id}` with an `assigned_user_id` field. That endpoint validated only the FK (which accepts any users.id, including cross-tenant), and never told the new assignee.
+
+New `POST /api/compliance/notices/{notice_id}/assign` (`backend/app/compliance/routers/notices.py`):
+
+- body `{"assigned_user_id": <int> | null}` (null clears),
+- permission `NOTICE_CREATE`,
+- verifies the assignee has an active ClientMembership on the notice's client (defence vs cross-tenant FK win),
+- writes a `NoticeActivity` row with `activity_type="notice_assigned"`,
+- writes an immutable AuditLog entry with before / after,
+- publishes `{type: "notice_assigned", recipient_user_id, payload: {notice_id, notice_number, authority, response_deadline, inviter_user_id}}` to the `notifications:{client_id}` Redis pubsub channel. The existing `NotificationBell` WebSocket forwards it to the assignee's open dashboard.
+
+`dispatch_alert` was bypassed intentionally: the `notice_alert_log.alert_type` CHECK constraint would need a migration for a new `notice_assigned` enum value, and the WebSocket envelope alone is enough for in-app surfacing; the immutable AuditLog still records the assignment for compliance forensics.
+
+Commit: `cb412b4`.
+
+### Review queue, populated today (not waiting for v2.1)
+
+The queue was wired but dead: `compliance_tasks.py` only called `enqueue_low_confidence` when classifier confidences were non-null, and the v2.0 rule-based path left those NULL by design. The empty-state told operators to wait for v2.1, which made the whole feature dead weight.
+
+Two backend changes flip the queue on now:
+
+1. **Heuristic confidences** (`compute_heuristic_confidence` in `services/review_queue_service.py`). Authority confidence is 0.92 when the extractor's entity list matches the authority (GST + gstins, IT + pans, MCA + cins), 0.85 for RBI / SEBI with any extracted financial identifier, 0.55 for manual entry with nothing to corroborate. Type confidence is 0.90 when notice_type_id is set, 0.40 when it is NULL. With the 0.75 threshold, every notice that lacks corroborating entities OR a type assignment lands in the queue. Tagged `model_version="rule_based_heuristic_v1"` so the UI distinguishes the source from BERT or manual.
+2. **Manual flag endpoint** `POST /api/compliance/review/manual-enqueue/{notice_id}` (`compliance/routers/review_queue.py`). Permission `NOTICE_VIEW` so any active member can flag. Bypasses the threshold gate. Reason field captures an optional 36-char operator note as `manual_flag:<note>`. Writes an immutable AuditLog row with `action="review_queue_manual_flag"`.
+
+When BERT ships in v2.1 the existing classifier path takes over automatically; the heuristic only fires when classifier confidences are NULL.
+
+Commit: `04cd316` (heuristic + UI), `7b3a47f` (em-dash placeholder cleanup), `ebd7e59` (test_classify_and_score_task updated to match the new contract).
+
+### Triage workbench UI (review queue page redesign)
+
+`frontend/src/app/dashboard/compliance/review/page.tsx` replaced the old table with a card grid:
+
+- **Sticky filter strip** at top with reason buckets (Both unclear / Low authority / Low type / Operator flag), each chip showing its count plus a coloured dot keyed to the semantic token (warning, info, danger, accent). Click to filter, click again to clear.
+- **Cards** (two per row on lg viewports), each with: header (notice link + authority pill + source badge (HEURISTIC / BERT / MANUAL) + age in 1h / 2d / 3w units), two segmented confidence dot strips (10 dots with a dashed marker at the 75% threshold, so "below the bar" reads in under a second), reason chip with optional operator note, and three actions (Confirm assigns the predicted label, Re-classify opens an authority + type dialog, Open jumps to the notice detail).
+- **Reason-tinted left spine** on each card, semantic colour tied to the bucket.
+- **Empty state** stopped being passive: a manual-flag form is embedded inline so the page is useful when the queue is dry.
+
+Design decisions matched the existing SaaS aesthetic (refined / minimal, blue accent on neutral grays, no maximalism). The dot-strip is the one non-generic visual choice; everything else extends the existing token vocabulary.
+
+Commit: `04cd316`.
+
+### Live verification (against Supabase via WARP)
+
+Admin promoted to `admin` role, created client #253, invited `bob_<ts>@e2e.test`:
+- login as Bob before accept-invite returns 401 (correct, account inactive),
+- POST /accept-invite returns a 204-char JWT and flips Bob to active,
+- /clients/me as Bob returns the membership,
+- normal /login as Bob now succeeds,
+- POST /notices/{id}/assign rejects non-member user_id with 400, accepts Bob with 200, clears with null,
+- POST /review/manual-enqueue rejects nonexistent notice with 404, rejects unauthenticated with 401.
+
+### CI / CD
+
+Commit `ebd7e59`: docker-build, test, lint, frontend-checks all green. Deploy ran from the same SHA and succeeded (skipping image push because DOCKER_USERNAME secret is unset in this repo).
+
+### Out of scope (deferred)
+
+- response_service.py audit-after-commit pattern (architectural).
+- DOCX zip-bomb subprocess sandbox.
+- BERT classifier itself (v2.1 milestone). The heuristic fully covers the queue today.
+- Force-pushing the 2 em-dashes that landed in commit message bodies of f6447d8 and 04cd316 (user denied the force-push when offered; left as-is).
 
 ## 2026-05-21, production-readiness audit sweep (agent team + CI cleanup)
 
