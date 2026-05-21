@@ -39,7 +39,7 @@ import { useAuth } from "@/context/AuthContext";
  */
 
 const CATEGORY_LABELS: Record<string, string> = {
-    bills: "Bills",
+    bills: "Vendor invoices",
     upi: "UPI",
     tickets: "Tickets",
     tax: "Tax",

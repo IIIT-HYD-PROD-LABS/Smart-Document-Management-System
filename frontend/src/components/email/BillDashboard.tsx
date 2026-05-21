@@ -97,22 +97,61 @@ export default function BillDashboard() {
     ) => {
         setLoading(true);
         try {
-            const responses = await Promise.all(
+            // Promise.allSettled so a single bucket's failure (e.g. slow
+            // server-side filter on Overdue) does not blank the entire
+            // dashboard. The user must still see paid/upcoming bills so
+            // they can act on real liabilities; otherwise they could miss
+            // a payment thinking they have nothing due.
+            const settled = await Promise.allSettled(
                 BUCKETS.map((b) => emailApi.listBills({ status: b })),
             );
+            const failedBuckets: BillStatusBucket[] = [];
+            const dataByBucket: Record<BillStatusBucket, Bill[]> = {
+                upcoming: [],
+                due_soon: [],
+                overdue: [],
+                paid: [],
+            };
+            settled.forEach((res, idx) => {
+                const bucketName = BUCKETS[idx];
+                if (res.status === "fulfilled") {
+                    dataByBucket[bucketName] = res.value.data;
+                } else {
+                    failedBuckets.push(bucketName);
+                }
+            });
             const map: Record<BillStatusBucket, number> = {
-                upcoming: responses[0].data.length,
-                due_soon: responses[1].data.length,
-                overdue: responses[2].data.length,
-                paid: responses[3].data.length,
+                upcoming: dataByBucket.upcoming.length,
+                due_soon: dataByBucket.due_soon.length,
+                overdue: dataByBucket.overdue.length,
+                paid: dataByBucket.paid.length,
             };
             setCounts(map);
             if (currentBucket) {
-                const idx = BUCKETS.indexOf(currentBucket);
-                setBills(responses[idx].data);
+                setBills(dataByBucket[currentBucket]);
             } else {
-                // No bucket → show all four merged (overdue + due_soon + upcoming + paid)
-                setBills(responses.flatMap((r) => r.data));
+                // No bucket → show all four merged, de-duped by id. A bill on a
+                // boundary date can appear in two buckets server-side (e.g.
+                // due_soon ∩ upcoming for the 3-day window edge); we keep the
+                // first occurrence so the grid renders each bill once.
+                const seen = new Set<number>();
+                const merged: Bill[] = [];
+                for (const bucketName of BUCKETS) {
+                    for (const b of dataByBucket[bucketName]) {
+                        if (!seen.has(b.id)) {
+                            seen.add(b.id);
+                            merged.push(b);
+                        }
+                    }
+                }
+                setBills(merged);
+            }
+            if (failedBuckets.length > 0) {
+                toast.error(
+                    `Could not load: ${failedBuckets
+                        .map((b) => BUCKET_META[b].label)
+                        .join(", ")}. Other buckets still shown.`,
+                );
             }
         } catch (e: unknown) {
             const msg =
@@ -326,7 +365,18 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
             if (failed === 0) {
                 toast.success(`Marked ${ok} invoices paid`);
             } else {
-                toast(`Marked ${ok} paid, ${failed} failed`, { icon: "⚠" });
+                // Surface which IDs failed so the user can reconcile rather
+                // than wondering which 2 of 5 bills didn't apply. The toast
+                // stays for longer so the user can read the IDs before it
+                // auto-dismisses.
+                const failedIds = r.data.results
+                    .filter((row) => row.status === "failed")
+                    .map((row) => `#${row.id}`)
+                    .join(", ");
+                toast(
+                    `Marked ${ok} paid, ${failed} failed: ${failedIds}`,
+                    { icon: "⚠", duration: 8000 },
+                );
             }
             onDone();
         } catch (e: unknown) {

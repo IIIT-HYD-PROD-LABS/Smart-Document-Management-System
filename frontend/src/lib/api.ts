@@ -5,6 +5,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const api = axios.create({
     baseURL: `${API_URL}/api`,
+    timeout: 30000,
     headers: {
         "Content-Type": "application/json",
     },
@@ -85,10 +86,20 @@ api.interceptors.response.use(
         }
 
         try {
-            // Use raw axios (NOT the api instance) to avoid interceptor loops
-            const response = await axios.post(`${API_URL}/api/auth/refresh`, {
-                refresh_token: refreshToken,
-            });
+            // Use raw axios (NOT the api instance) to avoid interceptor loops.
+            // Explicit timeout: without one, an offline /auth/refresh leaves
+            // every queued request hanging and AuthContext.isLoading stuck on `true`.
+            // Short timeout on refresh: a slow auth-refresh stacks behind 30s
+            // of queued user requests that each restart their own 30s clock,
+            // so the user-perceived latency on a flaky link goes to ~60s+
+            // before any error renders. 10s is the cap; if refresh hasn't
+            // returned by then the session is effectively dead and we
+            // should redirect to /login quickly.
+            const response = await axios.post(
+                `${API_URL}/api/auth/refresh`,
+                { refresh_token: refreshToken },
+                { timeout: 10000 },
+            );
 
             const { access_token, refresh_token: newRefreshToken, user } = response.data;
 
@@ -256,14 +267,15 @@ export const adminApi = {
 };
 
 // ──── Early Access API (public, no auth) ────
-const API_URL_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Uses raw axios so requests don't pick up the api instance's Authorization
+// header. Re-uses the module-level API_URL above instead of redeclaring it.
 
 export const earlyAccessApi = {
     submit: (data: { full_name: string; email: string; company?: string; reason?: string }) =>
-        axios.post(`${API_URL_BASE}/api/early-access`, data),
+        axios.post(`${API_URL}/api/early-access`, data),
 
     validateInvite: (token: string) =>
-        axios.get(`${API_URL_BASE}/api/early-access/validate-invite`, { params: { token } }),
+        axios.get(`${API_URL}/api/early-access/validate-invite`, { params: { token } }),
 };
 
 // ──── Sharing API ────

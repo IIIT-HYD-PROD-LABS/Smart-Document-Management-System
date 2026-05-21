@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Cookies from "js-cookie";
 import { useCurrentClient } from "@/stores/currentClientStore";
 import type { NotificationEnvelope } from "@/types/compliance";
 
@@ -38,10 +39,10 @@ export function useNotificationStream() {
 
         const connect = () => {
             if (cancelled) return;
-            const token =
-                typeof window !== "undefined"
-                    ? localStorage.getItem("access_token")
-                    : null;
+            // Tokens are stored as cookies (see lib/api.ts, AuthContext) under
+            // key "token" — NOT in localStorage. Reading the wrong source
+            // silently kept this WebSocket from ever opening.
+            const token = Cookies.get("token") ?? null;
             if (!token) return;
 
             const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
