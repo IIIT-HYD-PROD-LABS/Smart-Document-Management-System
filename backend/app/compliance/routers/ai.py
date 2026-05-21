@@ -19,14 +19,20 @@ Credential routes are gated by CLIENT_MANAGE_TEAM (admin-grade). The AI
 task routes are gated by NOTICE_VIEW so any active member of the tenant
 can use the AI on the data they can already read.
 """
-from __future__ import annotations
+# NOTE: do NOT add `from __future__ import annotations` here. The combination
+# of (a) future annotations, (b) `@limiter.limit(...)` wrapping route
+# handlers, and (c) Pydantic body params breaks OpenAPI schema generation
+# with `PydanticUserError: TypeAdapter[Annotated[ForwardRef(...), Body(...)]]
+# is not fully defined`. The other compliance routers either rely on path
+# parameters (no body resolution needed) or have no rate-limit decorator.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.compliance.dependencies import require_compliance_permission
+from app.utils.rate_limiter import limiter
 from app.compliance.models.membership import ClientMembership
 from app.compliance.models.notice import ComplianceNotice
 from app.compliance.schemas.ai import (
@@ -213,8 +219,13 @@ def delete_credential(
     "/credentials/test",
     response_model=AICredentialTestResult,
 )
+@limiter.limit("10/minute")
 def test_credential(
-    payload: AICredentialCreate,
+    request: Request,
+    # Explicit Body() so the OpenAPI schema generator (which introspects
+    # the signature after slowapi wraps it) keeps recognising the Pydantic
+    # model as the request body rather than misclassifying it as a query.
+    payload: AICredentialCreate = Body(...),
     _membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.CLIENT_MANAGE_TEAM)
     ),
@@ -227,11 +238,26 @@ def test_credential(
         )
         return AICredentialTestResult(ok=True, latency_ms=result["latency_ms"])
     except AIAuthError as e:
-        return AICredentialTestResult(ok=False, detail=f"Auth failed: {e}")
+        # Never echo the provider exception string back to the client: the
+        # Anthropic SDK / Google REST body can include the submitted key or
+        # request headers in their error representation, and the test
+        # endpoint accepts the plaintext key in the payload. Log the full
+        # error server-side, return a fixed string.
+        logger.warning("ai_test_credential_auth_failed", exc_info=e)
+        return AICredentialTestResult(
+            ok=False, detail="Auth failed: invalid or rejected key"
+        )
     except AIRateLimitError as e:
-        return AICredentialTestResult(ok=False, detail=f"Rate limited: {e}")
+        logger.warning("ai_test_credential_rate_limited", exc_info=e)
+        return AICredentialTestResult(
+            ok=False, detail="Rate limited by provider, try again shortly"
+        )
     except AIProviderError as e:
-        return AICredentialTestResult(ok=False, detail=f"Provider error: {e}")
+        logger.warning("ai_test_credential_provider_error", exc_info=e)
+        return AICredentialTestResult(
+            ok=False,
+            detail="Provider error, check the model name and provider status",
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -242,7 +268,9 @@ def test_credential(
 @router.post(
     "/notice-summary/{notice_id}", response_model=NoticeSummaryResponse
 )
+@limiter.limit("20/minute")
 def notice_summary(
+    request: Request,
     notice_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
@@ -265,7 +293,9 @@ def notice_summary(
 @router.post(
     "/notice-actions/{notice_id}", response_model=NoticeActionsResponse
 )
+@limiter.limit("20/minute")
 def notice_actions(
+    request: Request,
     notice_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
@@ -293,7 +323,9 @@ def notice_actions(
 @router.post(
     "/invoice-summary/{bill_id}", response_model=InvoiceSummaryResponse
 )
+@limiter.limit("20/minute")
 def invoice_summary(
+    request: Request,
     bill_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
@@ -316,7 +348,9 @@ def invoice_summary(
 @router.post(
     "/invoice-actions/{bill_id}", response_model=InvoiceActionsResponse
 )
+@limiter.limit("20/minute")
 def invoice_actions(
+    request: Request,
     bill_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
@@ -337,8 +371,10 @@ def invoice_actions(
 
 
 @router.post("/chat", response_model=ChatResponse)
+@limiter.limit("15/minute")
 def chat(
-    payload: ChatRequest,
+    request: Request,
+    payload: ChatRequest = Body(...),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
@@ -396,7 +432,9 @@ def chat(
 @router.post(
     "/invoice-timing/{bill_id}", response_model=InvoiceTimingResponse
 )
+@limiter.limit("20/minute")
 def invoice_timing(
+    request: Request,
     bill_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)

@@ -126,6 +126,35 @@ class Settings(BaseSettings):
     DATABASE_URL_RUNTIME: str = ""
     DATABASE_URL_MIGRATOR: str = ""
 
+    @field_validator("FERNET_KEY")
+    @classmethod
+    def fernet_key_must_be_valid_if_set(cls, v: str) -> str:
+        # Empty is allowed at startup: deployments that don't use
+        # PII encryption / BYOK can run without one, and the runtime
+        # check in pii_encryption.py will raise on first use. But if a
+        # value IS set, decode it and confirm Fernet's actual requirement
+        # (32 raw bytes after urlsafe-base64 decode) rather than relying on
+        # the length+charset heuristic that false-rejected quoted/padded
+        # keys and false-accepted Unicode alphanumerics.
+        if not v:
+            return v
+        _hint = (
+            'Generate via: python -c '
+            '"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+        )
+        import base64
+        try:
+            decoded = base64.urlsafe_b64decode(v.strip().encode("ascii"))
+        except (ValueError, UnicodeEncodeError) as e:
+            raise ValueError(
+                f"FERNET_KEY is not valid urlsafe base64: {e}. {_hint}"
+            ) from e
+        if len(decoded) != 32:
+            raise ValueError(
+                f"FERNET_KEY must decode to 32 bytes (got {len(decoded)}). {_hint}"
+            )
+        return v
+
     @field_validator("SECRET_KEY")
     @classmethod
     def secret_key_must_be_strong(cls, v: str) -> str:

@@ -26,6 +26,12 @@ from pydantic import BaseModel, ConfigDict, Field
 class AICredentialCreate(BaseModel):
     """POST/PATCH payload — tenant submits a fresh provider + model + key."""
 
+    # `model` is the LLM model name (e.g. "claude-3-5-sonnet"). Pydantic 2.x
+    # reserves the `model_*` namespace and warns when user fields start with
+    # `model`; we opt out of that protection here since `model` is the
+    # canonical field name for both providers.
+    model_config = ConfigDict(protected_namespaces=())
+
     provider: Literal["anthropic", "google"]
     model: str = Field(..., min_length=1, max_length=100)
     api_key: str = Field(..., min_length=8, max_length=500)
@@ -36,7 +42,8 @@ class AICredentialOut(BaseModel):
     rows that exist; the field is present so absence (404 → null) and
     existence read symmetrically on the client."""
 
-    model_config = ConfigDict(from_attributes=True)
+    # See AICredentialCreate for why we opt out of the model_* namespace.
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
     provider: str
     model: str

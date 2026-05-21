@@ -65,7 +65,7 @@ def test_transition_to_submitted_with_approved_response_allowed():
             return_value=True,
         ),
         patch("app.compliance.services.notice_service.log_activity"),
-        patch("app.compliance.services.notice_service.log_audit_event"),
+        patch("app.compliance.services.notice_service.log_audit_event_strict"),
     ):
         transition_notice_status(
             db, notice.id, NoticeStatus.SUBMITTED, user
@@ -97,7 +97,7 @@ def test_transition_to_resolved_does_not_check_response():
             "app.compliance.services.response_service.is_response_approved"
         ) as mock_check,
         patch("app.compliance.services.notice_service.log_activity"),
-        patch("app.compliance.services.notice_service.log_audit_event"),
+        patch("app.compliance.services.notice_service.log_audit_event_strict"),
     ):
         transition_notice_status(
             db, notice.id, NoticeStatus.RESOLVED, user

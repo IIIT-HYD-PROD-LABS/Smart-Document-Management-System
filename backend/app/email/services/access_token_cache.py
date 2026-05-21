@@ -7,7 +7,6 @@ credential_vault.handle_invalid_grant and re-raises as 401 (Pitfall 2).
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timezone
 
 import redis
@@ -26,10 +25,18 @@ _redis: redis.Redis | None = None
 
 
 def _get_redis() -> redis.Redis:
+    """Singleton Redis client. Reads from `settings.REDIS_URL` (not the raw
+    env var) so deployments that override REDIS_SSL_VERIFY or normalise the
+    URL through pydantic-settings get the correct client. The connection
+    options stay aligned with `rate_limiter.py` and `main.py`.
+    """
     global _redis
     if _redis is None:
-        url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-        _redis = redis.Redis.from_url(url, decode_responses=True)
+        url = settings.REDIS_URL
+        kwargs: dict = {"decode_responses": True}
+        if url.startswith("rediss://") and not settings.REDIS_SSL_VERIFY:
+            kwargs["ssl_cert_reqs"] = None
+        _redis = redis.Redis.from_url(url, **kwargs)
     return _redis
 
 

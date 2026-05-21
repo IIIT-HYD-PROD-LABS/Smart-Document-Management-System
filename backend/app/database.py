@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.config import settings
 
-_connect_args: dict = {}
+_connect_args: dict = {"connect_timeout": 10}
 _db_url = settings.DATABASE_URL
 # SSL required only for remote production databases. Local docker-compose Postgres
 # (hostname `db`), localhost, and 127.0.0.1 connect without SSL.

@@ -173,12 +173,17 @@ async def gmail_callback(
         )
     except HTTPException:
         raise
-    except Exception as e:  # noqa: BLE001 — propagate as redirect with error
+    except Exception:  # noqa: BLE001 — propagate as redirect with error
+        # Do not leak the internal exception class name into the URL: it
+        # ends up in browser history, Referer headers, and proxy logs and
+        # tells an observer which Python module raised. Full traceback is
+        # in the server log via logger.exception above; the user only
+        # needs a stable error code they can quote to support.
         logger.exception("gmail_oauth_token_exchange_failed")
         return RedirectResponse(
             url=(
                 f"{frontend}/dashboard/email/connect"
-                f"?error=token_exchange_failed&detail={type(e).__name__}"
+                "?error=token_exchange_failed"
             )
         )
 

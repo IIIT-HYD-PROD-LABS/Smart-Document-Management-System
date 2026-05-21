@@ -128,7 +128,10 @@ def log_audit_event(
         try:
             db.rollback()
         except Exception:
-            pass
+            # Rollback after a commit failure can itself fail when the
+            # connection is already torn down; log loudly so this is
+            # visible in dashboards rather than disappearing.
+            logger.exception("audit_rollback_failed")
         return False
     finally:
         db.close()

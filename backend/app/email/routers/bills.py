@@ -138,33 +138,44 @@ def bulk_mark_bills_paid(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
 ):
-    """Bulk mark-as-paid with per-row SAVEPOINT (Phase 9 LIFE-08 pattern).
+    """Bulk mark-as-paid with per-row error isolation.
 
-    Each bill is processed in its own nested transaction. A single failure
-    rolls back only that row; the loop continues. Returns:
+    Each call to `mark_paid` is atomic and commits its own row. A row that
+    raises (bill missing, invalid payment_method) leaves the database
+    untouched for that row and is reported in `results` so the caller can
+    surface partial failure to the user. The loop continues past failures.
 
         {
           "results": [{"id": 1, "status": "ok"}, ...],
           "summary": {"ok": N, "failed": M}
         }
+
+    Note: the prior implementation wrapped each call in `db.begin_nested()`
+    to act as a SAVEPOINT, but `mark_paid` itself issues `db.commit()` —
+    under SQLAlchemy 2.x that ends the outer transaction context and raises
+    `InvalidRequestError`. We rely on `mark_paid`'s own commit per row.
     """
     results: list[dict] = []
     ok = 0
     failed = 0
     for bid in ids:
         try:
-            with db.begin_nested():
-                mark_paid(
-                    db,
-                    bill_id=bid,
-                    payment_date=payment_date,
-                    payment_reference=payment_reference,
-                    payment_method=payment_method,
-                    user_id=membership.user_id,
-                )
+            mark_paid(
+                db,
+                bill_id=bid,
+                payment_date=payment_date,
+                payment_reference=payment_reference,
+                payment_method=payment_method,
+                user_id=membership.user_id,
+            )
             results.append({"id": bid, "status": "ok"})
             ok += 1
         except Exception as e:  # noqa: BLE001 — partial-failure semantics
+            db.rollback()
+            # Expire all ORM identity-map entries after rollback so a stale
+            # Bill object from a prior successful iteration cannot resurface
+            # as expired-but-still-cached state in the next loop iteration.
+            db.expire_all()
             results.append(
                 {
                     "id": bid,
@@ -173,7 +184,6 @@ def bulk_mark_bills_paid(
                 }
             )
             failed += 1
-    db.commit()
     return {
         "results": results,
         "summary": {"ok": ok, "failed": failed},

@@ -228,11 +228,34 @@ def root():
     }
 
 
+# Module-level cached Redis client for /api/health. The previous handler
+# constructed a fresh `redis.from_url(...)` on every request, paying TCP
+# handshake + auth + (in TLS mode) SSL context setup each call. Under the
+# 10-RPS concurrency the live E2E probe ran, p99 hit ~5 seconds. Lazy
+# singleton recovers the steady-state to sub-100ms per call.
+_health_redis_client = None
+
+
+def _get_health_redis():
+    global _health_redis_client
+    if _health_redis_client is not None:
+        return _health_redis_client
+    import redis
+    redis_kwargs = {"socket_connect_timeout": 5, "socket_timeout": 5}
+    if settings.REDIS_URL.startswith("rediss://"):
+        import ssl
+        ctx = ssl.create_default_context()
+        if not settings.REDIS_SSL_VERIFY:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        redis_kwargs["ssl"] = ctx
+    _health_redis_client = redis.from_url(settings.REDIS_URL, **redis_kwargs)
+    return _health_redis_client
+
+
 @app.get("/api/health", tags=["Health"])
 def health_check():
     """Detailed health check for monitoring."""
-    import redis
-
     health = {
         "status": "healthy",
         "version": settings.APP_VERSION,
@@ -249,20 +272,15 @@ def health_check():
         health["database"] = "disconnected"
         health["status"] = "degraded"
 
-    # Check Redis
+    # Check Redis (uses cached client so a hot path is ~1 round trip)
     try:
-        redis_kwargs = {}
-        if settings.REDIS_URL.startswith("rediss://"):
-            import ssl
-            ctx = ssl.create_default_context()
-            if not settings.REDIS_SSL_VERIFY:
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_NONE
-            redis_kwargs["ssl"] = ctx
-        r = redis.from_url(settings.REDIS_URL, **redis_kwargs)
-        r.ping()
+        _get_health_redis().ping()
         health["redis"] = "connected"
     except Exception:
+        # Reset the cached client so the next call can re-establish
+        # against a healed Redis rather than reusing the broken socket.
+        global _health_redis_client
+        _health_redis_client = None
         health["redis"] = "disconnected"
         health["status"] = "degraded"
 

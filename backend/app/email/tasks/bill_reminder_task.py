@@ -52,6 +52,7 @@ def fire_reminder(bill_id: int, tier: str) -> None:
             cross_mode=False,
         )
 
+        dispatched = False
         try:
             from app.compliance.services.alert_service import (
                 dispatch_non_notice_alert,
@@ -76,13 +77,20 @@ def fire_reminder(bill_id: int, tier: str) -> None:
                     "due_date": bill.due_date.isoformat() if bill.due_date else None,
                 },
             )
+            dispatched = True
         except Exception as e:
             logger.warning(
                 "bill reminder dispatch failed: bill_id=%s tier=%s err=%s",
                 bill_id, tier, e,
             )
 
-        bill.reminder_count += 1
-        db.commit()
+        # Only consume one of the 3-reminder budget when dispatch actually
+        # succeeded. A failed dispatch (Redis/SMTP/Celery down) used to
+        # increment unconditionally; after 3 such failures the cool-down
+        # at line 45 made future reminders no-op, leaving the user with
+        # zero notifications about an unpaid invoice.
+        if dispatched:
+            bill.reminder_count += 1
+            db.commit()
     finally:
         db.close()

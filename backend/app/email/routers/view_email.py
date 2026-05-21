@@ -65,6 +65,16 @@ async def view_email(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Credential not found",
         )
+    # IDOR guard: GmailMessageLog has no client_id column; the only tenant
+    # link is via credential_id -> GmailCredential.client_id. Verify the
+    # resolved credential's client matches the caller's active membership
+    # before invoking the MCP tool, otherwise an authenticated user could
+    # read another tenant's email body by guessing message_log_id.
+    if cred.client_id != membership.client_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Message log not found",
+        )
     if cred.status != GmailCredential.STATUS_ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

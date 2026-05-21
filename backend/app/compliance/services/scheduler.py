@@ -20,7 +20,13 @@ _scheduler = None
 
 
 def get_scheduler():
-    """Returns the singleton BackgroundScheduler, lazily started."""
+    """Returns the singleton BackgroundScheduler, lazily started.
+
+    Init failure resets `_scheduler` to None so the next caller can retry,
+    rather than caching a half-dead instance that keeps returning the same
+    error. Engine uses `pool_pre_ping=True` so the Supabase pooler killing
+    idle connections does not poison the jobstore.
+    """
     global _scheduler
     if _scheduler is not None:
         return _scheduler
@@ -34,9 +40,28 @@ def get_scheduler():
     jobstore_url = os.environ.get("DATABASE_URL_RUNTIME") or os.environ.get(
         "DATABASE_URL"
     )
-    jobstore = SQLAlchemyJobStore(url=jobstore_url, tablename="apscheduler_jobs")
+    # Bound libpq connect at 10s so an unreachable DB fails fast instead of
+    # blocking the FastAPI lifespan indefinitely. pool_pre_ping recovers from
+    # idle disconnects (Supabase pooler trims sessions aggressively).
+    jobstore = SQLAlchemyJobStore(
+        url=jobstore_url,
+        tablename="apscheduler_jobs",
+        engine_options={
+            "pool_pre_ping": True,
+            "connect_args": {"connect_timeout": 10},
+        },
+    )
     scheduler = BackgroundScheduler(jobstores={"default": jobstore})
-    scheduler.start()
+    try:
+        scheduler.start()
+    except Exception:
+        # `start()` raised — the worker thread already inside the jobstore
+        # may be in a bad state. Reset the singleton so the next caller
+        # retries with a fresh BackgroundScheduler instead of returning
+        # this poisoned one.
+        logger.exception("scheduler_start_failed; resetting singleton")
+        _scheduler = None
+        raise
     _scheduler = scheduler
     return scheduler
 

@@ -298,6 +298,15 @@ def search_documents(
     current_user: User = Depends(get_current_user),
 ):
     """Search documents by extracted text content using PostgreSQL FTS."""
+    # Strip NUL bytes — psycopg/libpq rejects strings containing 0x00 with
+    # a ValueError that propagates to a 500. Treat embedded NULs as invalid
+    # input rather than letting them reach the engine layer.
+    q = q.replace("\x00", "")
+    if not q:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Search query cannot be empty",
+        )
     # Validate filter consistency
     if date_from and date_to and date_from > date_to:
         raise HTTPException(

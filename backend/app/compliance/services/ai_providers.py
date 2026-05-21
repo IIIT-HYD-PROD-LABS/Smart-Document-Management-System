@@ -123,17 +123,30 @@ class AnthropicProvider(AIProvider):
             raise AIProviderError(f"anthropic call failed: {e}") from e
 
         # `resp.content` is a list of content blocks; we want the first
-        # text block. Older SDK versions used `resp.content[0].text`; this
-        # is stable on 0.52.x.
+        # TextBlock. With anthropic SDK 0.52 the first block can be a
+        # ToolUseBlock or ThinkingBlock (when reasoning is enabled) — those
+        # have no `.text`, so picking index 0 unconditionally raises. Walk
+        # the list and return the first block that is an actual TextBlock,
+        # not just any block that happens to expose a `.text` attribute
+        # (a future SDK could add citation/debug blocks with their own
+        # `.text` field that is not a user-facing reply).
         if not resp.content:
             raise AIProviderError("empty response from anthropic")
-        first = resp.content[0]
-        text = getattr(first, "text", None)
-        if text is None:
-            raise AIProviderError(
-                f"unexpected content block type: {type(first).__name__}"
-            )
-        return text
+        try:
+            from anthropic.types import TextBlock
+        except ImportError:
+            TextBlock = None  # type: ignore[assignment]
+        for block in resp.content:
+            if TextBlock is not None and isinstance(block, TextBlock):
+                return block.text
+            if TextBlock is None and getattr(block, "type", None) == "text":
+                text = getattr(block, "text", None)
+                if isinstance(text, str):
+                    return text
+        raise AIProviderError(
+            "no text block in anthropic response (got: "
+            f"{[type(b).__name__ for b in resp.content]})"
+        )
 
     def complete(self, system: str, user: str, max_tokens: int = 1024) -> str:
         return self._send(system, [{"role": "user", "content": user}], max_tokens)

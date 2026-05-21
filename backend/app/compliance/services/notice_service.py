@@ -37,7 +37,7 @@ from app.compliance.services.notice_state_machine import (
     validate_transition,
 )
 from app.models.user import User
-from app.services.audit_service import log_audit_event
+from app.services.audit_service import log_audit_event_strict
 
 
 def transition_notice_status(
@@ -115,7 +115,11 @@ def transition_notice_status(
     # Immutable system audit (AUDIT-02). Synchronous so the test contract
     # in test_audit_capture::test_status_change_captures_diff observes the
     # row immediately after the call returns.
-    log_audit_event(
+    # Use the strict variant so that on dead-letter dispatch the
+    # `regulatory_audit_write_failed` ERROR fires; ops dashboards alert on
+    # it. notice status changes are regulatory events (received → under_review
+    # → submitted → resolved) and silently losing them violates AUDIT-02.
+    log_audit_event_strict(
         user_id=user.id,
         action="notice_status_changed",
         resource_type="ComplianceNotice",

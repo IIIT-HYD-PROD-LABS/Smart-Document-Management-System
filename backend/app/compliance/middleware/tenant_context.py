@@ -190,11 +190,27 @@ def register_tenant_listener(engine) -> None:
             info["_tenant_state"] = None
             info["_tenant_dirty"] = False
         except Exception:
+            # Cleanup failed: the next checkout could see this connection
+            # with the prior request's `app.current_client_id` still set,
+            # breaking tenant isolation. Discard the connection so the
+            # pool opens a fresh one instead of recycling tainted state.
+            import logging
+            logging.getLogger(__name__).warning(
+                "tenant_context checkin cleanup failed; invalidating connection"
+            )
             try:
                 if not getattr(dbapi_connection, "autocommit", True):
                     dbapi_connection.rollback()
             except Exception:
-                pass
+                logging.getLogger(__name__).exception(
+                    "tenant_context rollback after cleanup failure also failed"
+                )
+            try:
+                connection_record.invalidate()
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "tenant_context connection invalidate failed"
+                )
 
 
 class TenantContextMiddleware(BaseHTTPMiddleware):
