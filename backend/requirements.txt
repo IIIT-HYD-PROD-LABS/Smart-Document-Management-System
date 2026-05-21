@@ -93,7 +93,7 @@ freezegun==1.5.5
 kaggle==1.6.17
 
 # LLM Providers (optional - install if using LLM extraction)
-anthropic==0.52.0
+anthropic==0.103.1
 openai==1.86.0
 
 # Utilities
