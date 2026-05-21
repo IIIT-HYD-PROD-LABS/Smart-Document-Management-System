@@ -68,7 +68,13 @@ export interface OnboardClientPayload {
     };
     registrations: { type: string; value: string; state?: string }[];
     team: {
-        user_id: number;
+        // Same exactly-one-of rule as the membership add endpoint: the
+        // backend (services/invitation_service.py) accepts either email
+        // (pre-creates a pending User + sends invite) or user_id (legacy
+        // path used by the wizard's auto-add of the creating admin).
+        email?: string;
+        user_id?: number;
+        full_name?: string;
         compliance_role: string;
         access_start?: string;
         access_end?: string;
