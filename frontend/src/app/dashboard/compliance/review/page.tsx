@@ -439,7 +439,7 @@ function TriageCard({
                             border border-[var(--border-subtle)]
                         "
                     >
-                        {row.predicted_authority ?? "—"}
+                        {row.predicted_authority ?? "·"}
                     </span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -609,7 +609,7 @@ function DotConfidence({
                     className="text-[12px] font-mono tabular-nums"
                     style={{ color }}
                 >
-                    {pct === null ? "—" : `${pct}%`}
+                    {pct === null ? "·" : `${pct}%`}
                 </span>
             </div>
             <div className="relative flex items-center gap-[3px] h-3">
