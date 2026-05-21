@@ -39,7 +39,29 @@ def send_email(to_email: str, subject: str, html_body: str) -> bool:
         logger.info("email_sent", to=to_email, subject=subject)
         return True
     except Exception as e:
-        logger.error("email_send_failed", to=to_email, subject=subject, error=str(e))
+        # Resend free-tier rejects every recipient that is not the account
+        # owner with a 550 ("verify a domain at resend.com/domains"). That
+        # is a configuration limitation, not a real outage, and the
+        # alert/scheduler retries can flood the error log with it. Downgrade
+        # the known-shape 550 to a warning so real send failures still
+        # surface at ERROR.
+        msg = str(e)
+        is_resend_unverified = "550" in msg and (
+            "verify a domain" in msg or "testing emails" in msg
+        )
+        log_fn = logger.warning if is_resend_unverified else logger.error
+        log_fn(
+            "email_send_failed",
+            to=to_email,
+            subject=subject,
+            error=msg,
+            hint=(
+                "Resend rejects non-account-owner recipients on the free tier."
+                " Verify a domain at resend.com/domains and update"
+                " SMTP_FROM_EMAIL, or set FRONTEND_URL/SMTP_* to a provider"
+                " that accepts arbitrary recipients."
+            ) if is_resend_unverified else None,
+        )
         return False
 
 

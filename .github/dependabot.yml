@@ -5,12 +5,62 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # Block major-version bumps for libraries that own large API surfaces
+    # or ship breaking releases routinely. Patch + minor still get PRs.
+    ignore:
+      - dependency-name: "anthropic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "starlette"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "xgboost"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "scikit-learn"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "transformers"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "spacy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "celery"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "psycopg2-binary"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # Next 16, Tailwind 4, TS 6 all ship breaking changes that need a
+      # planned migration (turbopack default, CSS plugin overhaul, stricter
+      # CSS-side-effect imports). Hold the major on those + the @types/node
+      # major which tracks Node LTS bumps the runtime hasn't moved to.
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-config-next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"

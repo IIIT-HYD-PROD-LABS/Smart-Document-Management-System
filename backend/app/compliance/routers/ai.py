@@ -28,7 +28,7 @@ can use the AI on the data they can already read.
 
 import logging
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.compliance.dependencies import require_compliance_permission
@@ -222,6 +222,12 @@ def delete_credential(
 @limiter.limit("10/minute")
 def test_credential(
     request: Request,
+    # slowapi's wrapper auto-injects rate-limit headers via this Response
+    # arg when the handler returns a non-Response value (dict / Pydantic
+    # model). Without it, `kwargs.get("response")` is None and slowapi
+    # raises "parameter `response` must be an instance of
+    # starlette.responses.Response". Pattern mirrors documents.py:286.
+    response: Response,
     # Explicit Body() so the OpenAPI schema generator (which introspects
     # the signature after slowapi wraps it) keeps recognising the Pydantic
     # model as the request body rather than misclassifying it as a query.
@@ -271,6 +277,7 @@ def test_credential(
 @limiter.limit("20/minute")
 def notice_summary(
     request: Request,
+    response: Response,
     notice_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
@@ -296,6 +303,7 @@ def notice_summary(
 @limiter.limit("20/minute")
 def notice_actions(
     request: Request,
+    response: Response,
     notice_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
@@ -326,6 +334,7 @@ def notice_actions(
 @limiter.limit("20/minute")
 def invoice_summary(
     request: Request,
+    response: Response,
     bill_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
@@ -351,6 +360,7 @@ def invoice_summary(
 @limiter.limit("20/minute")
 def invoice_actions(
     request: Request,
+    response: Response,
     bill_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
@@ -374,6 +384,7 @@ def invoice_actions(
 @limiter.limit("15/minute")
 def chat(
     request: Request,
+    response: Response,
     payload: ChatRequest = Body(...),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
@@ -435,6 +446,7 @@ def chat(
 @limiter.limit("20/minute")
 def invoice_timing(
     request: Request,
+    response: Response,
     bill_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
