@@ -1,9 +1,75 @@
-# Smart Document Management System — Status Report
+# Smart Document Management System, Status Report
 
 **Organization:** Product Labs, IIIT Hyderabad
-**Last Updated:** 2026-05-18 (Repo consolidation + 5-agent end-to-end audit + Tier 1 fixes)
+**Last Updated:** 2026-05-21 (production-readiness audit sweep, slowapi 500 fix, dependabot churn cleanup, Next.js + python-multipart CVE patches)
 
-**Repo consolidation + 5-agent audit pass (2026-05-18) — Tier 1 fixes applied; CI re-run pending**
+## 2026-05-21, production-readiness audit sweep (agent team + CI cleanup)
+
+Re-ran the parallel agent audit (security-auditor, code-reviewer, silent-failure-hunter, live-HTTP probe, pytest) against `main` head `c0dc994` plus the uncommitted Phase 16 BYOK working tree. Stack pushed 6 commits, CI + Deploy green, live E2E confirmed end-to-end against the real Supabase DB (WARP-tunneled).
+
+**Security**
+1. Cross-tenant email body access (IDOR) closed in `backend/app/email/routers/view_email.py:62`. `GmailMessageLog` has no `client_id` column; only the `require_compliance_permission` dependency checked tenant scope, never the resolved credential's client. Added `cred.client_id == membership.client_id` guard. Confirmed live: a token without a membership for the target client now gets a 403.
+2. BYOK API key reflection in `POST /api/compliance/ai/credentials/test` closed. The endpoint returned `detail=f"Auth failed: {e}"`, and the Anthropic SDK's `AuthenticationError` can stringify request headers (including the submitted key). Replaced with fixed strings; full exception goes to `logger.warning` server-side.
+3. NUL-byte 500 on `GET /api/documents/search?q=%00`. psycopg raised `ValueError: A string literal cannot contain NUL (0x00) characters`, surfacing as HTTP 500 in ~10s. Now strips NUL and returns 400 if the query is empty after the strip.
+4. Internal exception class name was being reflected in the Gmail OAuth callback redirect URL. Removed; the full traceback is logged server-side under the same correlation ID.
+5. Per-route rate limiting (10 to 20/minute) added to every BYOK AI endpoint (`test_credential`, `notice_summary`, `notice_actions`, `invoice_summary`, `invoice_actions`, `invoice_timing`, `chat`) so a legitimate tenant member cannot exhaust the per-tenant Anthropic / Gemini budget. Pattern follows `documents.py:286`.
+6. Migration `0033_ai_credentials_rls` ENABLE / FORCE RLS statements moved inside the `app_runtime` guard so a fresh dev database without that role is not left with FORCE RLS applied but no policies (a one-way trap that returns zero rows on every CRUD).
+7. `config.FERNET_KEY` validator now base64-decodes and checks for a 32-byte payload, replacing the brittle `len == 44 + isalnum` heuristic that was both false-positive (Unicode alphanumerics) and false-negative (quoted or padded keys in `.env`).
+
+**Reliability**
+8. `tenant_context` checkin cleanup used bare `except: pass`, so a cleanup failure returned the connection to the pool with the prior request's `app.current_client_id` still set, breaking tenant isolation. Now logs the failure and calls `connection_record.invalidate()` so the next checkout opens a fresh connection.
+9. `scheduler.get_scheduler()` left a half-dead singleton on `start()` failure; the next caller would receive the same broken instance forever. Reset to `None` on start failure, plus `pool_pre_ping=True` on the jobstore engine to recover from Supabase pooler idle disconnects.
+10. `bill_reminder_task` incremented `reminder_count` even on dispatch failure; after 3 failed dispatches the cool-down at line 45 silently muted the bill. Only consume the budget on successful dispatch.
+11. `audit_service` rollback-after-commit-failure became `logger.exception("audit_rollback_failed")` instead of `except: pass`.
+12. `notice_service.transition_notice_status` uses `log_audit_event_strict` so a regulatory dead-letter write fires the ops-attention log line (matches the AUDIT-02 contract). Test `test_response_submitted_gate.py` patches updated.
+13. `bulk_mark_bills_paid` calls `db.expire_all()` after rollback so a stale `Bill` from a prior successful iteration cannot resurface as expired-but-still-cached state in the next loop iteration.
+14. `access_token_cache` now reads `settings.REDIS_URL` (with SSL options aligned with `rate_limiter.py` and `main.py`) instead of `os.environ.get(REDIS_URL, "redis://localhost:6379/0")`, which previously bypassed the pydantic-settings normalization.
+15. `ai_providers.AnthropicProvider` now uses `isinstance(block, TextBlock)` before returning `block.text`, so a future SDK content-block with an unrelated `.text` attribute cannot leak.
+
+**API surface, slowapi 500 fix (the one that you flagged)**
+16. Every `@limiter.limit(...)` AI route now declares `response: Response` in its signature. slowapi's `_inject_headers` (extension.py:383) raises `parameter response must be an instance of starlette.responses.Response` when the handler returns a non-Response value; the wrapper falls back to `kwargs.get("response")` to find a Response on which to set `X-RateLimit-*` headers, and that lookup returned `None` because the routes did not declare the param. Effect was a 500 on every successful chat turn AFTER Gemini returned 200, with the user's reply discarded. Pattern now matches `documents.py:286`.
+17. `from __future__ import annotations` removed from `compliance/routers/ai.py`. The combination of future-annotations + `@limiter.limit(...)` + Pydantic body params produced `PydanticUserError: TypeAdapter[Annotated[ForwardRef(...), Body(...)]] is not fully defined` when FastAPI rebuilt the schema, breaking `/openapi.json`. Removing the future import resolves all ForwardRefs at import time.
+
+**Health-check split (k8s-style)**
+18. New `GET /api/health/live` endpoint (no DB / Redis access) wired to the docker-compose healthcheck. `GET /api/health` still does the DB + Redis ping for monitoring dashboards. Previous configuration tripped the container to `unhealthy` whenever the Supabase tunnel hiccupped, taking `depends_on` cascades down with it. Liveness now stays green during external-dependency blips; monitoring still alerts.
+19. `/api/health` cached its Redis client at module scope (was constructing a fresh `redis.from_url(...)` on every call). p99 under 10-RPS concurrency dropped from ~5.2s to ~1s steady state. Cache is reset on ping failure so the next call can re-establish.
+
+**Frontend**
+20. `BillDashboard.loadCountsAndList` switched from `Promise.all` to `Promise.allSettled` so a single bucket failure (e.g., Overdue server-side filter timing out) no longer blanks the entire dashboard. The user keeps seeing every bucket that loaded plus a non-blocking error toast naming the failed bucket. Bulk mark-paid toast on partial failure now lists the failing bill IDs and stays up for 8s so the user can reconcile.
+21. `api.ts` axios refresh-token timeout dropped from 30s to 10s. The 30s cap stacked with the per-request 30s, so a flaky link burned ~60s before any error rendered and `AuthContext.isLoading` could stick.
+
+**CI / CD**
+22. Bumped Next.js to 15.5.18 (Dependabot 8H / 4M / 2L cleared). Stayed on the 15.5 line via the `backport` dist-tag; held back from the major jump to 16.x which changes turbopack defaults and would need a planned migration.
+23. python-multipart 0.0.26 to 0.0.27 patches GHSA: unbounded multipart part headers DoS, the last remaining HIGH Dependabot advisory.
+24. Resend free-tier 550 ("verify a domain at resend.com/domains") rejection now downgraded to WARNING with a one-line resolution hint, so the scheduler / alert retries stop flooding the ERROR log. Real send failures still surface at ERROR.
+25. `dependabot.yml` rewritten with a wildcard `dependency-name: "*"` major-version ignore on both pip and npm ecosystems, plus explicit per-package entries kept as documentation. Closed 8 dependabot PRs that opened breaking majors (Next 16, Tailwind 4, TS 6, starlette 1.0, xgboost 3, @types/node 25, plus a second-wave 5 PRs: zod 4, react-dropzone 15, react-day-picker 10, framer-motion 12, redis 7).
+
+**Commits pushed to `origin/main`**
+- `acd7160` fix(backend): close IDOR, BYOK key reflection, NUL byte 500, RLS guard gaps
+- `b9a16e1` fix(frontend): BillDashboard partial-failure rendering + faster auth-refresh timeout
+- `f31f93c` docs: consolidate top-level docs into docs/ subdirs + add internship notes + script polish
+- `960283e` fix(deps): bump Next.js to 15.5.18 + split health into liveness vs monitoring
+- `2f192ac` fix(api): Response parameter on rate-limited AI routes + Resend 550 spam suppression + dependabot major ignore
+- `b45aca4` fix(deps): patch python-multipart DoS CVE + block all dependabot majors with a wildcard
+
+**Live E2E (against rebuilt images + WARP-tunneled Supabase)**
+- `/api/health` healthy, db connected, redis connected
+- Auth register returns a 204-char JWT
+- NUL-byte search returns 400 (was 500)
+- IDOR view_email target returns 403 (tenant guard)
+- AI chat returns 403 (was 500, slowapi crash is gone, 403 is the correct no-membership answer)
+- AI test endpoint returns 403 (rate-limit + permission guard)
+- 0 HTTP 500 responses in `smartdocs-backend` logs over the verification window
+
+**CI run on `b45aca4`**: 4 / 4 jobs green (docker-build, test, lint, frontend-checks). Deploy workflow ran on top and completed successfully in 3m8s.
+
+**Out of scope this sweep (deferred, architectural)**
+- `response_service.py` audit-after-commit pattern; needs to move audit into the same transaction as the business write. Architecture change, not an audit-sweep fix.
+- DOCX zip-bomb mitigation; needs a subprocess sandbox to bound decompressed XML size before python-docx parses it.
+- Switching CI workflows from Node 20 actions (deprecation warning, runner stays on 20 until June 2026).
+- Supabase password rotation; manual ops task per the existing `feedback_supabase_only` memory note.
+
+## 2026-05-18, Repo consolidation + 5-agent audit pass, Tier 1 fixes applied; CI re-run pending
 
 Doc layout was scattered (10+ markdown / html / pdf / docx files at repo root, plus 6 UI screenshots in the parent directory). Consolidated everything under `docs/` with a clean subfolder structure (`deployment/`, `security/`, `reference/`, `status/`, `operations/`, `exports/`, `screenshots/`); rewrote the 2 cross-references in `README.md`; updated all 4 build scripts (`scripts/build_*.py`, `scripts/md_to_docx.py`) to point at the new source + output paths; created `docs/README.md` as the index; added `.pytest_cache/` and `.ruff_cache/` to `.gitignore`. Top-level is now 9 entries (3 dirs, 4 config files, README, vercel.json) versus 27 before.
 

@@ -6,6 +6,31 @@
 | ------------ | --------- |
 | 1.0.x (current) | Yes   |
 
+## Recent hardening (2026-05-21 audit sweep)
+
+The latest end-to-end agent-team audit closed the following findings. See `docs/status/STATUS_REPORT.md` for the full session log + commit hashes.
+
+| Severity | Finding | Fix location |
+|---|---|---|
+| CRITICAL | Cross-tenant email body access (IDOR). `GmailMessageLog` has no `client_id`; the route resolved the credential without checking that `cred.client_id == membership.client_id`. | `backend/app/email/routers/view_email.py:62`. |
+| HIGH | BYOK `POST /ai/credentials/test` reflected the provider SDK exception string back to the caller. The Anthropic `AuthenticationError` can stringify the submitted key in its message. Now logs full exc server-side, returns a fixed user-facing string. | `backend/app/compliance/routers/ai.py` (`test_credential`). |
+| HIGH | Phase 16 BYOK `ai_credentials` table was created without the Row Level Security bootstrap + GRANT pattern used on every other tenant table. Migration `0033_ai_credentials_rls` adds it, with `ENABLE / FORCE RLS` guarded behind the `app_runtime` role check so a fresh dev DB without that role is not left with FORCE-RLS-no-policies (zero-rows trap). | `backend/alembic/versions/0033_ai_credentials_rls.py`. |
+| HIGH | NUL-byte 500 on `/api/documents/search?q=%00`. psycopg raised `ValueError: A string literal cannot contain NUL`; surfaced as a 10s 500. Now strips NUL and returns 400 when the query is empty after strip. | `backend/app/routers/documents.py`. |
+| HIGH | Per-route rate limiting added to every BYOK AI endpoint (10 to 20 per minute) so a legitimate tenant member cannot exhaust the per-tenant Anthropic / Gemini budget. | `backend/app/compliance/routers/ai.py`. |
+| HIGH | python-multipart 0.0.26 to 0.0.27 patches GHSA: unbounded multipart part headers DoS (Dependabot alert #81). | `backend/requirements.txt`. |
+| HIGH | Next.js 15.5.15 to 15.5.18 (backport tag) clears the bulk of the open Dependabot advisories, including middleware auth bypass (GHSA-267c-6grr-h53f), cache poisoning (GHSA-3g8h-86w9-wvmq), and the App-Router CSP-nonce / `beforeInteractive` XSS pair. Stayed on the 15.5 line; major to 16.x deferred for a planned migration. | `frontend/package.json`, `frontend/package-lock.json`. |
+| MEDIUM | Tenant-context checkin cleanup bare `except: pass` could return a connection to the pool with the prior request's `app.current_client_id` still set. Now logs the failure and invalidates the connection so the next checkout opens a fresh one. | `backend/app/compliance/middleware/tenant_context.py`. |
+| MEDIUM | Gmail OAuth callback was reflecting the internal exception class name in the URL query string. Removed; the full traceback is logged server-side. | `backend/app/email/routers/oauth.py`. |
+| MEDIUM | `FERNET_KEY` validator was length + isalnum heuristic that false-rejected padded keys and false-accepted Unicode alphanumerics. Now base64-decodes and checks for a 32-byte payload. | `backend/app/config.py`. |
+| LOW | `audit_service` rollback failure was a bare `pass`; now `logger.exception("audit_rollback_failed")` so dashboards see it. `notice_service` transitions use `log_audit_event_strict` so dead-letter writes fire the ops-attention log. | `backend/app/services/audit_service.py`, `backend/app/compliance/services/notice_service.py`. |
+| LOW | `bill_reminder_task` incremented `reminder_count` even on dispatch failure; after 3 failed dispatches the cool-down silently muted the bill. Only consume the budget on success. | `backend/app/email/tasks/bill_reminder_task.py`. |
+| LOW | Dependabot churn: wildcard `dependency-name: "*"` major-version ignore on both pip and npm. 8 breaking-major PRs closed (Next 16, Tailwind 4, TS 6, starlette 1.0, xgboost 3, @types/node 25, zod 4, redis 7, framer-motion 12, react-day-picker 10, react-dropzone 15). | `.github/dependabot.yml`. |
+
+Deferred (architectural, not auto-applied):
+- `response_service.py` audit-after-commit pattern. Needs audit inside the same transaction as the business write.
+- DOCX zip-bomb mitigation; needs a subprocess sandbox to bound decompressed XML size before python-docx parses it.
+- Frontend BFF pattern to move JWTs out of non-HttpOnly cookies.
+
 ## Security Architecture
 
 ### Authentication
