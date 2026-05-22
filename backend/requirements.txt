@@ -44,7 +44,7 @@ lxml==6.1.0
 # Phase 11 — alert pipeline (APScheduler durable scheduler, Twilio SMS adapter,
 # Indian holiday calendar). SendGrid migration deferred to v2.1 — keeps v2.0
 # email path on the existing Resend SMTP integration.
-APScheduler==3.11.0
+APScheduler==3.11.2
 twilio==9.4.4
 holidays==0.61
 
