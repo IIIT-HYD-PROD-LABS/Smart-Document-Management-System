@@ -175,19 +175,26 @@ function LoginInner() {
                                     </button>
                                 )}
                             </div>
-                            <p className="text-center text-[11.5px] text-[var(--text-subtle)] mt-3">
-                                Hitting{" "}
-                                <code className="font-mono text-[10.5px]">
-                                    redirect_uri_mismatch
-                                </code>
-                                ?{" "}
-                                <Link
-                                    href="/oauth-setup"
-                                    className={`text-[var(--text-secondary)] hover:text-[var(--accent)] underline-offset-2 hover:underline transition-colors rounded-sm ${focusRing}`}
-                                >
-                                    OAuth setup help
-                                </Link>
-                            </p>
+                            {/* Operator-facing helper for first-install OAuth config.
+                                Hidden in production so end users do not see
+                                developer jargon (redirect_uri_mismatch) on the
+                                login page. /oauth-setup is also admin-gated
+                                outside DEBUG on the backend (M-1 fix). */}
+                            {process.env.NODE_ENV !== "production" && (
+                                <p className="text-center text-[11.5px] text-[var(--text-subtle)] mt-3">
+                                    Hitting{" "}
+                                    <code className="font-mono text-[10.5px]">
+                                        redirect_uri_mismatch
+                                    </code>
+                                    ?{" "}
+                                    <Link
+                                        href="/oauth-setup"
+                                        className={`text-[var(--text-secondary)] hover:text-[var(--accent)] underline-offset-2 hover:underline transition-colors rounded-sm ${focusRing}`}
+                                    >
+                                        OAuth setup help
+                                    </Link>
+                                </p>
+                            )}
                         </>
                     )}
                 </div>
