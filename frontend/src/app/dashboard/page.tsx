@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
     FiFileText,
@@ -18,6 +18,7 @@ import {
     FiCpu,
 } from "react-icons/fi";
 import toast from "react-hot-toast";
+import { useQuery } from "@tanstack/react-query";
 
 import { documentsApi } from "@/lib/api";
 import { LoadingSpinner, StatusBadge } from "@/components";
@@ -75,19 +76,15 @@ interface DashboardStats {
 
 export default function DashboardPage() {
     const { user } = useAuth();
-    const [stats, setStats] = useState<DashboardStats | null>(null);
-    const [loading, setLoading] = useState(true);
+    const { data: stats, isLoading: loading, isError } = useQuery<DashboardStats>({
+        queryKey: ["dashboard", "stats"],
+        queryFn: () => documentsApi.getStats().then((r) => r.data),
+        staleTime: 60_000,
+    });
 
     useEffect(() => {
-        documentsApi
-            .getStats()
-            .then((res) => setStats(res.data))
-            .catch(() => {
-                setStats(null);
-                toast.error("Failed to load dashboard");
-            })
-            .finally(() => setLoading(false));
-    }, []);
+        if (isError) toast.error("Failed to load dashboard");
+    }, [isError]);
 
     const today = useMemo(() => {
         return new Date().toLocaleDateString("en-IN", {

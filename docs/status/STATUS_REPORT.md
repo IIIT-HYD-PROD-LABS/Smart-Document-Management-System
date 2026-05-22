@@ -1,7 +1,55 @@
 # Smart Document Management System, Status Report
 
 **Organization:** Product Labs, IIIT Hyderabad
-**Last Updated:** 2026-05-21 (compliance overhaul, admin-only client creation, email-based team invites, notice-assign endpoint, review-queue heuristic + triage workbench)
+**Last Updated:** 2026-05-22 (admin shell + auth hardening, register-bypass + first-user-race CRITICAL fixes, compliance defense-in-depth, frontend perf)
+
+## 2026-05-22, admin shell + auth hardening
+
+Multi-agent audit sweep (sign-in, compliance, AI/email, admin UI, security, perf) followed by parallel implementation. Two CRITICAL security findings closed, plus four HIGH/MED, plus a unified admin surface.
+
+### Admin shell
+
+Replaced the scattered admin pages (`/dashboard/admin` tab-based mega-page, `/dashboard/settings/ai`, `/dashboard/model-evaluation`) with a unified `/dashboard/admin/` shell:
+
+- `layout.tsx` gates on `role === 'admin'` and renders a secondary sidebar (200px sticky rail desktop, horizontal tab strip mobile).
+- Pages: Overview (stats + quick links + recent audit feed), Users (list), Users/[id] (detail with audit history), Early access (extracted from the old tab), Audit log (filter-rich, backend endpoint was already there), AI provider (moved from `/settings/ai`), Organization (tenant identity + retention + thresholds, scaffold for Phase 18), Security (password policy + account hardening + sign-in providers + registration gate, read-only status panel), Model evaluation (moved from `/dashboard/model-evaluation`).
+- Legacy URLs preserved as redirect stubs (`/dashboard/settings/ai` and `/dashboard/model-evaluation` push to the new admin paths).
+- `UserMenu` admin section updated to the new IA (Admin home, Users, Audit log, AI provider, Organizations).
+- Backend needed zero new endpoints: the audit log viewer and user detail page consume `GET /api/admin/audit` and `GET /api/admin/users/{id}` that were already shipped.
+
+### Auth hardening, CRITICAL fixes
+
+**C-1, public-register early-access bypass.** `POST /api/auth/register` accepted any email regardless of invitation status; the early-access gate was decorative. Fix: `UserRegister` schema gains an optional `invitation_token` field. After the bootstrap admin exists, the register handler requires the token, validates the JWT against the matching `EarlyAccessRequest`, locks the row with `with_for_update()`, and nulls `invitation_token` to make it single-use. Frontend register page forwards `inviteToken` from the URL into the API call.
+
+**C-2, first-user admin promotion race.** Three call sites (local register, Google OAuth callback, Microsoft OAuth callback) ran `db.query(User).count() == 0` then `INSERT`, so two concurrent requests on a fresh DB could both insert as admin. Fix: new `_safe_role(db)` helper takes a Postgres advisory lock (`pg_advisory_xact_lock(7398126503)`) before the count, released at transaction end. All three sites switched to the helper. Also closes M-3 by counting `is_active == True` users only.
+
+### Auth hardening, HIGH/MED follow-ups
+
+- **H-2.** `POST /api/auth/accept-invite` switched from `payload: dict` (no validation, no OpenAPI schema) to a typed `AcceptInviteRequest` Pydantic model with bounded password length.
+- **H-4.** Removed `invitation_token` from `PATCH /api/admin/early-access/{id}` response and `accept_invite_token` from `POST /api/clients/{id}/memberships` response. Both were leaking replayable JWTs to authenticated callers in `DEBUG=true`. Now logged via `structlog.debug` with a token preview only.
+- **M-1.** `GET /api/auth/oauth/diag` is public in `DEBUG=true` (fresh-install self-service) but requires an admin bearer token outside DEBUG, so the backend URL and client_id hint no longer leak in production.
+
+### Compliance defense-in-depth
+
+`GET /api/compliance/notices/{id}` and `GET /api/compliance/review/{id}` previously trusted RLS alone for tenant scoping. Both now apply an explicit `client_id` filter on top of the RLS policy, so an accidental policy regression cannot leak cross-tenant rows. The matching `PATCH /notices/{id}` is similarly hardened. Cross-client mode for the system admin role still works because the filter is gated by `is_cross_client_mode()`.
+
+### Frontend perf
+
+- `dashboard/page.tsx` stats fetch wrapped in `useQuery` with 60-second `staleTime`, so back-navigating no longer refetches.
+- `dashboard/analytics/page.tsx` stats + trends split into two `useQuery` calls with 5-minute `staleTime`.
+- recharts (1.2 MB) lazy-loaded via `next/dynamic`: extracted `TrendsChart` (area) and `CategoryDonut` (pie) into a single `components/analytics/TrendsChart.tsx` chunk so both charts share one lazy boundary.
+- Soft logout: `lib/api.ts` token-refresh failures now dispatch a `auth:session-expired` `CustomEvent` instead of `window.location.href = "/login"`. `dashboard/layout.tsx` listens and calls `router.push("/login")` for a route-level navigation, so the user no longer sees a full-page flash on session expiry.
+
+### Verification
+
+414 backend pytest tests pass (`-m "not integration"`, skipping pre-existing RLS `SET ROLE app_runtime` infrastructure tests). `npx tsc --noEmit` clean on the frontend. Playwright drove the admin shell: all 8 sub-nav routes return 200, audit log renders 50 rows with filters, security page shows all 4 sections, legacy `/dashboard/settings/ai` redirects to `/dashboard/admin/ai`. Live POST against the bypass curl reproduced the C-1 fix returning `403 "Registration requires an invitation"` and the bad-token variant returning `400 "Invalid invitation link"`. `GET /api/auth/oauth/diag` returns `401` outside DEBUG.
+
+### Out-of-scope, deferred to Phase 18
+
+- Per-account brute-force lockout (currently global IP rate limit 5/min). The Security page surfaces a "Phase 18" badge for this.
+- MFA enrolment, session-timeout config, rate-limit overrides, retention-policy actual enforcement.
+- Tenant-configurable compliance confidence threshold (currently hard-coded 0.75 in `review_queue_service.py`).
+- AI cost metering + per-tenant token quotas.
 
 ## 2026-05-21 (PM), compliance flow rewired end-to-end
 

@@ -80,7 +80,7 @@ api.interceptors.response.use(
             Cookies.remove("refresh_token");
             Cookies.remove("user");
             if (typeof window !== "undefined") {
-                window.location.href = "/login";
+                window.dispatchEvent(new CustomEvent("auth:session-expired"));
             }
             return Promise.reject(error);
         }
@@ -121,7 +121,7 @@ api.interceptors.response.use(
             Cookies.remove("refresh_token");
             Cookies.remove("user");
             if (typeof window !== "undefined") {
-                window.location.href = "/login";
+                window.dispatchEvent(new CustomEvent("auth:session-expired"));
             }
             return Promise.reject(refreshError);
         } finally {
@@ -132,7 +132,7 @@ api.interceptors.response.use(
 
 // ──── Auth API ────
 export const authApi = {
-    register: (data: { email: string; username: string; password: string; full_name?: string }) =>
+    register: (data: { email: string; username: string; password: string; full_name?: string; invitation_token?: string }) =>
         api.post("/auth/register", data),
 
     login: (data: { email: string; password: string }) =>
@@ -253,6 +253,30 @@ export const adminApi = {
 
     getStats: () =>
         api.get("/admin/stats"),
+
+    // Audit log query. Filters mirror the FastAPI route signature exactly.
+    getAuditLogs: (filters: {
+        page?: number;
+        perPage?: number;
+        userId?: number | null;
+        action?: string | null;
+        resourceType?: string | null;
+        resourceId?: number | null;
+        dateFrom?: string | null;
+        dateTo?: string | null;
+    } = {}) => {
+        const params = new URLSearchParams({
+            page: String(filters.page ?? 1),
+            per_page: String(filters.perPage ?? 50),
+        });
+        if (filters.userId != null) params.append("user_id", String(filters.userId));
+        if (filters.action) params.append("action", filters.action);
+        if (filters.resourceType) params.append("resource_type", filters.resourceType);
+        if (filters.resourceId != null) params.append("resource_id", String(filters.resourceId));
+        if (filters.dateFrom) params.append("date_from", filters.dateFrom);
+        if (filters.dateTo) params.append("date_to", filters.dateTo);
+        return api.get(`/admin/audit?${params.toString()}`);
+    },
 
     // Early Access management
     getEarlyAccess: (page = 1, perPage = 20, statusFilter?: string, search?: string) => {

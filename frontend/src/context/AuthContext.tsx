@@ -17,7 +17,7 @@ interface AuthContextType {
     token: string | null;
     isLoading: boolean;
     login: (email: string, password: string) => Promise<void>;
-    register: (data: { email: string; username: string; password: string; full_name?: string }) => Promise<void>;
+    register: (data: { email: string; username: string; password: string; full_name?: string; invitation_token?: string }) => Promise<void>;
     logout: () => Promise<void>;
     setTokensFromOAuth: (accessToken: string, refreshToken: string, userData: User) => void;
 }
@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(userData);
     }, []);
 
-    const register = useCallback(async (data: { email: string; username: string; password: string; full_name?: string }) => {
+    const register = useCallback(async (data: { email: string; username: string; password: string; full_name?: string; invitation_token?: string }) => {
         const response = await authApi.register(data);
         const { access_token, refresh_token, user: userData } = response.data;
         Cookies.set("token", access_token, { sameSite: "Strict", secure: process.env.NODE_ENV === "production", expires: 1 / 48 });

@@ -143,6 +143,15 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
         if (!isLoading && !user) router.push("/login");
     }, [user, isLoading, router]);
 
+    // Soft-logout on expired-session event from the axios interceptor.
+    // Replaces a hard window.location reload so the React tree, query
+    // cache, and theme state survive the redirect.
+    useEffect(() => {
+        const handler = () => router.push("/login");
+        window.addEventListener("auth:session-expired", handler);
+        return () => window.removeEventListener("auth:session-expired", handler);
+    }, [router]);
+
     // Close sidebar on route change (mobile)
     useEffect(() => {
         setSidebarOpen(false);

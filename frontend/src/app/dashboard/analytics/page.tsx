@@ -1,36 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import toast from "react-hot-toast";
+import dynamic from "next/dynamic";
+import { useQuery } from "@tanstack/react-query";
 import { documentsApi } from "@/lib/api";
 import { LoadingSpinner } from "@/components";
-import {
-    AreaChart,
-    Area,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-    PieChart,
-    Pie,
-    Cell,
-} from "recharts";
 
-// Light-theme calibrated category palette — deeper saturations for AA on white.
-const CATEGORY_COLORS: Record<string, string> = {
-    bills:    "#047857",
-    upi:      "#6d28d9",
-    tickets:  "#b45309",
-    tax:      "#1d4ed8",
-    bank:     "#0e7490",
-    invoices: "#be185d",
-    unknown:  "#71717a",
-};
+const TrendsChart = dynamic(() => import("@/components/analytics/TrendsChart"), {
+    ssr: false,
+    loading: () => (
+        <div className="h-64 flex items-center justify-center">
+            <LoadingSpinner />
+        </div>
+    ),
+});
+
+const CategoryDonut = dynamic(
+    () => import("@/components/analytics/TrendsChart").then((m) => m.CategoryDonut),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="h-56 flex items-center justify-center">
+                <LoadingSpinner />
+            </div>
+        ),
+    },
+);
 
 interface TrendPoint {
     month: string;
     count: number;
+}
+
+interface TrendsResponse {
+    trends: TrendPoint[];
 }
 
 interface Stats {
@@ -42,26 +46,23 @@ interface Stats {
 }
 
 export default function AnalyticsPage() {
-    const [stats, setStats] = useState<Stats | null>(null);
-    const [trends, setTrends] = useState<TrendPoint[]>([]);
-    const [loading, setLoading] = useState(true);
+    const statsQ = useQuery<Stats>({
+        queryKey: ["docs", "stats"],
+        queryFn: () => documentsApi.getStats().then((r) => r.data),
+        staleTime: 5 * 60_000,
+    });
+    const trendsQ = useQuery<TrendsResponse>({
+        queryKey: ["docs", "trends", 12],
+        queryFn: () => documentsApi.getTrends(12).then((r) => r.data),
+        staleTime: 5 * 60_000,
+    });
+
+    const loading = statsQ.isLoading || trendsQ.isLoading;
+    const isError = statsQ.isError || trendsQ.isError;
 
     useEffect(() => {
-        Promise.all([
-            documentsApi.getStats(),
-            documentsApi.getTrends(12),
-        ])
-            .then(([statsRes, trendsRes]) => {
-                setStats(statsRes.data);
-                setTrends(trendsRes.data.trends ?? []);
-            })
-            .catch(() => {
-                setStats(null);
-                setTrends([]);
-                toast.error("Failed to load analytics");
-            })
-            .finally(() => setLoading(false));
-    }, []);
+        if (isError) toast.error("Failed to load analytics");
+    }, [isError]);
 
     if (loading) {
         return (
@@ -70,6 +71,9 @@ export default function AnalyticsPage() {
             </div>
         );
     }
+
+    const stats = statsQ.data ?? null;
+    const trends = trendsQ.data?.trends ?? [];
 
     const total = stats?.total_documents ?? 0;
     const processing = stats?.processing_count ?? 0;
@@ -141,16 +145,6 @@ export default function AnalyticsPage() {
         { label: "Failed",          value: failed,     color: "var(--danger)" },
     ];
 
-    // Recharts tooltip uses a div with inline style; pull tokens at runtime.
-    const tooltipStyle = {
-        backgroundColor: "var(--bg-elevated)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "8px",
-        color: "var(--text-primary)",
-        fontSize: 12,
-        boxShadow: "var(--shadow-md)",
-    };
-
     return (
         <div>
             <div className="mb-8">
@@ -186,46 +180,7 @@ export default function AnalyticsPage() {
                 }}
             >
                 <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Upload Trends</h2>
-                {trendData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={260}>
-                        <AreaChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                            <defs>
-                                <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#2563eb" stopOpacity={0.18} />
-                                    <stop offset="100%" stopColor="#2563eb" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-                            <XAxis
-                                dataKey="month"
-                                tick={{ fill: "#71717a", fontSize: 12 }}
-                                axisLine={{ stroke: "#e4e4e7" }}
-                                tickLine={false}
-                            />
-                            <YAxis
-                                allowDecimals={false}
-                                tick={{ fill: "#71717a", fontSize: 12 }}
-                                axisLine={{ stroke: "#e4e4e7" }}
-                                tickLine={false}
-                            />
-                            <Tooltip
-                                contentStyle={tooltipStyle}
-                                labelStyle={{ color: "#52525b" }}
-                                cursor={{ stroke: "#d4d4d8", strokeDasharray: "3 3" }}
-                            />
-                            <Area
-                                type="monotone"
-                                dataKey="count"
-                                stroke="#2563eb"
-                                strokeWidth={2}
-                                fill="url(#trendGradient)"
-                                name="Uploads"
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                ) : (
-                    <p className="text-xs text-center py-8" style={{ color: "var(--text-muted)" }}>No trend data available</p>
-                )}
+                <TrendsChart data={trendData} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -239,50 +194,7 @@ export default function AnalyticsPage() {
                     }}
                 >
                     <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Category Distribution</h2>
-                    {pieData.length > 0 ? (
-                        <div className="flex flex-col items-center">
-                            <ResponsiveContainer width="100%" height={220}>
-                                <PieChart>
-                                    <Pie
-                                        data={pieData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={60}
-                                        outerRadius={90}
-                                        dataKey="value"
-                                        paddingAngle={2}
-                                    >
-                                        {pieData.map((entry) => (
-                                            <Cell
-                                                key={entry.name}
-                                                fill={CATEGORY_COLORS[entry.name] ?? "#71717a"}
-                                                stroke="#ffffff"
-                                                strokeWidth={2}
-                                            />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip
-                                        contentStyle={tooltipStyle}
-                                        formatter={(value: number, name: string) => [value, name]}
-                                    />
-                                </PieChart>
-                            </ResponsiveContainer>
-                            <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-2">
-                                {pieData.map((entry) => (
-                                    <div key={entry.name} className="flex items-center gap-1.5">
-                                        <div
-                                            className="w-2 h-2 rounded-full"
-                                            style={{ backgroundColor: CATEGORY_COLORS[entry.name] ?? "#71717a" }}
-                                        />
-                                        <span className="text-xs capitalize" style={{ color: "var(--text-secondary)" }}>{entry.name}</span>
-                                        <span className="text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>{entry.value}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ) : (
-                        <p className="text-xs text-center py-8" style={{ color: "var(--text-muted)" }}>No data</p>
-                    )}
+                    <CategoryDonut data={pieData} />
                 </div>
 
                 {/* Processing Status - Horizontal Segmented Bar */}

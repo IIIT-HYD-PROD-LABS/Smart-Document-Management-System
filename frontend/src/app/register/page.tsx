@@ -75,7 +75,13 @@ function RegisterInner() {
         if (!/^[a-zA-Z0-9_-]+$/.test(form.username)) { toast.error("Username may only contain letters, numbers, hyphens, and underscores"); return; }
         setLoading(true);
         try {
-            await register(form);
+            // Forward the invite JWT so the backend can validate the
+            // early-access gate. Without this, the public /register
+            // endpoint accepts any email and the gate is decorative.
+            await register({
+                ...form,
+                invitation_token: inviteToken || undefined,
+            });
             toast.success("Account created");
         } catch (err: unknown) {
             toast.error(extractErrorMessage(err, "Registration failed"));

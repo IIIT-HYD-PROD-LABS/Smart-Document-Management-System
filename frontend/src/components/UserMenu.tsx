@@ -8,7 +8,8 @@ import {
     FiCpu,
     FiShield,
     FiBriefcase,
-    FiBarChart2,
+    FiUsers,
+    FiList,
     FiLogOut,
     FiChevronUp,
 } from "react-icons/fi";
@@ -34,20 +35,21 @@ interface UserMenuItem {
 const PERSONAL_ITEMS: UserMenuItem[] = [
     { href: "/dashboard/profile", icon: FiUser, label: "Account" },
     { href: "/dashboard/email", icon: FiMail, label: "Email center" },
-    { href: "/dashboard/settings/ai", icon: FiCpu, label: "AI assistant" },
 ];
 
+// Admin entries point at the new unified /dashboard/admin shell (a
+// second-level sidebar lives inside that layout for deeper navigation).
+// Legacy URLs (/dashboard/settings/ai, /dashboard/model-evaluation)
+// still resolve via redirect stubs for backwards-compat.
 const ADMIN_ITEMS: UserMenuItem[] = [
-    { href: "/dashboard/admin", icon: FiShield, label: "Admin" },
+    { href: "/dashboard/admin", icon: FiShield, label: "Admin home" },
+    { href: "/dashboard/admin/users", icon: FiUsers, label: "Users" },
+    { href: "/dashboard/admin/audit", icon: FiList, label: "Audit log" },
+    { href: "/dashboard/admin/ai", icon: FiCpu, label: "AI provider" },
     {
         href: "/dashboard/compliance/clients",
         icon: FiBriefcase,
         label: "Organizations",
-    },
-    {
-        href: "/dashboard/model-evaluation",
-        icon: FiBarChart2,
-        label: "Model eval",
     },
 ];
 
