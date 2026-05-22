@@ -274,14 +274,57 @@ def process_classified_email(
         from app.services.audit_service import log_audit_event_strict
 
         authority = authority_from_sender(sender)
-        notice_number = (
-            extracted_metadata.get("notice_number")
-            or f"GMAIL-{message_log.gmail_message_id[:8]}"
-        )
+
+        # Phase 17 D-24 — run extractor BEFORE notice create so extracted
+        # values can land directly on the canonical columns. Non-fatal:
+        # any failure falls back to the original "use sender-derived
+        # authority + GMAIL-prefix notice_number" path.
+        extraction_envelope: Optional[dict] = None
+        extraction_decision: Optional[dict] = None
+        try:
+            from app.compliance.services.extraction_routing_service import (
+                apply_extraction_to_notice,
+                route_or_apply,
+            )
+            from app.compliance.services.notice_extractor_service import (
+                extract_notice_fields,
+            )
+
+            extraction_envelope = extract_notice_fields(
+                db,
+                client_id=credential.client_id,
+                user_id=system_user_id,
+                text=body or "",
+                notice_id=None,
+            )
+            extraction_decision = route_or_apply(extraction_envelope)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("gmail_phase17_extraction_failed: %s", e)
+            extraction_envelope = None
+            extraction_decision = None
+
+        # Pull extracted values when the decision authorises auto-apply (D-24).
+        notice_number = None
+        applied_authority = authority
+        if extraction_decision and extraction_decision.get("action") == "apply":
+            fields = (extraction_envelope or {}).get("fields") or {}
+            ext_no = fields.get("notice_number") if isinstance(fields.get("notice_number"), dict) else None
+            if ext_no and ext_no.get("value"):
+                notice_number = str(ext_no["value"])
+            ext_auth = fields.get("authority") if isinstance(fields.get("authority"), dict) else None
+            if ext_auth and ext_auth.get("value") in {"GST", "IT", "MCA", "RBI", "SEBI"}:
+                applied_authority = ext_auth["value"]
+
+        if not notice_number:
+            notice_number = (
+                extracted_metadata.get("notice_number")
+                or f"GMAIL-{message_log.gmail_message_id[:8]}"
+            )
+
         notice = ComplianceNotice(
             client_id=credential.client_id,
             notice_number=str(notice_number)[:100],
-            authority=authority,
+            authority=applied_authority,
             status="received",
             source="gmail",
             document_id=primary_attachment_doc_id,
@@ -289,6 +332,18 @@ def process_classified_email(
         )
         db.add(notice)
         db.flush()
+
+        # Persist the extraction envelope onto the notice regardless of
+        # routing decision (D-23). When the gate failed, this also
+        # enqueues a review-queue row.
+        if extraction_envelope and extraction_decision:
+            try:
+                apply_extraction_to_notice(
+                    db, notice, extraction_envelope, extraction_decision
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning("gmail_phase17_apply_failed: %s", e)
+
         try:
             log_activity(
                 db,
@@ -302,6 +357,9 @@ def process_classified_email(
                     "gmail_message_id_sha256": hashlib.sha256(
                         message_log.gmail_message_id.encode("utf-8")
                     ).hexdigest(),
+                    "phase17_extraction_action": (
+                        extraction_decision.get("action") if extraction_decision else "skipped"
+                    ),
                 },
             )
         except Exception as e:
@@ -317,6 +375,13 @@ def process_classified_email(
                 "body_sha256": message_log.body_sha256,
                 "sender_domain": message_log.sender_domain,
                 "gmail_message_log_id": message_log.id,
+                # D-24 audit cross-reference: when the extractor ran, name
+                # the action so the auditor can correlate this notice
+                # creation with the preceding NOTICE_AI_EXTRACT row by
+                # body_sha256.
+                "phase17_extraction_action": (
+                    extraction_decision.get("action") if extraction_decision else "skipped"
+                ),
             },
         )
         db.commit()

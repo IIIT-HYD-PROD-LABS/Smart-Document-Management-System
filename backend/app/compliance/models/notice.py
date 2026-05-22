@@ -145,6 +145,14 @@ class ComplianceNotice(Base):
     model_version = Column(String(50), nullable=True)
     classified_at = Column(DateTime(timezone=True), nullable=True)
     risk_scored_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Phase 17 — LLM-based field extraction artefact (migration 0034).
+    # Shape per 17-CONTEXT.md D-03 envelope; routing per D-06.
+    extracted_fields = Column(JSONB, nullable=True)
+    extraction_confidence = Column(Numeric(3, 2), nullable=True)
+    extracted_by_provider = Column(String(120), nullable=True)
+    extracted_at = Column(DateTime(timezone=True), nullable=True)
+    extraction_status = Column(String(20), nullable=True)
     # Phase 15 + Phase 14 — source provenance for filter chip on dashboard.
     source = Column(
         String(20),
@@ -211,6 +219,18 @@ class ComplianceNotice(Base):
         CheckConstraint(
             "risk_tier IS NULL OR risk_tier IN ('critical', 'high', 'medium', 'low')",
             name="ck_compliance_notices_risk_tier_valid",
+        ),
+        # Phase 17 — extraction status check (mirrors migration 0034).
+        CheckConstraint(
+            "extraction_status IS NULL OR extraction_status IN "
+            "('pending', 'completed', 'failed', 'accepted', 'superseded')",
+            name="ck_compliance_notices_extraction_status",
+        ),
+        # Phase 17 — confidence bounded to [0, 1] (mirrors migration 0034).
+        CheckConstraint(
+            "extraction_confidence IS NULL OR "
+            "(extraction_confidence >= 0 AND extraction_confidence <= 1)",
+            name="ck_compliance_notices_extraction_confidence",
         ),
         # Phase 10 + Phase 15 — source provenance.
         CheckConstraint(

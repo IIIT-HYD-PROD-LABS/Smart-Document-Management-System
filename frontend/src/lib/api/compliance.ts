@@ -155,6 +155,58 @@ export interface NoticesPage {
     page_size: number;
 }
 
+// ──── Phase 17 — AI extraction types ────
+
+export interface ExtractedFieldDto {
+    value: string | number | string[] | null;
+    confidence: number;
+    source_span?: string | null;
+    original_confidence?: number | null;
+    validation_failure?: string | null;
+}
+
+export interface ExtractionEnvelopeDto {
+    fields: Record<string, ExtractedFieldDto>;
+    average_confidence: number;
+    model: string;
+    tokens_in: number;
+    tokens_out: number;
+    latency_ms: number;
+}
+
+export interface ExtractionRouteDecisionDto {
+    action: "apply" | "review_queue" | "failed";
+    reason: string | null;
+    average_confidence: number;
+    critical_field_confidence: Record<string, number>;
+}
+
+export interface ExtractPreviewResponse {
+    envelope: ExtractionEnvelopeDto;
+    decision: ExtractionRouteDecisionDto;
+}
+
+export interface ExtractionResponseDto {
+    notice_id: number;
+    extraction_status:
+        | "pending"
+        | "completed"
+        | "failed"
+        | "accepted"
+        | "superseded"
+        | null;
+    extraction_confidence: number | null;
+    extracted_by_provider: string | null;
+    extracted_at: string | null;
+    envelope: ExtractionEnvelopeDto | null;
+}
+
+export interface AcceptExtractionItem {
+    field: string;
+    value: string | number | null;
+    accept_as_is: boolean;
+}
+
 // ──── complianceApi ────
 
 export const complianceApi = {
@@ -275,6 +327,32 @@ export const complianceApi = {
             })
         );
     },
+
+    // ──── Phase 17 — AI extraction (BYOK) ────
+    extractPreview: (file: File) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        return api.post<ExtractPreviewResponse>(
+            `/compliance/notices/extract-preview`,
+            fd,
+            withTenant({
+                headers: { "Content-Type": "multipart/form-data" },
+            }),
+        );
+    },
+
+    getExtraction: (id: number) =>
+        api.get<ExtractionResponseDto>(
+            `/compliance/notices/${id}/extraction`,
+            withTenant(),
+        ),
+
+    acceptExtraction: (id: number, items: AcceptExtractionItem[]) =>
+        api.post<ComplianceNotice>(
+            `/compliance/notices/${id}/accept-extraction`,
+            { items },
+            withTenant(),
+        ),
 
     listActivity: (id: number) =>
         api.get<NoticeActivity[]>(

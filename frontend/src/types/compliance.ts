@@ -132,6 +132,18 @@ export interface ComplianceNotice {
     classified_at: string | null;
     risk_scored_at: string | null;
     source: NoticeSource;
+    // Phase 17 — LLM-based field extraction artefact (migration 0034).
+    extracted_fields: unknown | null;
+    extraction_confidence: string | null;
+    extracted_by_provider: string | null;
+    extracted_at: string | null;
+    extraction_status:
+        | "pending"
+        | "completed"
+        | "failed"
+        | "accepted"
+        | "superseded"
+        | null;
 }
 
 // Phase 10 — review queue

@@ -54,6 +54,110 @@ def _cleanup_file(file_path: str | None) -> None:
         logger.warning("orphan_file_cleanup_failed", error=str(err))
 
 
+def _run_phase17_extraction(
+    db, *, document_id: int, notice_id: int, user_id: int | None, extracted_text: str
+) -> None:
+    """Phase 17 D-23 — extract notice fields when this document attaches to a notice.
+
+    All failure modes mark `extraction_status='failed'` on the notice and
+    return; nothing here should re-raise. The Document row is already
+    committed by the caller, so partial extraction is acceptable.
+
+    First-upload-wins (D-12): if the notice already carries an accepted
+    extraction artefact, skip. A `extracted_supplementary` activity row
+    is left behind so the supplementary upload is visible on the timeline.
+    """
+    try:
+        from app.compliance.models.notice import ComplianceNotice
+        from app.compliance.services.activity_service import log_activity
+        from app.compliance.services.extraction_routing_service import (
+            apply_extraction_to_notice,
+            route_or_apply,
+            should_skip_extraction,
+        )
+        from app.compliance.services.notice_extractor_service import (
+            NoticeExtractionCredentialMissingError,
+            extract_notice_fields,
+        )
+    except ImportError as imp_err:
+        logger.warning(
+            "phase17_extraction_import_failed",
+            document_id=document_id,
+            error=str(imp_err),
+        )
+        return
+
+    notice = db.get(ComplianceNotice, notice_id)
+    if notice is None:
+        return
+
+    if should_skip_extraction(notice):
+        try:
+            log_activity(
+                db,
+                notice_id=notice.id,
+                user_id=user_id,
+                type="file_attached",
+                details={"document_id": document_id, "supplementary_extraction_skipped": True},
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+        return
+
+    try:
+        envelope = extract_notice_fields(
+            db,
+            client_id=notice.client_id,
+            user_id=user_id,
+            text=extracted_text or "",
+            notice_id=notice.id,
+        )
+    except NoticeExtractionCredentialMissingError:
+        notice.extraction_status = "failed"
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+        return
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "phase17_extraction_failed",
+            document_id=document_id,
+            notice_id=notice_id,
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        notice.extraction_status = "failed"
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+        return
+
+    try:
+        decision = route_or_apply(envelope)
+        apply_extraction_to_notice(db, notice, envelope, decision)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "phase17_extraction_apply_failed",
+            document_id=document_id,
+            notice_id=notice_id,
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        notice.extraction_status = "failed"
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+
+
 @celery_app.task(bind=True, max_retries=3, time_limit=600, soft_time_limit=540)
 def process_document_task(self, document_id: int):
     """
@@ -183,6 +287,19 @@ def process_document_task(self, document_id: int):
 
         doc.status = DocumentStatus.COMPLETED
         db.commit()
+
+        # Phase 17 — when this document is attached to a compliance notice,
+        # run LLM field extraction so the notice form gets pre-populated.
+        # Non-fatal: a failure leaves extraction_status='failed' and the
+        # user falls back to manual entry (D-09 + D-23).
+        if getattr(doc, "notice_id", None):
+            _run_phase17_extraction(
+                db,
+                document_id=document_id,
+                notice_id=doc.notice_id,
+                user_id=getattr(doc, "user_id", None),
+                extracted_text=extracted_text,
+            )
 
         logger.info(
             "document_processed",

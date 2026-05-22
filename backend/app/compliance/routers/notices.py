@@ -32,6 +32,8 @@ from fastapi import (
     File,
     HTTPException,
     Query,
+    Request,
+    Response,
     UploadFile,
     status,
 )
@@ -75,11 +77,17 @@ from app.compliance.services.permission_registry import (
     ComplianceRole,
     has_permission,
 )
+from app.compliance.schemas.extraction import (
+    AcceptExtractionPayload,
+    ExtractPreviewResponse,
+    ExtractionResponse,
+)
 from app.database import get_db
 from app.models.document import Document, DocumentStatus
 from app.models.user import User
 from app.services.audit_service import log_audit_event
 from app.services.storage_service import save_file
+from app.utils.rate_limiter import limiter
 from app.utils.security import get_current_user
 
 
@@ -788,3 +796,256 @@ def add_note(
         )
     db.refresh(row)
     return row
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Phase 17 — AI extraction endpoints
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _ocr_extract_text(file_bytes: bytes, file_ext: str) -> str:
+    """Run v1.0 OCR / PDF / DOCX extraction on raw bytes. Returns extracted text."""
+    from app.ml.classifier import extract_and_classify
+    text, _category, _confidence = extract_and_classify(file_bytes, file_ext)
+    return text or ""
+
+
+@router.post(
+    "/extract-preview",
+    response_model=ExtractPreviewResponse,
+    status_code=status.HTTP_200_OK,
+)
+@limiter.limit("12/minute")
+def extract_preview(
+    request: Request,
+    response: Response,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    membership: ClientMembership = Depends(
+        require_compliance_permission(CompliancePermission.NOTICE_AI_EXTRACT)
+    ),
+):
+    """Phase 17 D-19 — upload PDF/JPG/PNG, return extraction envelope + routing decision.
+
+    No notice row or document row is persisted. The caller (frontend) shows
+    the envelope alongside the manual create form so the user can review,
+    accept, edit, or discard each field before saving.
+
+    On HTTP 412 (PRECONDITION_FAILED) the tenant has no AICredential
+    configured; user falls back to manual fill (D-14).
+    """
+    from app.compliance.services.extraction_routing_service import route_or_apply
+    from app.compliance.services.notice_extractor_service import (
+        NoticeExtractionCredentialMissingError,
+        NoticeExtractionParseError,
+        extract_notice_fields,
+    )
+    from app.compliance.services import ai_service
+
+    if file.content_type not in _ALLOWED_UPLOAD_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF, JPG, PNG accepted for extract-preview",
+        )
+
+    contents = file.file.read()
+    ext = _CONTENT_TYPE_TO_EXT.get(file.content_type or "", "pdf")
+
+    try:
+        text = _ocr_extract_text(contents, ext)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="OCR could not extract text from the uploaded file",
+        )
+
+    if not text.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No text could be extracted from the uploaded file",
+        )
+
+    try:
+        envelope = extract_notice_fields(
+            db,
+            client_id=membership.client_id,
+            user_id=current_user.id,
+            text=text,
+            notice_id=None,
+        )
+    except NoticeExtractionCredentialMissingError:
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail={
+                "code": "no_ai_credential",
+                "message": (
+                    "Connect an AI provider in settings to enable extraction. "
+                    "You can still upload and fill the form manually."
+                ),
+                "settings_path": "/dashboard/settings/ai-credentials",
+            },
+        )
+    except ai_service.AIOutOfScopeError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="AI provider declined this content as out of scope",
+        )
+    except NoticeExtractionParseError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="AI provider returned an unparseable response",
+        )
+
+    decision = route_or_apply(envelope)
+    return {"envelope": envelope, "decision": decision}
+
+
+@router.get(
+    "/{notice_id}/extraction",
+    response_model=ExtractionResponse,
+)
+def get_extraction(
+    notice_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    membership: ClientMembership = Depends(
+        require_compliance_permission(CompliancePermission.NOTICE_VIEW)
+    ),
+):
+    """Phase 17 D-20 — return the persisted extraction artefact for a notice."""
+    notice = (
+        db.query(ComplianceNotice)
+        .filter(ComplianceNotice.id == notice_id)
+        .first()
+    )
+    if not notice:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notice not found",
+        )
+
+    return {
+        "notice_id": notice.id,
+        "extraction_status": notice.extraction_status,
+        "extraction_confidence": notice.extraction_confidence,
+        "extracted_by_provider": notice.extracted_by_provider,
+        "extracted_at": notice.extracted_at,
+        "envelope": notice.extracted_fields,
+    }
+
+
+@router.post(
+    "/{notice_id}/accept-extraction",
+    response_model=NoticeOut,
+)
+def accept_extraction(
+    notice_id: int,
+    payload: AcceptExtractionPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    membership: ClientMembership = Depends(
+        require_compliance_permission(CompliancePermission.NOTICE_AI_EXTRACT)
+    ),
+):
+    """Phase 17 D-21 — copy accepted fields onto the canonical notice columns.
+
+    Writes one audit row per accepted field carrying SHA-256 hashes of the
+    original-extracted value and the actually-accepted value, plus a
+    `was_edited` boolean. The notice's `extraction_status` flips to 'accepted'.
+
+    Requires NOTICE_AI_EXTRACT AND NOTICE_UPDATE per D-21. We check
+    NOTICE_AI_EXTRACT in the dependency and NOTICE_UPDATE inline here so
+    the error message can distinguish the two failure modes.
+    """
+    import hashlib
+
+    role = ComplianceRole(membership.role)
+    if not has_permission(role, CompliancePermission.NOTICE_CREATE):
+        # NOTICE_UPDATE is implemented via NOTICE_CREATE in the existing
+        # permission registry (Phase 9 RBAC-01). PATCH /notices/{id} also
+        # gates on NOTICE_CREATE — we mirror that exact contract here so
+        # acceptance and manual edit have the same gate.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Role lacks permission to update notice fields",
+        )
+
+    notice = (
+        db.query(ComplianceNotice)
+        .filter(ComplianceNotice.id == notice_id)
+        .first()
+    )
+    if not notice:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notice not found",
+        )
+    if notice.extraction_status not in ("completed", "accepted"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Notice extraction_status is '{notice.extraction_status}'; "
+                "must be 'completed' before fields can be accepted"
+            ),
+        )
+
+    envelope = notice.extracted_fields or {}
+    extracted_fields = envelope.get("fields") or {}
+
+    # Map of canonical schema field -> ComplianceNotice column name.
+    # Subset of FIELD_SCHEMA: only fields the model owns get accepted onto
+    # canonical columns. The rest live on extracted_fields for reference
+    # but do not back-populate any column.
+    _ACCEPT_TO_COLUMN = {
+        "notice_number": "notice_number",
+        "authority": "authority",
+        "issued_date": "received_date",
+        "response_deadline": "response_deadline",
+        "tax_demand": "tax_demand",
+        "interest": "interest",
+        "penalty": "penalty",
+        "total_liability": "total_liability",
+    }
+
+    accepted_count = 0
+    for item in payload.items:
+        if item.field not in _ACCEPT_TO_COLUMN:
+            continue
+        column = _ACCEPT_TO_COLUMN[item.field]
+        original_payload = extracted_fields.get(item.field) or {}
+        original_value = original_payload.get("value")
+        accepted_value = item.value
+        was_edited = (str(original_value) != str(accepted_value))
+
+        setattr(notice, column, accepted_value)
+        accepted_count += 1
+
+        log_audit_event(
+            user_id=current_user.id,
+            action="notice_ai_extract_accepted",
+            resource_type="compliance_notice",
+            resource_id=notice.id,
+            details={
+                "field": item.field,
+                "original_value_sha256": hashlib.sha256(
+                    str(original_value or "").encode("utf-8", errors="ignore")
+                ).hexdigest(),
+                "accepted_value_sha256": hashlib.sha256(
+                    str(accepted_value or "").encode("utf-8", errors="ignore")
+                ).hexdigest(),
+                "was_edited": was_edited,
+            },
+        )
+
+    notice.extraction_status = "accepted"
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to apply accepted extraction fields",
+        )
+    db.refresh(notice)
+    return notice

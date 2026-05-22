@@ -32,6 +32,10 @@ class CompliancePermission(str, Enum):
     ESCALATION_TRIGGER = "escalation:trigger"
     # Phase 15 — gates Gmail OAuth + MCP tool invocation (D-05).
     EMAIL_INTEGRATION_USE = "email_integration:use"
+    # Phase 17 — gates the AI extraction surfaces (extract-preview, accept-extraction).
+    # Granted to roles that already hold NOTICE_CREATE (compliance_head,
+    # ca_consultant, staff) per 17-CONTEXT D-21.
+    NOTICE_AI_EXTRACT = "notice:ai_extract"
 
 
 class ComplianceRole(str, Enum):
@@ -60,6 +64,7 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.REPORT_EXPORT,
         CompliancePermission.ESCALATION_TRIGGER,
         CompliancePermission.EMAIL_INTEGRATION_USE,
+        CompliancePermission.NOTICE_AI_EXTRACT,
         # AUDIT_VIEW: senior in-house compliance owner is the natural
         # consumer of "what happened on this client?" — locking the audit
         # log to the auditor role only made the page useless for the
@@ -102,6 +107,7 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.REPORT_VIEW,
         CompliancePermission.REPORT_EXPORT,
         CompliancePermission.EMAIL_INTEGRATION_USE,
+        CompliancePermission.NOTICE_AI_EXTRACT,
         # External CAs need the audit trail for their working papers —
         # an audit they cannot see is one they cannot rely on.
         CompliancePermission.AUDIT_VIEW,
@@ -113,6 +119,7 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.NOTICE_ATTACH_EVIDENCE,
         CompliancePermission.ESCALATION_TRIGGER,
         CompliancePermission.EMAIL_INTEGRATION_USE,
+        CompliancePermission.NOTICE_AI_EXTRACT,
     }),
     ComplianceRole.CFO: frozenset({
         CompliancePermission.NOTICE_VIEW,
