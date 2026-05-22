@@ -28,17 +28,26 @@ const DIN_RX = /^[0-9]{8}$/;
 
 const regSchema = z.object({
     type: z.enum(["GSTIN", "PAN", "CIN", "DIN"]),
-    value: z.string().min(1, "Required"),
+    // Allow a totally blank row so the user can land on the step,
+    // change nothing, and proceed. The superRefine below only validates
+    // format on rows that actually have a value, and onSubmit strips
+    // empty rows before persisting.
+    value: z.string(),
     state: z.string().optional().or(z.literal("")),
 });
 
 const schema = z.object({
+    // Registrations are optional at onboarding time. Many CAs start the
+    // tenant before the client has their GSTIN handy. They can add
+    // registrations later from the client detail page.
     registrations: z
         .array(regSchema)
-        .min(1, "Add at least one registration")
         .superRefine((arr, ctx) => {
             arr.forEach((reg, i) => {
                 const v = (reg.value ?? "").toUpperCase();
+                // Skip format validation on rows the user left blank,
+                // the onSubmit handler drops them before persisting.
+                if (!v) return;
                 if (reg.type === "GSTIN" && !GSTIN_RX.test(v)) {
                     ctx.addIssue({
                         code: "custom",
@@ -102,14 +111,15 @@ export function StepRegistrations() {
     });
 
     const onSubmit = (values: FormValues) => {
-        // Normalise: uppercase the value, drop empty optional fields
-        const cleaned: WizardRegistration[] = values.registrations.map(
-            (r) => ({
+        // Drop blank rows (user landed on the step but had nothing to add)
+        // and uppercase real values.
+        const cleaned: WizardRegistration[] = values.registrations
+            .filter((r) => (r.value ?? "").trim().length > 0)
+            .map((r) => ({
                 type: r.type,
                 value: r.value.toUpperCase(),
                 state: r.state || undefined,
-            })
-        );
+            }));
         setRegistrations(cleaned);
         markComplete(2);
         setStep(3);
@@ -126,7 +136,9 @@ export function StepRegistrations() {
                 </h1>
                 <p className="text-[var(--text-muted)] text-sm">
                     Add GSTINs, PAN, CIN, and DIN. Multi-state operations? Add
-                    one GSTIN per state.
+                    one GSTIN per state. All fields are optional, leave blank
+                    rows alone and click Continue to add these later from the
+                    client detail page.
                 </p>
             </div>
 

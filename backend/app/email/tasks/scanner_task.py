@@ -264,22 +264,36 @@ def run_scan(credential_id: int) -> None:
             record_fetch_outcome(db, credential_id, status, msgs_processed)
         except HttpError as e:
             # Permanent auth failures (401 invalid_grant, 403 accessNotConfigured /
-            # API disabled / scope revoked) repeat forever otherwise — APScheduler
-            # logs a fresh exception every cadence_minutes. Disable the credential
-            # so subsequent scans short-circuit at the STATUS_ACTIVE check above.
+            # API disabled / scope revoked) repeat forever otherwise. Earlier
+            # code only flipped the DB row to REVOKED; the APScheduler job
+            # kept firing every cadence_minutes and re-recording FETCH_FAILED.
+            # handle_invalid_grant flips the row AND removes the scheduler
+            # job, so dead credentials stop wasting cycles entirely.
             status_code = getattr(getattr(e, "resp", None), "status", None)
             if status_code in (401, 403):
                 logger.warning(
-                    "Gmail credential %s revoked or unauthorized (HTTP %s) — "
-                    "marking REVOKED to stop scheduler retries",
+                    "Gmail credential %s revoked or unauthorized (HTTP %s), "
+                    "calling handle_invalid_grant to stop scheduler retries",
                     credential_id,
                     status_code,
                 )
-                cred.status = GmailCredential.STATUS_REVOKED
                 try:
-                    db.commit()
-                except Exception:
-                    db.rollback()
+                    from app.email.services.credential_vault import (
+                        handle_invalid_grant,
+                    )
+
+                    handle_invalid_grant(db, credential_id)
+                except Exception as he:
+                    logger.warning(
+                        "handle_invalid_grant fallback for %s: %s",
+                        credential_id,
+                        he,
+                    )
+                    cred.status = GmailCredential.STATUS_REVOKED
+                    try:
+                        db.commit()
+                    except Exception:
+                        db.rollback()
                 record_fetch_outcome(
                     db,
                     credential_id,
