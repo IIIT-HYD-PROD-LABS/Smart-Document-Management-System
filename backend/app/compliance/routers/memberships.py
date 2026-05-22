@@ -13,6 +13,7 @@ Audit logging:
 These are written to the immutable system audit_log via log_audit_event
 (separate session — failures cannot roll back business operations).
 """
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
@@ -22,6 +23,7 @@ from app.compliance.models.client import Client
 from app.compliance.models.membership import ClientMembership
 from app.compliance.schemas.client import MembershipCreate, MembershipOut
 from app.compliance.services.permission_registry import CompliancePermission
+from app.config import settings
 from app.database import get_db
 from app.models.user import User
 from app.services.audit_service import log_audit_event
@@ -30,6 +32,8 @@ from app.services.invitation_service import (
     resolve_or_invite,
 )
 from app.utils.security import get_current_user
+
+logger = structlog.stdlib.get_logger()
 
 
 router = APIRouter(
@@ -132,11 +136,19 @@ def add_member(
             "invited": invited,
         },
     )
-    # Attach the side-channel fields onto the ORM object so MembershipOut
-    # picks them up; default False / None are coerced if the ORM mapping
-    # path is followed instead.
+    # Attach the invited flag for the UI. The dev_token MUST NOT travel
+    # in the API response: it is a replayable JWT that grants tenant
+    # access. We log it server-side instead so a developer running
+    # DEBUG can still pluck it from structured logs.
     setattr(m, "invited", invited)
-    setattr(m, "accept_invite_token", dev_token)
+    setattr(m, "accept_invite_token", None)
+    if dev_token and settings.DEBUG:
+        logger.debug(
+            "membership_invite_token_issued",
+            client_id=client_id,
+            user_id=resolved_user_id,
+            token_preview=dev_token[:16] + "..." if len(dev_token) > 16 else dev_token,
+        )
     return m
 
 

@@ -80,7 +80,11 @@ def get_review(
 ):
     from app.compliance.models.review_queue import NoticeReviewQueue
 
-    row = db.get(NoticeReviewQueue, review_id)
+    # Defense-in-depth: explicit client_id filter on top of RLS.
+    q = db.query(NoticeReviewQueue).filter(NoticeReviewQueue.id == review_id)
+    if not is_cross_client_mode():
+        q = q.filter(NoticeReviewQueue.client_id == membership.client_id)
+    row = q.first()
     if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

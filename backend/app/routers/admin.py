@@ -588,6 +588,12 @@ def review_early_access(
         )
 
     logger.info("early_access_reviewed", request_id=request_id, status=payload.status, admin=current_user.id)
+    if invitation_token and settings.DEBUG:
+        logger.debug(
+            "early_access_token_issued",
+            request_id=request_id,
+            token_preview=invitation_token[:16] + "...",
+        )
 
     # Send the decision email synchronously so the admin UI can surface
     # delivery failures (e.g. SMTP misconfigured). BackgroundTasks would
@@ -626,5 +632,10 @@ def review_early_access(
         "email": ea_request.email,
         "email_sent": email_sent,
         "email_error": email_error,
-        "invitation_token": invitation_token if (settings.DEBUG and invitation_token) else None,
+        # SECURITY: never reflect the JWT invitation token in the API
+        # response. It is a replayable bearer that bypasses the
+        # early-access gate. The DEBUG escape hatch was a foot-gun: it
+        # leaked to any operator who could see the approve response.
+        # Read it from structured logs instead in dev.
+        "invitation_token": None,
     }

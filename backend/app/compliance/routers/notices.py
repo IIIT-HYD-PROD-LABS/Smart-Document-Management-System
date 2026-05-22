@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session
 
 from app.compliance.dependencies import (
     get_active_membership,
+    is_cross_client_mode,
     require_compliance_permission,
 )
 from app.compliance.models.membership import ClientMembership
@@ -279,11 +280,12 @@ def get_notice(
     ),
     db: Session = Depends(get_db),
 ):
-    n = (
-        db.query(ComplianceNotice)
-        .filter(ComplianceNotice.id == notice_id)
-        .first()
-    )
+    # Defense-in-depth: explicit client_id filter on top of RLS so an
+    # accidental policy regression cannot leak cross-tenant rows.
+    q = db.query(ComplianceNotice).filter(ComplianceNotice.id == notice_id)
+    if not is_cross_client_mode():
+        q = q.filter(ComplianceNotice.client_id == membership.client_id)
+    n = q.first()
     if not n:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -302,12 +304,11 @@ def update_notice(
         require_compliance_permission(CompliancePermission.NOTICE_CREATE)
     ),
 ):
-    """Edit notice metadata — LIFE-03. Status changes go through /status."""
-    n = (
-        db.query(ComplianceNotice)
-        .filter(ComplianceNotice.id == notice_id)
-        .first()
-    )
+    """Edit notice metadata, LIFE-03. Status changes go through /status."""
+    q = db.query(ComplianceNotice).filter(ComplianceNotice.id == notice_id)
+    if not is_cross_client_mode():
+        q = q.filter(ComplianceNotice.client_id == membership.client_id)
+    n = q.first()
     if not n:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -9,14 +9,17 @@ import jwt
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
+from app.models.early_access import EarlyAccessRequest
 from app.models.user import User
 from app.models.refresh_token import RefreshToken
 from app.schemas import (
+    AcceptInviteRequest,
     UserRegister,
     UserLogin,
     UserResponse,
@@ -31,6 +34,83 @@ from app.utils.security import (
     create_refresh_token,
 )
 from app.utils.rate_limiter import limiter
+from sqlalchemy import text as sa_text
+
+
+# ──── Race-free first-user → admin promotion ────
+# Stable lock key for the bootstrap decision. Released at txn end.
+_FIRST_USER_LOCK_KEY = 7398126503
+
+
+def _safe_role(db: Session) -> str:
+    """Decide register role with a PG advisory lock to dodge the count==0 race.
+
+    Three call sites (local register, Google callback, Microsoft callback)
+    previously read `User.count() == 0` then wrote, so two concurrent
+    requests could both insert as admin on a fresh DB. The advisory lock
+    serializes the decision per-transaction. Falls back gracefully on
+    non-PG (test SQLite) and on inactive-user-only databases (M-3).
+    """
+    try:
+        db.execute(sa_text(f"SELECT pg_advisory_xact_lock({_FIRST_USER_LOCK_KEY})"))
+    except Exception:  # pragma: no cover - non-PG fallback
+        pass
+    is_first = db.query(User).filter(User.is_active == True).count() == 0  # noqa: E712
+    return "admin" if is_first else "editor"
+
+
+def _consume_invitation(
+    db: Session, *, token: str | None, email: str
+) -> EarlyAccessRequest | None:
+    """Validate + atomically consume an early-access invitation JWT.
+
+    Returns the EA row on success; raises HTTPException on any failure
+    so callers can propagate the exact 400/403. None is returned only
+    when token is None (handled by caller for the bootstrap case).
+    """
+    if not token:
+        return None
+    try:
+        token_payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invitation has expired. Please request early access again.",
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid invitation link.",
+        )
+    if token_payload.get("type") != "invitation":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid invitation link.",
+        )
+    if (token_payload.get("email") or "").lower() != (email or "").lower():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email does not match the invitation.",
+        )
+    ea = (
+        db.query(EarlyAccessRequest)
+        .filter(
+            EarlyAccessRequest.id == token_payload.get("ea_id"),
+            EarlyAccessRequest.status == "approved",
+        )
+        .with_for_update()
+        .first()
+    )
+    if not ea or not ea.invitation_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invitation already used or no longer valid.",
+        )
+    # Single-use: null the stored token so a replay cannot succeed.
+    ea.invitation_token = None
+    return ea
 
 logger = structlog.stdlib.get_logger()
 
@@ -85,28 +165,40 @@ def _create_token_pair(user: User, db: Session) -> TokenPairResponse:
 @router.post("/register", response_model=TokenPairResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
 def register(request: Request, response: Response, payload: UserRegister, db: Session = Depends(get_db)):
-    """Register a new user account and return a token pair."""
-    # Check for existing email
+    """Register a new user account and return a token pair.
+
+    Gate: after the bootstrap admin exists, registration requires an
+    approved early-access invitation JWT. Without this, the public
+    /register endpoint trivially bypassed the early-access workflow.
+    """
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered",
         )
-    # Check for existing username
     if db.query(User).filter(User.username == payload.username).first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username already taken",
         )
 
-    # First user becomes admin automatically
-    is_first_user = db.query(User).count() == 0
+    role = _safe_role(db)
+    # Bootstrap exception: a fresh DB has no admin yet, allow self-register.
+    # Any subsequent register MUST present a valid invitation token.
+    if role != "admin":
+        if not payload.invitation_token:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Registration requires an invitation. Request early access first.",
+            )
+        _consume_invitation(db, token=payload.invitation_token, email=payload.email)
+
     user = User(
         email=payload.email,
         username=payload.username,
         hashed_password=hash_password(payload.password),
         full_name=payload.full_name,
-        role="admin" if is_first_user else "editor",
+        role=role,
     )
     db.add(user)
     try:
@@ -127,35 +219,19 @@ def register(request: Request, response: Response, payload: UserRegister, db: Se
 def accept_invite(
     request: Request,
     response: Response,
-    payload: dict,
+    payload: AcceptInviteRequest,
     db: Session = Depends(get_db),
 ):
     """Complete a tenant-team invitation: set password + activate + sign in.
-
-    Body shape: `{"token": "<JWT from invite email>", "password": "<chosen>"}`.
-
-    Token is the JWT created by `services.invitation_service` and
-    delivered via `utils.email.send_tenant_invite_email`. On success the
-    user is marked is_active=True with the chosen password hashed and
-    stored; we then return the standard access + refresh pair, so the
-    invitee lands signed-in on the frontend.
 
     Idempotency: a second call with the same token (now that the user
     is active) returns 400 with a "sign in normally" hint, rather than
     silently overwriting the password.
     """
-    token = (payload or {}).get("token") or ""
-    new_password = (payload or {}).get("password") or ""
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="token is required",
-        )
-
     from app.services.invitation_service import InvitationError, accept_invite as _accept
 
     try:
-        user = _accept(db, token=token, new_password=new_password)
+        user = _accept(db, token=payload.token, new_password=payload.password)
     except InvitationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
@@ -340,19 +416,40 @@ def get_auth_providers(request: Request, response: Response):
 
 @router.get("/oauth/diag")
 @limiter.limit("30/minute")
-def oauth_diag(request: Request, response: Response):
-    """Public, no-auth diagnostic for OAuth setup.
+def oauth_diag(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
+):
+    """Diagnostic for OAuth setup.
 
-    Returns the exact redirect URIs the backend will send to each
-    provider, plus a hint of which client ID is configured (first 12
-    chars only, since the full client_id is already public anyway —
-    it's visible in every OAuth URL).
-
-    Use case: someone setting up TaxSync hits `redirect_uri_mismatch`,
-    they don't know what URI to add to Google Cloud Console, and
-    grepping the source is friction. Hitting this endpoint or
-    /oauth-setup on the frontend tells them exactly what to paste.
+    Returns redirect URIs and a client_id hint. Public in DEBUG so a
+    fresh install can self-serve `redirect_uri_mismatch` errors; in
+    production this leaks the backend URL + client_id hint, so we
+    require admin auth there.
     """
+    if not settings.DEBUG:
+        if credentials is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+        from app.utils.security import decode_access_token
+        try:
+            tok_payload = decode_access_token(credentials.credentials)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+            )
+        uid = tok_payload.get("sub")
+        u = db.query(User).filter(User.id == int(uid)).first() if uid else None
+        if not u or u.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required",
+            )
     from app.services.oauth_service import _get_backend_url
 
     backend = _get_backend_url()
@@ -485,11 +582,11 @@ async def google_callback(
             except (IntegrityError, OperationalError):
                 db.rollback()
         else:
-            # Create new user
-            is_first_user = db.query(User).count() == 0
+            # Create new user. _safe_role() uses an advisory lock so
+            # concurrent OAuth callbacks cannot both insert as admin.
+            role = _safe_role(db)
             import re as _re
             username = _re.sub(r'[^a-zA-Z0-9_-]', '', email.split("@")[0]) or "user"
-            # Ensure unique username
             base_username = username
             counter = 1
             while db.query(User).filter(User.username == username).first():
@@ -501,7 +598,7 @@ async def google_callback(
                 full_name=user_info.get("name"),
                 auth_provider="google",
                 oauth_id=oauth_id,
-                role="admin" if is_first_user else "editor",
+                role=role,
             )
             try:
                 db.add(user)
@@ -620,7 +717,7 @@ async def microsoft_callback(
             except (IntegrityError, OperationalError):
                 db.rollback()
         else:
-            is_first_user = db.query(User).count() == 0
+            role = _safe_role(db)
             import re as _re
             username = _re.sub(r'[^a-zA-Z0-9_-]', '', email.split("@")[0]) or "user"
             base_username = username
@@ -634,7 +731,7 @@ async def microsoft_callback(
                 full_name=user_info.get("displayName"),
                 auth_provider="microsoft",
                 oauth_id=oauth_id,
-                role="admin" if is_first_user else "editor",
+                role=role,
             )
             try:
                 db.add(user)

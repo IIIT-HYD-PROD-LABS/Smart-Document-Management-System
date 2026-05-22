@@ -12,6 +12,10 @@ class UserRegister(BaseModel):
     username: str = Field(..., min_length=3, max_length=100, examples=["johndoe"])
     password: str = Field(..., min_length=8, max_length=128)
     full_name: str | None = Field(None, max_length=200, examples=["John Doe"])
+    # JWT from an approved early-access invitation. Required for all
+    # registrations after the first (bootstrap) user; otherwise the
+    # early-access gate is decorative and trivially bypassed.
+    invitation_token: str | None = Field(None, max_length=2048)
 
     @field_validator("email")
     @classmethod
@@ -96,3 +100,14 @@ class RefreshTokenRequest(BaseModel):
 class OAuthExchangeRequest(BaseModel):
     code: str = Field(..., min_length=1)
     token: str = Field(..., min_length=1)
+
+
+class AcceptInviteRequest(BaseModel):
+    """Typed body for POST /api/auth/accept-invite.
+
+    Replaces the previous untyped dict so the password is bounded at the
+    API boundary (defense-in-depth alongside invitation_service's check)
+    and OpenAPI consumers see real field documentation.
+    """
+    token: str = Field(..., min_length=1, max_length=2048)
+    password: str = Field(..., min_length=12, max_length=128)
