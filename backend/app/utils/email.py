@@ -209,7 +209,27 @@ def send_password_reset_email(
     </div>
     """
 
-    return send_email(to_email, "Reset your TaxSync password", html)
+    ok = send_email(to_email, "Reset your TaxSync password", html)
+    if not ok:
+        # Email delivery failed (Resend sandbox restriction, SMTP not
+        # configured, transient outage, etc.). The user is locked out
+        # unless an operator can hand-deliver the link. Log the URL at
+        # WARNING with a clear hint so an admin with log access can
+        # ship it to the user out-of-band. Log access is already a
+        # full-admin capability, so this does not widen the trust
+        # boundary.
+        logger.warning(
+            "password_reset_url_fallback",
+            to=to_email,
+            url=reset_url,
+            hint=(
+                "Email delivery failed. Send this URL to the user manually "
+                "(it expires in 15 minutes). Fix the SMTP misconfiguration "
+                "(Resend: verify a domain at resend.com/domains and update "
+                "SMTP_FROM_EMAIL) so future resets self-deliver."
+            ),
+        )
+    return ok
 
 
 def send_rejection_email(to_email: str, full_name: str, note: str | None = None) -> bool:
