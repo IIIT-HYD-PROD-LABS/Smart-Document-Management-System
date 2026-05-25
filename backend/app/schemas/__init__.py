@@ -75,6 +75,15 @@ class UserResponse(BaseModel):
     is_active: bool
     role: str
     created_at: datetime
+    mfa_enabled: bool = False
+
+    @field_validator("mfa_enabled", mode="before")
+    @classmethod
+    def _coerce_mfa_enabled(cls, v):
+        # A freshly-constructed (unflushed) User has mfa_enabled=None: the DB
+        # default applies on INSERT, not on Python object construction. Treat
+        # that as the default False rather than failing bool validation.
+        return False if v is None else v
 
     class Config:
         from_attributes = True
@@ -91,6 +100,44 @@ class TokenPairResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+# --- MFA (TOTP) schemas ---
+
+class MfaChallengeResponse(BaseModel):
+    """Returned by /login when the password is correct but the account has MFA.
+    The client exchanges ``mfa_token`` + a TOTP/backup code at /auth/mfa/verify."""
+    mfa_required: bool = True
+    mfa_token: str
+
+
+class MfaVerifyRequest(BaseModel):
+    mfa_token: str = Field(..., min_length=1)
+    code: str = Field(..., min_length=6, max_length=32)  # 6-digit TOTP or a backup code
+
+    @field_validator("code")
+    @classmethod
+    def _strip_code(cls, v: str) -> str:
+        return v.strip()
+
+
+class TotpEnrollResponse(BaseModel):
+    """Enrollment material, shown once. MFA is inactive until /totp/confirm."""
+    secret: str
+    otpauth_uri: str
+    qr_data_uri: str
+
+
+class TotpConfirmRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class MfaDisableRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=32)
+
+
+class BackupCodesResponse(BaseModel):
+    backup_codes: list[str]
 
 
 class RefreshTokenRequest(BaseModel):

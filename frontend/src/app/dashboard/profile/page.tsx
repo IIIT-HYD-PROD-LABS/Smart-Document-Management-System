@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import EnrollMfaModal from "@/components/admin/EnrollMfaModal";
+import DisableMfaModal from "@/components/admin/DisableMfaModal";
 import {
     FiUser,
     FiMail,
     FiCpu,
     FiArrowRight,
+    FiCheck,
+    FiKey,
     FiShield,
 } from "react-icons/fi";
 
@@ -21,7 +26,17 @@ import {
  * sub-nav and forms; this page is purely a hub + account summary.
  */
 export default function ProfilePage() {
-    const { user } = useAuth();
+    const { user, setUser } = useAuth();
+    const [enrollOpen, setEnrollOpen] = useState(false);
+    const [disableOpen, setDisableOpen] = useState(false);
+
+    const mfaEnabled = !!user?.mfa_enabled;
+
+    // After enroll/disable the backend toggled mfa_enabled; reflect it locally
+    // (and re-persist the user cookie) since there is no /me refetch endpoint.
+    const setMfa = (enabled: boolean) => {
+        if (user) setUser({ ...user, mfa_enabled: enabled });
+    };
 
     const initial = (user?.full_name || user?.username || user?.email || "?")
         .charAt(0)
@@ -91,6 +106,63 @@ export default function ProfilePage() {
                 </div>
             </section>
 
+            {/* Two-factor authentication */}
+            <section className="surface-card p-6 mb-6">
+                <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 min-w-0">
+                        <span className="w-8 h-8 rounded-md bg-[var(--accent-soft)] flex items-center justify-center shrink-0">
+                            <FiKey className="w-4 h-4 text-[var(--accent)]" />
+                        </span>
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h2 className="text-[14px] font-semibold text-[var(--text-primary)]">
+                                    Two-factor authentication
+                                </h2>
+                                {mfaEnabled && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--success-soft)] text-[var(--success)]">
+                                        <FiCheck className="w-3 h-3" />
+                                        On
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-[12px] text-[var(--text-muted)] mt-0.5 leading-relaxed">
+                                {mfaEnabled
+                                    ? "An authenticator code is required each time you sign in."
+                                    : "Add a one-time code from an authenticator app to every sign-in."}
+                            </p>
+                        </div>
+                    </div>
+                    {mfaEnabled ? (
+                        <button
+                            type="button"
+                            onClick={() => setDisableOpen(true)}
+                            className="
+                                shrink-0 inline-flex items-center px-3 py-1.5 rounded-md text-[12.5px]
+                                bg-[var(--bg-surface)] border border-[var(--border-emphasis)]
+                                text-[var(--text-secondary)] hover:text-[var(--text-primary)]
+                                hover:bg-[var(--bg-hover)] transition-colors cursor-pointer
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)]
+                            "
+                        >
+                            Disable
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setEnrollOpen(true)}
+                            className="
+                                shrink-0 inline-flex items-center px-3 py-1.5 rounded-md text-[12.5px]
+                                bg-[var(--accent)] text-white font-medium
+                                hover:bg-[var(--accent-strong)] transition-colors cursor-pointer
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]
+                            "
+                        >
+                            Set up
+                        </button>
+                    )}
+                </div>
+            </section>
+
             {/* Profile-scoped destinations */}
             <h2 className="microtype mb-3">Settings</h2>
             <ul className="grid gap-3" role="list">
@@ -131,6 +203,17 @@ export default function ProfilePage() {
                     </li>
                 ))}
             </ul>
+
+            <EnrollMfaModal
+                open={enrollOpen}
+                onClose={() => setEnrollOpen(false)}
+                onEnrolled={() => setMfa(true)}
+            />
+            <DisableMfaModal
+                open={disableOpen}
+                onClose={() => setDisableOpen(false)}
+                onDisabled={() => setMfa(false)}
+            />
         </div>
     );
 }

@@ -29,6 +29,15 @@ def _make_mock_user(**overrides):
         "is_active": True,
         "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
         "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+        "deleted_at": None,
+        # MFA + lockout columns (0036). Explicit so MagicMock doesn't auto-return
+        # truthy values that would wrongly trip the MFA / lockout branches.
+        "mfa_enabled": False,
+        "totp_secret_enc": None,
+        "mfa_backup_codes_enc": None,
+        "mfa_enrolled_at": None,
+        "failed_login_count": 0,
+        "locked_until": None,
     }
     defaults.update(overrides)
     user = MagicMock()

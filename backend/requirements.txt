@@ -18,6 +18,8 @@ alembic==1.18.4
 PyJWT==2.12.1
 bcrypt==4.1.2
 passlib[bcrypt]==1.7.4
+pyotp==2.9.0          # TOTP MFA (RFC 6238)
+qrcode[pil]==8.0      # server-side QR provisioning image (Pillow pinned below)
 
 # ML & NLP
 scikit-learn==1.6.1

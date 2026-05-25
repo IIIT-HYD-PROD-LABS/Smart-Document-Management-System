@@ -13,7 +13,10 @@ function LoginInner() {
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [providers, setProviders] = useState<string[]>([]);
-    const { login, user, isLoading } = useAuth();
+    // MFA second step: when set, the form swaps in place to a code prompt.
+    const [mfaToken, setMfaToken] = useState<string | null>(null);
+    const [mfaCode, setMfaCode] = useState("");
+    const { login, verifyMfa, user, isLoading } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -48,7 +51,14 @@ function LoginInner() {
         e.preventDefault();
         setLoading(true);
         try {
-            await login(email, password);
+            const result = await login(email, password);
+            if (result.mfaRequired) {
+                // Swap the form in place to the code step; no toast yet, the
+                // session isn't established until verifyMfa succeeds.
+                setMfaToken(result.mfaToken);
+                setMfaCode("");
+                return;
+            }
             toast.success("Welcome back");
         } catch (err: unknown) {
             const resp = err as { response?: { status?: number } };
@@ -56,6 +66,31 @@ function LoginInner() {
                 toast.error("Too many attempts. Please wait a minute and try again.");
             } else {
                 toast.error(extractErrorMessage(err, "Login failed"));
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleMfaSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!mfaToken) return;
+        setLoading(true);
+        try {
+            await verifyMfa(mfaToken, mfaCode.trim());
+            // Same success path as a normal login: the redirect effect fires
+            // once `user` is set; surface the identical confirmation toast.
+            toast.success("Welcome back");
+        } catch (err: unknown) {
+            const resp = err as { response?: { status?: number; data?: { detail?: unknown } } };
+            const status = resp?.response?.status;
+            if (status === 429) {
+                toast.error(extractErrorMessage(err, "Too many attempts. Please wait and try again."));
+            } else if (status === 401) {
+                toast.error(extractErrorMessage(err, "Invalid code. Try again."));
+                setMfaCode("");
+            } else {
+                toast.error(extractErrorMessage(err, "Verification failed"));
             }
         } finally {
             setLoading(false);
@@ -79,10 +114,58 @@ function LoginInner() {
                         </span>
                         <span className="text-[14px] font-semibold text-[var(--text-primary)] tracking-tight">TaxSync</span>
                     </Link>
-                    <h1 className="text-[22px] font-semibold text-[var(--text-primary)] mt-7 tracking-tight">Sign in</h1>
-                    <p className="text-[13px] text-[var(--text-subtle)] mt-1">Welcome back to your account</p>
+                    <h1 className="text-[22px] font-semibold text-[var(--text-primary)] mt-7 tracking-tight">
+                        {mfaToken ? "Two-factor authentication" : "Sign in"}
+                    </h1>
+                    <p className="text-[13px] text-[var(--text-subtle)] mt-1">
+                        {mfaToken ? "Enter the code from your authenticator app" : "Welcome back to your account"}
+                    </p>
                 </div>
                 <div className="surface-card p-6">
+                    {mfaToken ? (
+                        <form onSubmit={handleMfaSubmit} className="space-y-4" aria-busy={loading}>
+                            <div>
+                                <label htmlFor="mfa-code" className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">
+                                    6-digit code
+                                </label>
+                                <input
+                                    id="mfa-code"
+                                    type="text"
+                                    name="one-time-code"
+                                    autoComplete="one-time-code"
+                                    inputMode="numeric"
+                                    autoFocus
+                                    value={mfaCode}
+                                    onChange={(e) => setMfaCode(e.target.value)}
+                                    className={`${inputClass} font-mono tracking-[0.3em]`}
+                                    placeholder="123456"
+                                    required
+                                />
+                                <p className="text-[11px] text-[var(--text-subtle)] mt-1.5">
+                                    Lost your device? Enter one of your backup codes instead.
+                                </p>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={loading || !mfaCode.trim()}
+                                className={`w-full h-10 text-[13px] font-medium bg-[var(--accent)] text-white rounded-md hover:bg-[var(--accent-strong)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2 ${focusRing}`}
+                            >
+                                {loading ? "Verifying…" : "Verify"}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setMfaToken(null);
+                                    setMfaCode("");
+                                }}
+                                disabled={loading}
+                                className={`w-full h-9 text-[12.5px] font-medium bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md transition-colors disabled:opacity-50 cursor-pointer ${focusRing}`}
+                            >
+                                Back to sign in
+                            </button>
+                        </form>
+                    ) : (
+                    <>
                     <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading}>
                         <div>
                             <label htmlFor="login-email" className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Email</label>
@@ -205,10 +288,14 @@ function LoginInner() {
                             )}
                         </>
                     )}
+                    </>
+                    )}
                 </div>
-                <p className="text-center text-[12px] text-[var(--text-subtle)] mt-5">
-                    No account?{" "}<Link href="/" className={`text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors rounded-sm ${focusRing}`}>Request early access</Link>
-                </p>
+                {!mfaToken && (
+                    <p className="text-center text-[12px] text-[var(--text-subtle)] mt-5">
+                        No account?{" "}<Link href="/" className={`text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors rounded-sm ${focusRing}`}>Request early access</Link>
+                    </p>
+                )}
             </div>
         </div>
     );

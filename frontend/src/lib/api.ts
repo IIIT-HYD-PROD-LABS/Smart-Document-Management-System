@@ -155,6 +155,23 @@ export const authApi = {
 
     resetPassword: (data: { token: string; password: string }) =>
         api.post("/auth/reset-password", data),
+
+    // ── MFA (TOTP) ──
+    // verifyMfa is a pre-login step: the user has no access token yet, only a
+    // short-lived mfa_token. Use raw axios so the request interceptor doesn't
+    // attach a stale Bearer cookie and the 401 refresh-queue can't hijack a
+    // bad-code 401 (which would otherwise try /auth/refresh and swallow it).
+    verifyMfa: (mfaToken: string, code: string) =>
+        axios.post(`${API_URL}/api/auth/mfa/verify`, { mfa_token: mfaToken, code }),
+
+    enrollTotp: () =>
+        api.post("/auth/totp/enroll"),
+
+    confirmTotp: (code: string) =>
+        api.post("/auth/totp/confirm", { code }),
+
+    disableTotp: (code: string) =>
+        api.post("/auth/totp/disable", { code }),
 };
 
 // ──── Documents API ────

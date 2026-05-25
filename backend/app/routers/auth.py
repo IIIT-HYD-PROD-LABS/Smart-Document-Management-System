@@ -4,6 +4,7 @@ import secrets
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from typing import Union
 
 import jwt
 import structlog
@@ -20,11 +21,17 @@ from app.models.user import User
 from app.models.refresh_token import RefreshToken
 from app.schemas import (
     AcceptInviteRequest,
+    BackupCodesResponse,
     ForgotPasswordRequest,
+    MfaChallengeResponse,
+    MfaDisableRequest,
+    MfaVerifyRequest,
     OAuthExchangeRequest,
     RefreshTokenRequest,
     ResetPasswordRequest,
     TokenPairResponse,
+    TotpConfirmRequest,
+    TotpEnrollResponse,
     UserLogin,
     UserRegister,
     UserResponse,
@@ -34,9 +41,11 @@ from app.utils.security import (
     verify_password,
     create_access_token,
     create_refresh_token,
+    get_current_user,
 )
 from app.utils.rate_limiter import limiter
 from sqlalchemy import text as sa_text
+from app.services import mfa_service, lockout_service
 
 
 # ──── Race-free first-user → admin promotion ────
@@ -345,40 +354,223 @@ def reset_password(
     return _create_token_pair(user, db)
 
 
-@router.post("/login", response_model=TokenPairResponse)
+@router.post("/login", response_model=Union[TokenPairResponse, MfaChallengeResponse])
 @limiter.limit(settings.RATE_LIMIT_AUTH)
 def login(request: Request, response: Response, payload: UserLogin, db: Session = Depends(get_db)):
-    """Authenticate user and return a token pair."""
+    """Authenticate a user.
+
+    Returns a token pair, or an MFA challenge (HTTP 200 with ``mfa_required``)
+    when the account has TOTP enabled — the client then calls /auth/mfa/verify.
+    A per-account brute-force lockout (separate from the per-IP rate limit)
+    applies: it counts failures on the account and 429s while locked.
+    """
+    from app.services.audit_service import log_audit_event
+
     user = db.query(User).filter(User.email == payload.email).first()
     if not user:
         logger.warning("login_failed", reason="unknown_email")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+
+    # Lockout check first: don't spend a bcrypt verify on a locked account, and
+    # 429 distinguishes "locked" from "bad credentials".
+    if lockout_service.is_locked(user):
+        retry = lockout_service.seconds_remaining(user)
+        logger.warning("login_locked", user_id=user.id, retry_after_s=retry)
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Account temporarily locked after repeated failures. Try again in ~{max(1, retry // 60)} min.",
+            headers={"Retry-After": str(retry)},
         )
 
     if user.auth_provider != "local":
         logger.warning("login_wrong_provider", user_id=user.id, provider=user.auth_provider)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
-    if not user.hashed_password or not verify_password(payload.password, user.hashed_password):
-        logger.warning("login_failed", user_id=user.id, reason="bad_password")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
-        )
-
+    # Active-state check before the bcrypt verify: a deactivated account returns
+    # the same generic 401 (no enumeration) and never enters the password/lockout
+    # path, so it can't be probed and can't bypass lockout accounting.
     if not user.is_active:
         logger.warning("login_deactivated", user_id=user.id)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+
+    if not user.hashed_password or not verify_password(payload.password, user.hashed_password):
+        locked_now = lockout_service.register_failure(user)
+        db.commit()
+        logger.warning("login_failed", user_id=user.id, reason="bad_password",
+                       failed_count=user.failed_login_count, locked=locked_now)
+        log_audit_event(user_id=user.id, action="login_failed", resource_type="user",
+                        resource_id=user.id, details={"reason": "bad_password"})
+        if locked_now:
+            log_audit_event(user_id=user.id, action="account_locked", resource_type="user",
+                            resource_id=user.id, details={"locked_until": user.locked_until.isoformat()})
+            retry = lockout_service.seconds_remaining(user)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many failed attempts. Account locked for ~{max(1, retry // 60)} min.",
+                headers={"Retry-After": str(retry)},
+            )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+
+    # Second-factor gate. For an MFA account the password step alone is NOT a
+    # complete login, so the lockout counter is deliberately NOT reset here —
+    # resetting on password-success would refill the MFA-guess budget every
+    # round and make the per-account lockout unenforceable. mfa_verify resets
+    # the counter only after the second factor succeeds.
+    if user.mfa_enabled:
+        logger.info("login_mfa_challenge", user_id=user.id)
+        return MfaChallengeResponse(mfa_token=mfa_service.issue_challenge_token(user.id))
+
+    # Full (non-MFA) login succeeded — clear any accumulated failure/lock state.
+    if user.failed_login_count or user.locked_until:
+        lockout_service.reset(user)
+        db.commit()
 
     return _create_token_pair(user, db)
+
+
+@router.post("/mfa/verify", response_model=TokenPairResponse)
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+def mfa_verify(request: Request, response: Response, payload: MfaVerifyRequest, db: Session = Depends(get_db)):
+    """Second step of MFA login: exchange the challenge token plus a TOTP or
+    backup code for a token pair."""
+    from app.services.audit_service import log_audit_event
+
+    try:
+        user_id = mfa_service.decode_challenge_token(payload.mfa_token)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Invalid or expired MFA session. Sign in again.")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None or not user.is_active or not user.mfa_enabled:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Invalid or expired MFA session. Sign in again.")
+
+    if lockout_service.is_locked(user):
+        retry = lockout_service.seconds_remaining(user)
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail=f"Account temporarily locked. Try again in ~{max(1, retry // 60)} min.",
+                            headers={"Retry-After": str(retry)})
+
+    try:
+        secret = mfa_service.decrypt_secret(user.totp_secret_enc) if user.totp_secret_enc else None
+    except Exception:
+        # Tampered blob or a rotated FERNET_KEY without FERNET_KEY_OLD — degrade
+        # to the backup-code path rather than returning a 500.
+        secret = None
+    ok = bool(secret) and mfa_service.verify_totp(secret, payload.code)
+    if not ok and user.mfa_backup_codes_enc:
+        ok, new_blob = mfa_service.verify_and_consume_backup_code(user.mfa_backup_codes_enc, payload.code)
+        if ok:
+            user.mfa_backup_codes_enc = new_blob
+
+    if not ok:
+        locked_now = lockout_service.register_failure(user)
+        db.commit()
+        logger.warning("mfa_failed", user_id=user.id, failed_count=user.failed_login_count, locked=locked_now)
+        log_audit_event(user_id=user.id, action="mfa_challenge_failed", resource_type="user",
+                        resource_id=user.id, details={"failed_count": user.failed_login_count})
+        if locked_now:
+            log_audit_event(user_id=user.id, action="account_locked", resource_type="user",
+                            resource_id=user.id, details={"locked_until": user.locked_until.isoformat(), "via": "mfa"})
+            retry = lockout_service.seconds_remaining(user)
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                                detail=f"Too many failed codes. Account locked for ~{max(1, retry // 60)} min.",
+                                headers={"Retry-After": str(retry)})
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication code")
+
+    # Persist the consumed backup code + lockout reset in their OWN commit first.
+    # _create_token_pair rolls back on IntegrityError/OperationalError; folding
+    # the backup-consumption into that commit would let a failed token mint
+    # roll back the single-use consumption and allow the code to be replayed.
+    lockout_service.reset(user)
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="Failed to complete MFA verification")
+    logger.info("mfa_verified", user_id=user.id)
+    return _create_token_pair(user, db)
+
+
+@router.post("/totp/enroll", response_model=TotpEnrollResponse)
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+def totp_enroll(request: Request, response: Response, db: Session = Depends(get_db),
+                current_user: User = Depends(get_current_user)):
+    """Begin TOTP enrollment: store an encrypted *pending* secret and return the
+    provisioning material. MFA stays inactive until /totp/confirm succeeds."""
+    if current_user.auth_provider != "local":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="This account signs in with a provider; MFA is managed there.")
+    if current_user.mfa_enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="MFA is already enabled. Disable it first to re-enroll.")
+    secret = mfa_service.generate_totp_secret()
+    current_user.totp_secret_enc = mfa_service.encrypt_secret(secret)
+    db.commit()
+    return TotpEnrollResponse(
+        secret=secret,
+        otpauth_uri=mfa_service.provisioning_uri(secret, current_user.email),
+        qr_data_uri=mfa_service.qr_data_uri(secret, current_user.email),
+    )
+
+
+@router.post("/totp/confirm", response_model=BackupCodesResponse)
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+def totp_confirm(request: Request, response: Response, payload: TotpConfirmRequest,
+                 db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Finish enrollment: verify a code against the pending secret, enable MFA,
+    and return one-time backup codes (shown exactly once)."""
+    from app.services.audit_service import log_audit_event
+
+    if current_user.mfa_enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="MFA is already enabled.")
+    if not current_user.totp_secret_enc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Start enrollment first (no pending secret).")
+    try:
+        secret = mfa_service.decrypt_secret(current_user.totp_secret_enc)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Enrollment secret could not be read. Restart enrollment.")
+    if not mfa_service.verify_totp(secret, payload.code):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Invalid code. Check your authenticator and try again.")
+    codes = mfa_service.generate_backup_codes()
+    current_user.mfa_backup_codes_enc = mfa_service.encrypt_backup_codes(codes)
+    current_user.mfa_enabled = True
+    current_user.mfa_enrolled_at = datetime.now(timezone.utc)
+    db.commit()
+    log_audit_event(user_id=current_user.id, action="mfa_enabled", resource_type="user", resource_id=current_user.id)
+    return BackupCodesResponse(backup_codes=codes)
+
+
+@router.post("/totp/disable", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+def totp_disable(request: Request, response: Response, payload: MfaDisableRequest,
+                 db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Disable MFA. Requires a current TOTP or backup code so a hijacked session
+    that never cleared the second factor cannot strip MFA off the account."""
+    from app.services.audit_service import log_audit_event
+
+    if not current_user.mfa_enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="MFA is not enabled.")
+    try:
+        secret = mfa_service.decrypt_secret(current_user.totp_secret_enc) if current_user.totp_secret_enc else None
+    except Exception:
+        secret = None
+    ok = bool(secret) and mfa_service.verify_totp(secret, payload.code)
+    if not ok and current_user.mfa_backup_codes_enc:
+        ok, _ = mfa_service.verify_and_consume_backup_code(current_user.mfa_backup_codes_enc, payload.code)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid code.")
+    current_user.mfa_enabled = False
+    current_user.totp_secret_enc = None
+    current_user.mfa_backup_codes_enc = None
+    current_user.mfa_enrolled_at = None
+    db.commit()
+    log_audit_event(user_id=current_user.id, action="mfa_disabled", resource_type="user", resource_id=current_user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/refresh", response_model=TokenPairResponse)

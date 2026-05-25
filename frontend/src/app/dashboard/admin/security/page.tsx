@@ -138,9 +138,8 @@ export default function SecurityPage() {
             >
                 <PolicyRow
                     label="Multi-factor authentication (MFA)"
-                    detail="Require TOTP or hardware key on every sign-in."
-                    enabled={false}
-                    pending
+                    detail="TOTP authenticator app with one-time backup codes, enforced on every sign-in once a user enrolls. Users manage their own enrollment from Profile."
+                    enabled
                 />
                 <PolicyRow
                     label="Session timeout"
@@ -149,9 +148,8 @@ export default function SecurityPage() {
                 />
                 <PolicyRow
                     label="Brute-force lockout"
-                    detail="Global rate limit (5/min) is active. Per-account lockout planned."
-                    enabled={false}
-                    pending
+                    detail="5 failed attempts trigger a 15-minute lock with exponential backoff, per account, on top of the global rate limit."
+                    enabled
                 />
                 <PolicyRow
                     label="Audit log immutability"

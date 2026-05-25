@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # MFA (TOTP) + per-account brute-force lockout
+    MFA_ISSUER: str = "TaxSync"
+    MFA_CHALLENGE_EXPIRE_MINUTES: int = 5   # TTL of the post-password challenge token
+    MFA_BACKUP_CODE_COUNT: int = 10
+    MAX_FAILED_LOGINS: int = 5              # consecutive failures before lockout
+    LOCKOUT_DURATION_MINUTES: int = 15      # base lock window (doubles per repeat, capped)
+
     # CORS
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
 
