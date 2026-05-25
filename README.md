@@ -548,27 +548,33 @@ MICROSOFT_CLIENT_SECRET=your-microsoft-client-secret
 FRONTEND_URL=http://localhost:3000
 BACKEND_URL=http://localhost:8000
 
-# Email (SMTP) — required to deliver early-access invitation emails.
-# Without these, admin approval succeeds but the invitee never gets the link
-# (admin UI now flags this with "approved, but email NOT delivered").
+# Email (SMTP) is required to deliver early-access invitations, password
+# resets, tenant invites, and compliance alerts. Without these, admin
+# approval still succeeds but the invitee never gets the link (the admin
+# UI flags this with "approved, but email NOT delivered").
 #
-# Recommended: Resend (3k emails/month free, no domain required for testing).
-# Sign up at https://resend.com → API Keys → paste the re_xxx value below.
-# `onboarding@resend.dev` is Resend's verified sandbox sender — works out of
-# the box. Verify your own domain later for production.
-SMTP_HOST=smtp.resend.com
+# Recommended: Gmail App Password (free, ~500 emails/day, delivers to any
+# recipient, no domain verification). Requires 2-Step Verification on the
+# account; generate a 16-char value (no spaces) at
+# https://myaccount.google.com/apppasswords (App = Mail). Gmail rewrites or
+# rejects any From that is not the authenticated account, so SMTP_FROM_EMAIL
+# must equal SMTP_USERNAME.
+SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USERNAME=resend
-SMTP_PASSWORD=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-SMTP_FROM_EMAIL=onboarding@resend.dev
+SMTP_USERNAME=you@gmail.com
+SMTP_PASSWORD=xxxxxxxxxxxxxxxx
+SMTP_FROM_EMAIL=you@gmail.com
 SMTP_USE_TLS=true
 
-# Alternative: Gmail App Password (requires 2-Step Verification on the account).
-# Generate at https://myaccount.google.com/apppasswords (16-char value, no spaces).
-# SMTP_HOST=smtp.gmail.com
-# SMTP_USERNAME=you@gmail.com
-# SMTP_PASSWORD=xxxxxxxxxxxxxxxx
-# SMTP_FROM_EMAIL=you@gmail.com
+# Alternative: Resend (3k emails/month free, sandbox sender
+# onboarding@resend.dev needs no domain). Caveat: the free tier rejects
+# every recipient that is not the account owner with a 550 ("verify a
+# domain at resend.com/domains"), so it cannot reach arbitrary users until
+# you verify a domain. This limitation is why Gmail is recommended above.
+# SMTP_HOST=smtp.resend.com
+# SMTP_USERNAME=resend
+# SMTP_PASSWORD=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# SMTP_FROM_EMAIL=onboarding@resend.dev
 
 # LLM
 LLM_PROVIDER=ollama
