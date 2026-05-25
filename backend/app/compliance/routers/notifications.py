@@ -117,7 +117,7 @@ async def notifications_websocket(
             logger.info(
                 "WebSocket membership inactive for user_id=%d "
                 "client_id=%d — closing",
-                user_id, client_id,
+                int(user_id), int(client_id),
             )
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return False
@@ -126,7 +126,7 @@ async def notifications_websocket(
         except Exception:
             logger.info(
                 "WebSocket token invalid/expired for user_id=%d — closing",
-                user_id,
+                int(user_id),
             )
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return False

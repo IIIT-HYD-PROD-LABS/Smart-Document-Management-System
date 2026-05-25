@@ -417,8 +417,8 @@ def _notify_notice_assigned(
     except Exception:
         import logging
         logging.getLogger(__name__).warning(
-            "notice_assigned_notify_failed notice_id=%s assignee=%s",
-            notice.id, assignee_user_id,
+            "notice_assigned_notify_failed notice_id=%d assignee=%d",
+            int(notice.id), int(assignee_user_id),
         )
 
 
@@ -573,7 +573,7 @@ def transition_status(
             user=current_user,
             reason=payload.reason,
         )
-    except InvalidTransitionError as e:
+    except InvalidTransitionError:
         # Reload current status for the helpful error payload — the service
         # rolled back so the row is unchanged. Use a fresh query so the
         # session is clean.
@@ -587,10 +587,22 @@ def transition_status(
             valid = sorted(
                 s.value for s in ALLOWED_TRANSITIONS.get(NoticeStatus(current), frozenset())
             )
+        # Log the full exception server-side; do not surface raw exception
+        # text to the API caller (CodeQL py/stack-trace-exposure). The
+        # message field gets a curated string built from the known
+        # current+target pair, which is all the client needs to render
+        # the "X cannot move to Y" toast.
+        import logging
+        logging.getLogger(__name__).warning(
+            "notice_invalid_transition notice_id=%d current=%r target=%r",
+            int(notice_id), current, payload.new_status,
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
-                "message": str(e),
+                "message": (
+                    f"Cannot transition from {current!r} to {payload.new_status!r}."
+                ),
                 "valid_next_statuses": valid,
             },
         )

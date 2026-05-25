@@ -88,8 +88,11 @@ def update_credential(
         try:
             schedule_gmail_scan(cred.id, cadence_minutes=body.cadence_minutes)
         except Exception:  # noqa: BLE001 — non-fatal; cadence still saved
+            # int() cast defends against CodeQL py/log-injection: even though
+            # FastAPI types credential_id as int, the cast pins the value as
+            # purely numeric in the log line so the static analyzer agrees.
             logger.exception(
-                "schedule_gmail_scan_failed credential_id=%s", credential_id
+                "schedule_gmail_scan_failed credential_id=%d", int(credential_id)
             )
     return cred
 
@@ -135,6 +138,6 @@ def delete_credential(
                 pass
     except Exception:  # noqa: BLE001 — scheduler unavailable is non-fatal
         logger.exception(
-            "scheduler_remove_failed credential_id=%s", credential_id
+            "scheduler_remove_failed credential_id=%d", int(credential_id)
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

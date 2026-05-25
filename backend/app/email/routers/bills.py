@@ -176,11 +176,15 @@ def bulk_mark_bills_paid(
             # Bill object from a prior successful iteration cannot resurface
             # as expired-but-still-cached state in the next loop iteration.
             db.expire_all()
+            # Log the full exception server-side; surface only the exception
+            # class name to the API caller so we do not leak SQL fragments,
+            # bound parameters, or other internals (CodeQL py/stack-trace-exposure).
+            logger.exception("bills.mark_paid_bulk failed for bill_id=%d", int(bid))
             results.append(
                 {
                     "id": bid,
                     "status": "failed",
-                    "error": str(e)[:200],
+                    "error": type(e).__name__,
                 }
             )
             failed += 1

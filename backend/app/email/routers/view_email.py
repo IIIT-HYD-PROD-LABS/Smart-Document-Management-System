@@ -93,7 +93,7 @@ async def view_email(
         raise
     except Exception as e:  # noqa: BLE001 — surface as 502 with type only
         logger.exception(
-            "gmail_read_message_failed message_log_id=%s", message_log_id
+            "gmail_read_message_failed message_log_id=%d", int(message_log_id)
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

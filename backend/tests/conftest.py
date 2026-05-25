@@ -99,11 +99,31 @@ def app_runtime_engine():
     DATABASE_URL_RUNTIME (= literal app_runtime user) cannot RESET to a
     higher-privilege role; once subjected to FORCE RLS without a tenant
     context, INSERTs into client-scoped tables fail unconditionally.
+
+    DB prerequisite (2026-05-25): the connecting role must be a member of
+    `app_runtime` WITH SET TRUE. On Supabase that means running
+    `GRANT app_runtime TO postgres` once from the project owner; on PG 16+
+    the GRANT also needs `WITH SET TRUE` for SET ROLE to work. Without
+    this, every fixture that touches RLS will error with
+    `permission denied to set role "app_runtime"`. Auto-skip below
+    detects that case and reports cleanly instead of dumping 100
+    identical fixture tracebacks.
     """
     url = os.environ.get("DATABASE_URL")
     if not url:
         pytest.skip("DATABASE_URL not set")
     engine = create_engine(url, pool_pre_ping=True)
+    # Probe SET ROLE eligibility once at session start. Cheaper than
+    # discovering it 100 times via fixture failures.
+    try:
+        with engine.connect() as probe:
+            probe.execute(text("SET ROLE app_runtime"))
+            probe.execute(text("RESET ROLE"))
+    except Exception as exc:  # noqa: BLE001 — any failure means the role can't be assumed
+        pytest.skip(
+            f"Cannot SET ROLE app_runtime: {exc}. Grant it via "
+            f"'GRANT app_runtime TO <conn_user> WITH SET TRUE' on the DB."
+        )
     yield engine
     engine.dispose()
 
