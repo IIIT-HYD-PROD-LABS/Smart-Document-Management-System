@@ -142,15 +142,66 @@ export function ExtractionPreviewForm({
             }
         },
         onError: (err: unknown) => {
-            const e = err as { response?: { status?: number; data?: { detail?: { code?: string } } } };
-            if (e.response?.status === 412 && e.response?.data?.detail?.code === "no_ai_credential") {
+            const e = err as {
+                response?: {
+                    status?: number;
+                    data?: {
+                        detail?:
+                            | string
+                            | {
+                                  code?: string;
+                                  message?: string;
+                                  your_role?: string;
+                                  required_permission?: string;
+                                  allowed_roles?: string[];
+                              };
+                    };
+                };
+            };
+            const detail = e.response?.data?.detail;
+            const status = e.response?.status;
+
+            // 412: tenant has no AI credential configured.
+            if (
+                status === 412 &&
+                typeof detail === "object" &&
+                detail?.code === "no_ai_credential"
+            ) {
                 setCredentialMissing(true);
                 toast.error("Connect an AI provider in settings to enable extraction");
                 setMode("manual");
                 return;
             }
-            const msg = err instanceof Error ? err.message : "Extraction failed";
-            toast.error(`${msg} — fill in manually`);
+
+            // 403: caller's compliance role lacks NOTICE_AI_EXTRACT (Phase 17
+            // permission gate). Surface which role they need so they can
+            // switch clients or ask their admin to upgrade their membership.
+            if (
+                status === 403 &&
+                typeof detail === "object" &&
+                detail?.code === "role_lacks_permission"
+            ) {
+                const allowed = detail.allowed_roles?.join(", ") ?? "compliance_head";
+                toast.error(
+                    `Your role "${detail.your_role ?? "current"}" on this client cannot upload notices. ` +
+                        `Switch to a client where you hold one of: ${allowed}, or ask your admin.`,
+                    { duration: 8000 },
+                );
+                setMode("manual");
+                return;
+            }
+
+            // Anything else: try to read the FastAPI detail if it's a string,
+            // otherwise fall back to the axios message.
+            const detailMsg =
+                typeof detail === "string"
+                    ? detail
+                    : typeof detail === "object" && detail?.message
+                    ? detail.message
+                    : err instanceof Error
+                    ? err.message
+                    : "Extraction failed";
+            toast.error(`${detailMsg}. Fill in manually instead.`);
             setMode("manual");
         },
     });

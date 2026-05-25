@@ -247,16 +247,20 @@ def main() -> int:
                 CompliancePermission.NOTICE_AI_EXTRACT.value
                 == "notice:ai_extract"
             ), "permission enum value drifted"
+            # 2026-05-25: legal_team was widened to include NOTICE_AI_EXTRACT
+            # so reviewers can preview extracted fields when drafting a reply.
+            # accept-extraction still requires NOTICE_CREATE inline, so legal
+            # can preview but not persist.
             for role in (
                 ComplianceRole.COMPLIANCE_HEAD,
                 ComplianceRole.CA_CONSULTANT,
                 ComplianceRole.STAFF,
+                ComplianceRole.LEGAL_TEAM,
             ):
                 assert has_permission(
                     role, CompliancePermission.NOTICE_AI_EXTRACT
                 ), f"{role.value} lacks NOTICE_AI_EXTRACT"
             for role in (
-                ComplianceRole.LEGAL_TEAM,
                 ComplianceRole.AUDITOR,
                 ComplianceRole.CFO,
                 ComplianceRole.FINANCE_TEAM,
@@ -264,7 +268,7 @@ def main() -> int:
                 assert not has_permission(
                     role, CompliancePermission.NOTICE_AI_EXTRACT
                 ), f"{role.value} unexpectedly has NOTICE_AI_EXTRACT"
-            _passed(3, "permission_registered (3 grants, 4 negatives)")
+            _passed(3, "permission_registered (4 grants, 3 negatives)")
         except Exception as e:
             _failed(3, "permission_registered", str(e))
             return 1

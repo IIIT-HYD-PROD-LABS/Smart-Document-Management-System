@@ -119,9 +119,14 @@ def manual_enqueue(
     is appended to the reason field as `manual_flag:<note>` so the
     reviewer sees the operator's hint without a second fetch.
     """
+    # Defense-in-depth: explicit client_id filter on top of RLS so a
+    # tenant A user cannot enqueue tenant B's notice into the review queue.
     notice = (
         db.query(ComplianceNotice)
-        .filter(ComplianceNotice.id == notice_id)
+        .filter(
+            ComplianceNotice.id == notice_id,
+            ComplianceNotice.client_id == membership.client_id,
+        )
         .first()
     )
     if notice is None:

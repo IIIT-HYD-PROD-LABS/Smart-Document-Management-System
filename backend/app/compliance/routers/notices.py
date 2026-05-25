@@ -444,9 +444,15 @@ def assign_notice(
     immutable AuditLog entry, and pushes a real-time WebSocket
     notification to the new assignee.
     """
+    # Defense-in-depth: explicit client_id filter on top of RLS so an
+    # accidental policy regression cannot let tenant A reassign tenant B's
+    # notice.
     n = (
         db.query(ComplianceNotice)
-        .filter(ComplianceNotice.id == notice_id)
+        .filter(
+            ComplianceNotice.id == notice_id,
+            ComplianceNotice.client_id == membership.client_id,
+        )
         .first()
     )
     if not n:
@@ -641,9 +647,15 @@ def upload_notice_file(
     so the OCR pipeline (if it later runs) can find the source notice;
     Phase 10 will trigger ML classification on this same row.
     """
+    # Defense-in-depth: explicit client_id filter on top of RLS so an
+    # accidental policy regression cannot let tenant A attach a document to
+    # tenant B's notice.
     n = (
         db.query(ComplianceNotice)
-        .filter(ComplianceNotice.id == notice_id)
+        .filter(
+            ComplianceNotice.id == notice_id,
+            ComplianceNotice.client_id == membership.client_id,
+        )
         .first()
     )
     if not n:
@@ -738,9 +750,17 @@ def list_activity(
     db: Session = Depends(get_db),
 ):
     """List the user-facing activity timeline for a notice (D-09)."""
+    # Defense-in-depth: join through ComplianceNotice and filter on the
+    # caller's client_id so an RLS regression cannot leak cross-tenant
+    # activity rows. NoticeActivity has no client_id of its own; the
+    # parent notice is the canonical tenant anchor.
     rows = (
         db.query(NoticeActivity)
-        .filter(NoticeActivity.notice_id == notice_id)
+        .join(ComplianceNotice, NoticeActivity.notice_id == ComplianceNotice.id)
+        .filter(
+            NoticeActivity.notice_id == notice_id,
+            ComplianceNotice.client_id == membership.client_id,
+        )
         .order_by(NoticeActivity.created_at.desc())
         .all()
     )
@@ -965,12 +985,16 @@ def accept_extraction(
     """
     import hashlib
 
-    role = ComplianceRole(membership.role)
+    # NOTE: ClientMembership stores the role on `compliance_role`, not `role`.
+    # Hitting `.role` raised AttributeError -> 500 for every accept-extraction
+    # call regardless of permission. Confirmed by the agent that ran the
+    # 4x2 RBAC matrix during Plan 18 prep.
+    role = ComplianceRole(membership.compliance_role)
     if not has_permission(role, CompliancePermission.NOTICE_CREATE):
         # NOTICE_UPDATE is implemented via NOTICE_CREATE in the existing
         # permission registry (Phase 9 RBAC-01). PATCH /notices/{id} also
-        # gates on NOTICE_CREATE — we mirror that exact contract here so
-        # acceptance and manual edit have the same gate.
+        # gates on NOTICE_CREATE so acceptance and manual edit share the
+        # same gate.
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Role lacks permission to update notice fields",

@@ -80,6 +80,11 @@ ROLE_PERMISSIONS: dict[ComplianceRole, frozenset[CompliancePermission]] = {
         CompliancePermission.NOTICE_APPROVE_LEGAL,
         CompliancePermission.NOTICE_ATTACH_EVIDENCE,
         CompliancePermission.REPORT_VIEW,
+        # Phase 17 (2026-05-25, post-ship widening): legal team owns notice
+        # response drafting and review. They need to preview extracted fields
+        # to draft a competent reply. extract-preview is preview-only; persisting
+        # accepted fields still requires NOTICE_CREATE inline at accept-extraction.
+        CompliancePermission.NOTICE_AI_EXTRACT,
     }),
     ComplianceRole.FINANCE_TEAM: frozenset({
         CompliancePermission.NOTICE_VIEW,  # GST/IT scoping enforced in service layer

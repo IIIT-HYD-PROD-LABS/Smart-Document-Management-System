@@ -57,7 +57,11 @@ def _patched_call(payload_items, *, notice=None, permission_ok=True):
     db.refresh = MagicMock()
 
     current_user = MagicMock(id=99)
-    membership = MagicMock(role="compliance_head" if permission_ok else "auditor")
+    # ClientMembership stores the role on `compliance_role`, not `role`.
+    membership = MagicMock(
+        compliance_role="compliance_head" if permission_ok else "auditor",
+        client_id=7,
+    )
 
     captured: list[dict] = []
 

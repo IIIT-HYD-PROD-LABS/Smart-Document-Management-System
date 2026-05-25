@@ -172,12 +172,39 @@ def require_compliance_permission(perm: CompliancePermission):
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Invalid compliance role: {membership.compliance_role}",
+                detail={
+                    "code": "invalid_role",
+                    "message": (
+                        f"Invalid compliance role '{membership.compliance_role}'. "
+                        "Ask your admin to re-issue your membership."
+                    ),
+                    "your_role": membership.compliance_role,
+                },
             )
         if not has_permission(role, perm):
+            # Identify which roles do hold this permission, so the frontend
+            # can render an actionable "switch client" or "ask admin" CTA.
+            from app.compliance.services.permission_registry import (
+                ROLE_PERMISSIONS,
+            )
+
+            allowed_roles = sorted(
+                r.value for r, perms in ROLE_PERMISSIONS.items() if perm in perms
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Role '{role.value}' lacks permission '{perm.value}'",
+                detail={
+                    "code": "role_lacks_permission",
+                    "message": (
+                        f"Your role '{role.value}' on this client cannot use this "
+                        "action. Switch to a client where you hold one of: "
+                        f"{', '.join(allowed_roles)}, or ask your admin to "
+                        "upgrade your membership."
+                    ),
+                    "your_role": role.value,
+                    "required_permission": perm.value,
+                    "allowed_roles": allowed_roles,
+                },
             )
         return membership
 
