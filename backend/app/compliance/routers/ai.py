@@ -324,6 +324,72 @@ def notice_actions(
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Notice response drafting (Phase 18)
+# ─────────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/notice-response-draft/{notice_id}",
+)
+@limiter.limit("12/minute")
+def notice_response_draft(
+    request: Request,
+    response: Response,
+    notice_id: int,
+    body: dict | None = Body(default=None),
+    membership: ClientMembership = Depends(
+        require_compliance_permission(CompliancePermission.NOTICE_DRAFT_RESPONSE)
+    ),
+    db: Session = Depends(get_db),
+):
+    """Phase 18: generate an AI-assisted draft reply for the notice.
+
+    Permission gate is NOTICE_DRAFT_RESPONSE (compliance_head, legal_team,
+    ca_consultant, staff). Drafts ALWAYS return preview-only; the caller
+    decides whether to persist as a NoticeResponseVersion via the existing
+    POST /api/compliance/notices/{id}/responses endpoint.
+
+    Rate limited to 12/minute per Phase 17 extract-preview parity since
+    the cost profile is the same (one provider call per request).
+    """
+    from app.compliance.services.response_drafter_service import (
+        ResponseDraftCredentialMissingError,
+        draft_response_for_notice,
+    )
+
+    _require_credential(db, membership.client_id)
+    notice = _require_notice(db, notice_id, membership.client_id)
+    guidance = ""
+    if isinstance(body, dict):
+        raw = body.get("user_guidance")
+        if isinstance(raw, str):
+            guidance = raw
+
+    try:
+        return draft_response_for_notice(
+            db,
+            notice=notice,
+            user_id=membership.user_id,
+            user_guidance=guidance,
+        )
+    except ResponseDraftCredentialMissingError:
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail=(
+                "No AI credential configured for this tenant. "
+                "Set one in Settings -> AI."
+            ),
+        )
+    except (
+        AIOutOfScopeError,
+        AIAuthError,
+        AIRateLimitError,
+        AIProviderError,
+    ) as e:
+        raise _map_ai_error(e) from e
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Invoice AI
 # ─────────────────────────────────────────────────────────────────────
 

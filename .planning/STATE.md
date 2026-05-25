@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
-status: Milestone complete + Phase 17 shipped (BYOK AI notice extraction)
-stopped_at: Phase 17 v2.0 SHIPPED 2026-05-25 — smoke_phase17_v20.py 12/12 PASS (Gemini 2.5 Flash Lite, avg conf 0.99); migration 0034 head; audit redaction + immutability + RLS isolation verified
-last_updated: "2026-05-25T00:00:00.000Z"
+status: Milestone complete + Phase 17 + Phase 18 shipped (BYOK AI notice extraction + response drafting)
+stopped_at: Phase 18 v2.0 SHIPPED 2026-05-25 - smoke_phase18_v20.py 10/10 PASS (Gemini 2.5 Flash Lite, 1913-char draft, 5.9s latency, 11 extracted fields used as context); Phase 17 fixes also landed (legal_team widening, 403 enrichment, 4 router IDOR consistency, accept_extraction crash repair, frontend 403 toast)
+last_updated: "2026-05-25T07:40:00.000Z"
 progress:
-  total_phases: 9
-  completed_phases: 7
-  total_plans: 33
-  completed_plans: 33
+  total_phases: 10
+  completed_phases: 8
+  total_plans: 34
+  completed_plans: 34
 ---
 
 # Project State
@@ -35,6 +35,7 @@ Next: Phase 14 — Government Portal Integration (BLOCKED on GSP empanelment + I
 - **v2.0 Phase 11 v2.0** (2026-05-05, CODE-COMPLETE — pending user browser smoke): Alerts + Calendar — APScheduler + multi-channel alert pipeline (email + WebSocket; SMS scaffolded), Indian holiday-aware deadline adjustment, statutory calendar with 37 FY 2025-26 deadlines pre-seeded, compliance-score chip, NotificationBell with auto-reconnecting WebSocket. 95 backend tests GREEN.
 - **v2.0 Phase 15 v2.0** (2026-05-07, SHIPPED): Gmail MCP Integration — 7 plans (test infra, DB foundations, services, MCP server, routers, frontend, smoke + manual checklist). FastMCP with 6 tools via in-memory transport, scheduled scanner ingesting attachments + auto-creating ComplianceNotice and Bill rows, Fernet-encrypted refresh tokens, every MCP call PII-redacted in audit log. 12/12 automated smoke PASSED; 12-step manual OAuth checklist documented.
 - **v2.1 Phase 16** (2026-05-08, SHIPPED): BYOK AI Assistant — per-tenant Anthropic / Gemini key in `ai_credentials` table (Fernet-encrypted). Scope-locked SYSTEM prompt restricts output to Indian regulatory work, OUT_OF_SCOPE sentinel otherwise. 5 task surfaces: notice summary + recommended actions, invoice summary + suggested actions + payment timing. Settings page at /dashboard/settings/ai with Test + Save flow.
+- **v2.0 Phase 18 v2.0** (2026-05-25, SHIPPED): AI Notice Response Drafting (BYOK) - single endpoint `POST /api/compliance/ai/notice-response-draft/{notice_id}`, NOTICE_DRAFT_RESPONSE gate (legal_team, ca_consultant, staff), 800-char user guidance cap, 1400-token output cap, reuses Phase 16 SCOPE_LOCK_SYSTEM + Phase 17 extracted_fields as structured context. PII-redacted audit chain: `notice_ai_draft` rows hash both the draft body and the guidance, no raw text in audit args. Smoke `scripts/smoke_phase18_v20.py` covers 10 checks; 10/10 PASS against live Gemini 2.5 Flash Lite (1913-char draft, 5.9s latency, 11 extracted fields used).
 - **v2.0 Phase 17 v2.0** (2026-05-25, SHIPPED): AI Notice Field Extraction (Zero-Shot, BYOK) — 7 plans (test infra, schema + permission, extractor service, Celery + Gmail wiring, routers, upload-first UI, smoke + docs). 14-field canonical schema. Conjunctive 0.85 routing gate (avg + notice_number + authority). Structural validators (GSTIN, PAN, CIN, ISO dates, liability arithmetic) halve confidence on shape failure. PII-redacted audit chain: notice_ai_extract + notice_ai_extract_accepted, both bound by the Phase 9 immutability trigger. Upload-first form at /dashboard/compliance/notices/new with per-field accept / edit / discard and provenance disclosure on the detail page. End-to-end smoke 12/12 PASS (Gemini 2.5 Flash Lite, avg conf 0.99, 13 of 14 fields, 3.6s latency). EXTRACT-01..12 satisfied. v2.1 deferrals: supervised NER + BERT bake-off, tabular line-item extraction, bulk re-extraction of historical notices, cross-validation against authoritative GSTIN / PAN registries, active-learning loop on accepted edits.
 
 ## Accumulated Context

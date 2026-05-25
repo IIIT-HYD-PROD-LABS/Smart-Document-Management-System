@@ -37,6 +37,13 @@ TaxSync
 ### v2.0 Phase 15: Gmail MCP Integration (2026-05-07)
 - **Gmail OAuth + 6 MCP tools.** Connect a tenant's Gmail once, refresh tokens stored Fernet-encrypted, six MCP tools (`gmail_search`, `gmail_read_message`, `gmail_list_attachments`, `gmail_get_attachment`, `gmail_list_labels`, `gmail_modify_labels`) exposed to internal compliance agents via the in-memory FastMCP transport, every invocation writes a PII-redacted audit row. Scheduled scanner (5min to 24hr cadence) ingests attachments into the DMS, auto-creates `ComplianceNotice` rows for regulatory senders, and routes personal or household bills (now branded "Vendor invoices") to the bill dashboard with T-3, T-1, and overdue reminders. See `scripts/smoke_phase15_v20.py` for the automated smoke and `.planning/phases/15-gmail-mcp-integration/15-SMOKE-CHECKLIST.md` for the 12-step manual OAuth checklist.
 
+### v2.0 Phase 18: AI Notice Response Drafting, BYOK (2026-05-25)
+- **One endpoint draft generation** at `POST /api/compliance/ai/notice-response-draft/{notice_id}`. Anyone with `NOTICE_DRAFT_RESPONSE` (legal_team, ca_consultant, staff) can call it. The service reads the notice + the Phase 17 extracted_fields envelope, embeds them as JSON context, and asks the tenant's BYOK provider to draft a formal markdown reply that quotes figures verbatim and cites statute sections without invention.
+- **User guidance** capped at 800 chars: the caller can include free-text instructions like "be more terse" or "emphasise procedural objections" in the request body. Guidance is truncated before hashing so the audit trail records exactly what the prompt saw.
+- **PII-redacted audit chain.** One `notice_ai_draft` row per call with provider, model, tokens in or out, latency, body SHA-256, guidance SHA-256, and the list of extracted-field KEYS used as context. NO raw draft text and NO guidance text in the audit log. Phase 9 immutability trigger applies.
+- **Preview-only.** Drafts do not bypass the existing Phase 12 four-stage approval workflow. The caller persists the chosen draft via the existing POST `/api/compliance/notices/{id}/responses` flow, which moves it through Drafter, Reviewer, Legal, CFO as usual.
+- **Smoke.** `docker cp scripts/smoke_phase18_v20.py smartdocs-backend:/tmp/ && docker exec -e ANTHROPIC_API_KEY_SMOKE=$KEY smartdocs-backend python /tmp/smoke_phase18_v20.py` runs 10 checks end to end. CI-safe SKIP when no key set. Verified 10/10 PASS on 2026-05-25 against `gemini-2.5-flash-lite`: 1913-char draft, 5.9s latency, 11 extracted fields used.
+
 ### v2.0 Phase 17: AI Notice Field Extraction, BYOK (2026-05-25)
 - **Upload-first notice creation** at `/dashboard/compliance/notices/new`. Drop a PDF, JPG, or PNG and the page extracts canonical notice fields (notice_number, authority, issued_date, response_deadline, tax_demand, interest, penalty, total_liability, GSTIN, PAN, CIN, taxpayer_name, legal_sections, notice_type) using the tenant's Phase 16 BYOK key. The 14-field schema lines up with the create-notice form so each row carries an accept, edit, or discard affordance plus a per-field confidence badge (emerald `Confident` at >= 0.75, amber `Review` at >= 0.55, rose `Needs review` below).
 - **Conjunctive routing gate.** Auto-apply requires ALL of: average confidence >= 0.85, `notice_number` >= 0.85, and `authority` >= 0.85 (D-06). Any miss routes the artefact to the Phase 10 review queue with reason `low_confidence_extraction`. Structural validation (GSTIN, PAN, CIN, ISO dates, liability arithmetic) halves the per-field confidence before the gate runs, so a model that reports 0.95 on a malformed GSTIN drops to 0.475 and falls into the review path.
@@ -431,6 +438,7 @@ docker-compose.yml           # Redis, Backend, Celery, Frontend
 | 15 | Gmail MCP Integration (v2.0) | ✅ Shipped 2026-05-07 (7/7 plans) |
 | 16 | BYOK AI Assistant (v2.1) | ✅ Shipped 2026-05-08 |
 | 17 | AI Notice Field Extraction, BYOK (v2.0) | ✅ Shipped 2026-05-25 (7/7 plans, smoke 12/12 PASS) |
+| 18 | AI Notice Response Drafting, BYOK (v2.0) | ✅ Shipped 2026-05-25 (1 plan, smoke 10/10 PASS against live Gemini) |
 
 ### Completed
 

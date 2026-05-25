@@ -29,6 +29,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 - [x] **Phase 15: Gmail MCP Integration & Email Document Ingestion** — Gmail OAuth + MCP server, auto-ingest notice/bill attachments — 7 plans planned 2026-05-07 (completed 2026-05-07)
 - [x] **Phase 16: BYOK AI Assistant (v2.1)** — per-tenant Anthropic / Gemini key, Fernet-encrypted, scope-locked SYSTEM prompt, 5 task surfaces (notice summary + recommended actions, invoice summary + suggested actions + payment timing) — shipped 2026-05-08
 - [x] **Phase 17: AI Notice Field Extraction, BYOK (v2.0)** — upload-first flow on `/dashboard/compliance/notices/new` that extracts 14 canonical fields via the tenant's Phase 16 key, conjunctive 0.85 routing gate (average + notice_number + authority), structural validators for GSTIN / PAN / CIN / ISO dates / liability arithmetic that halve confidence on shape failure, PII-redacted audit chain (`notice_ai_extract` + `notice_ai_extract_accepted`), provenance disclosure on the detail page — 7 plans, shipped 2026-05-25
+- [x] **Phase 18: AI Notice Response Drafting, BYOK (v2.0)** — `POST /api/compliance/ai/notice-response-draft/{notice_id}` generates a markdown reply draft for any user with NOTICE_DRAFT_RESPONSE (legal_team, ca_consultant, staff), reusing the Phase 16 scope-locked SYSTEM prompt and the Phase 17 extracted_fields envelope as structured context, with PII-redacted `notice_ai_draft` audit rows that hash both the draft body and the user guidance — 1 plan, shipped 2026-05-25 (smoke 10/10 PASS)
 
 ## Phase Details
 
@@ -184,6 +185,7 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 | 15. Gmail MCP Integration | v2.0 | 7/7 | ✅ Shipped | 2026-05-07 |
 | 16. BYOK AI Assistant | v2.1 | 1/1 | ✅ Shipped (per-tenant Anthropic / Gemini key, 5 task surfaces, scope-locked SYSTEM prompt) | 2026-05-08 |
 | 17. AI Notice Field Extraction, BYOK | v2.0 | 7/7 | ✅ Shipped (upload-first flow, 0.85 conjunctive gate, structural validators, PII-redacted audit chain, smoke 12/12 PASS) | 2026-05-25 |
+| 18. AI Notice Response Drafting, BYOK | v2.0 | 1/1 | ✅ Shipped (markdown draft endpoint, NOTICE_DRAFT_RESPONSE gate, PII-redacted draft + guidance hashes, smoke 10/10 PASS against live Gemini) | 2026-05-25 |
 
 ---
 *Last updated: 2026-05-25 — **Phase 17 v2.0 SHIPPED**. End-to-end smoke `scripts/smoke_phase17_v20.py` cleared 12 of 12 checks against a live Gemini call (avg confidence 0.99, 13 of 14 fields returned, 3.6s latency). Audit redaction, immutability, and RLS isolation all verified by the smoke. Phase 14 remains BLOCKED on GSP empanelment + IT API decisions. v2.1 deferrals for Phase 17: supervised NER / BERT bake-off, tabular line-item extraction, bulk re-extraction of historical notices, cross-validation of extracted GSTIN / PAN against authoritative registries, active-learning loop on accepted edits.*
