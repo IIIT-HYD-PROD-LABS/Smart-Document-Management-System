@@ -60,7 +60,7 @@ function ComingSoon() {
     return (
         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10.5px] font-medium bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-default)]">
             <FiClock className="w-3 h-3" />
-            Phase 18
+            Planned
         </span>
     );
 }

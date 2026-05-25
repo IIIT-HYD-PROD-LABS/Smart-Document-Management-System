@@ -77,7 +77,7 @@ function PolicyRow({
                 }`}
             >
                 {pending ? <FiClock className="w-3 h-3" /> : enabled ? <FiCheck className="w-3 h-3" /> : <FiAlertTriangle className="w-3 h-3" />}
-                {pending ? "Phase 18" : enabled ? "Enforced" : "Off"}
+                {pending ? "Planned" : enabled ? "Enforced" : "Off"}
             </span>
         </div>
     );
@@ -156,6 +156,11 @@ export default function SecurityPage() {
                 <PolicyRow
                     label="Audit log immutability"
                     detail="Database trigger blocks UPDATE or DELETE on audit_logs."
+                    enabled
+                />
+                <PolicyRow
+                    label="Self-service password reset"
+                    detail="Forgot-password flow emails a 15-minute single-use signed link; completing a reset revokes every outstanding refresh token. Audit rows on request + completion."
                     enabled
                 />
             </SectionCard>

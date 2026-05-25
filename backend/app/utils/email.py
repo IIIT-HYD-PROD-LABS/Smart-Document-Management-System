@@ -164,6 +164,54 @@ def send_tenant_invite_email(
     )
 
 
+def send_password_reset_email(
+    *,
+    to_email: str,
+    full_name: str,
+    reset_token: str,
+) -> bool:
+    """Send a self-service password reset email.
+
+    Land on `${FRONTEND_URL}/reset-password?token=<JWT>`. The user enters
+    a new password there; backend validates the JWT (15-minute TTL,
+    single-use) and replaces the bcrypt hash.
+    """
+    reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+
+    if not settings.SMTP_HOST and settings.DEBUG:
+        logger.warning(
+            "password_reset_url_for_dev",
+            to=to_email,
+            url=reset_url,
+            hint="SMTP not configured. Copy this URL into the browser to complete the reset locally.",
+        )
+
+    safe_name = full_name or to_email.split("@", 1)[0]
+    html = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+        <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="font-size: 20px; font-weight: 600; color: #111; margin: 0;">TaxSync</h1>
+        </div>
+        <p style="color: #555; font-size: 14px; line-height: 1.6;">Hi {safe_name},</p>
+        <p style="color: #555; font-size: 14px; line-height: 1.6;">
+            We received a request to reset the password on your TaxSync account. Click the button below to choose a new one.
+        </p>
+        <div style="text-align: center; margin: 32px 0;">
+            <a href="{reset_url}" style="display: inline-block; padding: 12px 32px; background: #111; color: #fff; font-size: 14px; font-weight: 500; text-decoration: none; border-radius: 6px;">
+                Reset password
+            </a>
+        </div>
+        <p style="color: #999; font-size: 12px; line-height: 1.6;">
+            This link expires in 15 minutes and can only be used once. If you did not request this reset, you can safely ignore this email; your password will not change.
+        </p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;" />
+        <p style="color: #bbb; font-size: 11px; text-align: center;">TaxSync, AI-powered tax compliance intelligence</p>
+    </div>
+    """
+
+    return send_email(to_email, "Reset your TaxSync password", html)
+
+
 def send_rejection_email(to_email: str, full_name: str, note: str | None = None) -> bool:
     """Send early access rejection email."""
     note_html = f'<p style="color: #555; font-size: 14px; line-height: 1.6;"><em>Note from our team: {note}</em></p>' if note else ""

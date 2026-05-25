@@ -111,3 +111,38 @@ class AcceptInviteRequest(BaseModel):
     """
     token: str = Field(..., min_length=1, max_length=2048)
     password: str = Field(..., min_length=12, max_length=128)
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Body for POST /api/auth/forgot-password. Caller-side intake only."""
+
+    email: str = Field(..., min_length=3, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
+
+class ResetPasswordRequest(BaseModel):
+    """Body for POST /api/auth/reset-password.
+
+    Same complexity floor as the registration form so a reset cannot
+    bypass the password policy advertised on the admin Security page.
+    """
+
+    token: str = Field(..., min_length=1, max_length=2048)
+    password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def _validate_complexity(cls, v: str) -> str:
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r"[0-9]", v):
+            raise ValueError("Password must contain at least one digit")
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/~`]', v):
+            raise ValueError("Password must contain at least one special character")
+        return v

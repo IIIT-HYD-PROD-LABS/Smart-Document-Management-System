@@ -149,6 +149,12 @@ export const authApi = {
 
     acceptInvite: (data: { token: string; password: string }) =>
         api.post("/auth/accept-invite", data),
+
+    forgotPassword: (data: { email: string }) =>
+        api.post("/auth/forgot-password", data),
+
+    resetPassword: (data: { token: string; password: string }) =>
+        api.post("/auth/reset-password", data),
 };
 
 // ──── Documents API ────

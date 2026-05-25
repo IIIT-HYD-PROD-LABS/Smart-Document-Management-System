@@ -101,7 +101,15 @@ function LoginInner() {
                             />
                         </div>
                         <div>
-                            <label htmlFor="login-password" className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Password</label>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label htmlFor="login-password" className="text-xs font-medium text-[var(--text-muted)]">Password</label>
+                                <Link
+                                    href="/forgot-password"
+                                    className="text-[11px] text-[var(--accent)] hover:text-[var(--accent-strong)] transition-colors"
+                                >
+                                    Forgot password?
+                                </Link>
+                            </div>
                             <input
                                 id="login-password"
                                 type="password"

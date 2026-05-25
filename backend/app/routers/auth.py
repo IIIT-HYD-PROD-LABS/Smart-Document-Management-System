@@ -20,12 +20,14 @@ from app.models.user import User
 from app.models.refresh_token import RefreshToken
 from app.schemas import (
     AcceptInviteRequest,
-    UserRegister,
-    UserLogin,
-    UserResponse,
-    TokenPairResponse,
-    RefreshTokenRequest,
+    ForgotPasswordRequest,
     OAuthExchangeRequest,
+    RefreshTokenRequest,
+    ResetPasswordRequest,
+    TokenPairResponse,
+    UserLogin,
+    UserRegister,
+    UserResponse,
 )
 from app.utils.security import (
     hash_password,
@@ -237,6 +239,109 @@ def accept_invite(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
         )
 
+    return _create_token_pair(user, db)
+
+
+@router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("3/minute")
+def forgot_password(
+    request: Request,
+    response: Response,
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """Initiate a self-service password reset.
+
+    Always responds 204 regardless of whether the email exists, to defend
+    against account enumeration. If the email resolves to an active,
+    local-auth user, a 15-minute reset link is emailed; otherwise the
+    request is silently dropped (and a `password_reset_requested_unknown`
+    audit row is written so a real abuse pattern can be detected later).
+
+    Rate limit 3/min per IP matches the conservative posture used by the
+    other auth endpoints; the rate limiter is the per-IP control while
+    enumeration defence comes from the always-204 response shape.
+    """
+    from app.services.password_reset_service import issue_reset_token
+    from app.services.audit_service import log_audit_event
+    from app.utils.email import send_password_reset_email
+
+    user = (
+        db.query(User)
+        .filter(User.email == payload.email, User.is_active == True)  # noqa: E712
+        .first()
+    )
+    if user is None or (user.auth_provider and user.auth_provider != "local"):
+        # Either no user, deactivated, or OAuth-only. Always log + 204.
+        log_audit_event(
+            user_id=None,
+            action="password_reset_requested_unknown",
+            resource_type="user",
+            resource_id=None,
+            details={"email_hint": payload.email[:3] + "***"},
+        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    token = issue_reset_token(user=user)
+    try:
+        send_password_reset_email(
+            to_email=user.email,
+            full_name=user.full_name or user.username,
+            reset_token=token,
+        )
+    except Exception:  # noqa: BLE001 — non-fatal; user can request again
+        logger.exception("password_reset_email_send_failed", user_id=user.id)
+
+    log_audit_event(
+        user_id=user.id,
+        action="password_reset_requested",
+        resource_type="user",
+        resource_id=user.id,
+        details={},
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/reset-password", response_model=TokenPairResponse)
+@limiter.limit("5/minute")
+def reset_password(
+    request: Request,
+    response: Response,
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """Complete a password reset and sign the user in.
+
+    Validates the 15-minute reset JWT, sets the new bcrypt hash, and
+    revokes every outstanding refresh token for the user. Returns a
+    fresh access + refresh token pair so the user lands signed in.
+
+    Single-use is enforced by anchoring the JWT to `users.updated_at`;
+    consuming the token advances that timestamp so the same token cannot
+    be replayed.
+    """
+    from app.services.password_reset_service import (
+        PasswordResetError,
+        consume_reset_token,
+    )
+    from app.services.audit_service import log_audit_event
+
+    try:
+        user = consume_reset_token(
+            db, token=payload.token, new_password=payload.password
+        )
+    except PasswordResetError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
+
+    log_audit_event(
+        user_id=user.id,
+        action="password_reset_completed",
+        resource_type="user",
+        resource_id=user.id,
+        details={},
+    )
     return _create_token_pair(user, db)
 
 
