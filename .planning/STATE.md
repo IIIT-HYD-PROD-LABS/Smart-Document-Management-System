@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Compliance Management System
-status: Milestone complete
-stopped_at: v2.0.2 admin user-delete + 4-bug audit sweep landed (2026-05-08); migration 0030 head; 502 backend tests passing
-last_updated: "2026-05-08T06:30:00.000Z"
+status: Milestone complete + Phase 17 shipped (BYOK AI notice extraction)
+stopped_at: Phase 17 v2.0 SHIPPED 2026-05-25 — smoke_phase17_v20.py 12/12 PASS (Gemini 2.5 Flash Lite, avg conf 0.99); migration 0034 head; audit redaction + immutability + RLS isolation verified
+last_updated: "2026-05-25T00:00:00.000Z"
 progress:
-  total_phases: 7
-  completed_phases: 4
-  total_plans: 18
-  completed_plans: 19
+  total_phases: 9
+  completed_phases: 7
+  total_plans: 33
+  completed_plans: 33
 ---
 
 # Project State
@@ -23,8 +23,9 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
+Phase: 17 — AI Notice Field Extraction (BYOK)
+Plan: 07 — Wave 6 smoke + docs roll-up (SHIPPED)
+Next: Phase 14 — Government Portal Integration (BLOCKED on GSP empanelment + IT API access decisions)
 
 ## Shipped Milestones
 
@@ -32,6 +33,9 @@ Plan: Not started
 - **v2.0 Phase 9** (2026-04-28, SHIPPED): Compliance Foundation — 26 requirements satisfied, 7 plans, 21-step manual smoke verified by user 2026-04-28
 - **v2.0 Phase 10 v2.0** (2026-05-05, CODE-COMPLETE + smoke PASSED): ML Classification + Risk Scoring — RISK-01..05 + INFRA-01 + CLASS-04 (review queue infra) satisfied via rule-based scorer + escalation + review queue infrastructure; CLASS-01..03/05..08 deferred to v2.1. End-to-end smoke green: Critical-tier 90.8 score, escalation activity + audit log written, 3 SHAP factors persisted.
 - **v2.0 Phase 11 v2.0** (2026-05-05, CODE-COMPLETE — pending user browser smoke): Alerts + Calendar — APScheduler + multi-channel alert pipeline (email + WebSocket; SMS scaffolded), Indian holiday-aware deadline adjustment, statutory calendar with 37 FY 2025-26 deadlines pre-seeded, compliance-score chip, NotificationBell with auto-reconnecting WebSocket. 95 backend tests GREEN.
+- **v2.0 Phase 15 v2.0** (2026-05-07, SHIPPED): Gmail MCP Integration — 7 plans (test infra, DB foundations, services, MCP server, routers, frontend, smoke + manual checklist). FastMCP with 6 tools via in-memory transport, scheduled scanner ingesting attachments + auto-creating ComplianceNotice and Bill rows, Fernet-encrypted refresh tokens, every MCP call PII-redacted in audit log. 12/12 automated smoke PASSED; 12-step manual OAuth checklist documented.
+- **v2.1 Phase 16** (2026-05-08, SHIPPED): BYOK AI Assistant — per-tenant Anthropic / Gemini key in `ai_credentials` table (Fernet-encrypted). Scope-locked SYSTEM prompt restricts output to Indian regulatory work, OUT_OF_SCOPE sentinel otherwise. 5 task surfaces: notice summary + recommended actions, invoice summary + suggested actions + payment timing. Settings page at /dashboard/settings/ai with Test + Save flow.
+- **v2.0 Phase 17 v2.0** (2026-05-25, SHIPPED): AI Notice Field Extraction (Zero-Shot, BYOK) — 7 plans (test infra, schema + permission, extractor service, Celery + Gmail wiring, routers, upload-first UI, smoke + docs). 14-field canonical schema. Conjunctive 0.85 routing gate (avg + notice_number + authority). Structural validators (GSTIN, PAN, CIN, ISO dates, liability arithmetic) halve confidence on shape failure. PII-redacted audit chain: notice_ai_extract + notice_ai_extract_accepted, both bound by the Phase 9 immutability trigger. Upload-first form at /dashboard/compliance/notices/new with per-field accept / edit / discard and provenance disclosure on the detail page. End-to-end smoke 12/12 PASS (Gemini 2.5 Flash Lite, avg conf 0.99, 13 of 14 fields, 3.6s latency). EXTRACT-01..12 satisfied. v2.1 deferrals: supervised NER + BERT bake-off, tabular line-item extraction, bulk re-extraction of historical notices, cross-validation against authoritative GSTIN / PAN registries, active-learning loop on accepted edits.
 
 ## Accumulated Context
 
@@ -112,10 +116,11 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-07T18:59:18.846Z
-Previous session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
+Last session: 2026-05-25 (Phase 17 v2.0 SHIPPED — Wave 6 smoke + docs roll-up)
+Previous session: 2026-05-07T18:59:18.846Z (Phase 15 SHIPPED)
+Pre-previous session: 2026-04-30T10:21:00Z (auth + early-access bug sweep)
 
-Stopped at: Completed 15-07-PLAN.md (smoke + manual checklist); Phase 15 v2.0 ready for verifier
+Stopped at: Phase 17 plan 07 SHIPPED 2026-05-25; smoke `scripts/smoke_phase17_v20.py` 12/12 PASS via Gemini 2.5 Flash Lite (avg conf 0.99, 13 of 14 fields, 3.6s latency); README + ROADMAP + STATE + 17-07-SUMMARY.md updated; next phase 14 remains BLOCKED on GSP empanelment + IT API access decisions.
 
 v2.1 deferral commit: 10-RESEARCH-FINAL.md locks InLegalBERT as the v2.1 primary base model recommendation, training-data strategy (SEBI scrape + LLM-template synthetic + hand-labeled real held-out test set), and authority severity weights (CA/CFO sign-off pending — placeholders ship for v2.0).
 

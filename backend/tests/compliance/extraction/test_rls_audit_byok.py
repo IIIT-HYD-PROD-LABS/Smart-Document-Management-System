@@ -106,7 +106,6 @@ def test_extract_preview_rate_limited_per_tenant():
 
     from app.compliance.routers import notices as notices_router
 
-    src = inspect.getsource(notices_router.extract_preview)
     # The decorator wraps the function; the literal must appear in the
     # module source attached to the handler line. Decorator inspection
     # via __wrapped__ is fragile across slowapi versions.

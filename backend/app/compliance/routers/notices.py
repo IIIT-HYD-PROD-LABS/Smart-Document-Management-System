@@ -914,9 +914,14 @@ def get_extraction(
     ),
 ):
     """Phase 17 D-20 — return the persisted extraction artefact for a notice."""
+    # Defense-in-depth: explicit client_id filter on top of RLS so an
+    # accidental policy regression cannot leak cross-tenant rows.
     notice = (
         db.query(ComplianceNotice)
-        .filter(ComplianceNotice.id == notice_id)
+        .filter(
+            ComplianceNotice.id == notice_id,
+            ComplianceNotice.client_id == membership.client_id,
+        )
         .first()
     )
     if not notice:
@@ -971,9 +976,15 @@ def accept_extraction(
             detail="Role lacks permission to update notice fields",
         )
 
+    # Defense-in-depth: explicit client_id filter on top of RLS so an
+    # accidental policy regression cannot let one tenant accept extracted
+    # fields onto another tenant's notice.
     notice = (
         db.query(ComplianceNotice)
-        .filter(ComplianceNotice.id == notice_id)
+        .filter(
+            ComplianceNotice.id == notice_id,
+            ComplianceNotice.client_id == membership.client_id,
+        )
         .first()
     )
     if not notice:

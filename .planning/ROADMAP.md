@@ -3,7 +3,7 @@
 ## Milestones
 
 - **v1.0 Smart Document Management System** -- Phases 1-8 (shipped 2026-03-30) | [Archive](milestones/v1.0-ROADMAP.md)
-- **v2.0 Compliance Management System** -- Phases 9-14 (in progress)
+- **v2.0 Compliance Management System** -- Phases 9-13, 15, 17 shipped; Phase 16 BYOK shipped under v2.1; Phase 14 portal integration remains blocked on GSP empanelment plus IT API access decisions
 
 ## Phases
 
@@ -27,6 +27,8 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 - [~] **Phase 13: Elasticsearch + Cross-Entity Search + Reporting** v2.0 CODE-COMPLETE 2026-05-05 + smoke PASSED — PG-FTS-backed unified search across notices + documents + reports analytics (penalty by authority + volume by status + response time percentiles); Elastic Cloud + outbox + reconciliation deferred to v2.1
 - [ ] **Phase 14: Government Portal Integration** — GST/IT/MCA auto-fetch, RBI/SEBI scraping, IMAP email parsing — CONTEXT seeded 2026-05-05; **BLOCKED on external decisions: GSP empanelment status, IT e-filing API access path**
 - [x] **Phase 15: Gmail MCP Integration & Email Document Ingestion** — Gmail OAuth + MCP server, auto-ingest notice/bill attachments — 7 plans planned 2026-05-07 (completed 2026-05-07)
+- [x] **Phase 16: BYOK AI Assistant (v2.1)** — per-tenant Anthropic / Gemini key, Fernet-encrypted, scope-locked SYSTEM prompt, 5 task surfaces (notice summary + recommended actions, invoice summary + suggested actions + payment timing) — shipped 2026-05-08
+- [x] **Phase 17: AI Notice Field Extraction, BYOK (v2.0)** — upload-first flow on `/dashboard/compliance/notices/new` that extracts 14 canonical fields via the tenant's Phase 16 key, conjunctive 0.85 routing gate (average + notice_number + authority), structural validators for GSTIN / PAN / CIN / ISO dates / liability arithmetic that halve confidence on shape failure, PII-redacted audit chain (`notice_ai_extract` + `notice_ai_extract_accepted`), provenance disclosure on the detail page — 7 plans, shipped 2026-05-25
 
 ## Phase Details
 
@@ -143,9 +145,33 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 - [x] 15-07-PLAN.md — Wave 4 smoke + manual checklist (12 automated checks + 12-step manual verification)
 **UI hint**: yes
 
+### Phase 17: AI Notice Field Extraction (Zero-Shot, BYOK)
+**Goal**: A user drops a notice PDF, JPG, or PNG on `/dashboard/compliance/notices/new` and the system extracts the canonical compliance fields using the tenant's Phase 16 BYOK key, pre-populates the create-notice form with per-field confidence indicators, and on low confidence routes the artefact to the Phase 10 review queue. The Gmail ingestion path uses the same extractor so behaviour is identical regardless of source.
+**Depends on**: Phase 9 (RBAC, audit immutability, RLS, PII encryption), Phase 10 (`NoticeReviewQueue`), Phase 15 (`process_classified_email` hook), Phase 16 (`AICredential`, `build_provider`, scope-locked SYSTEM prompt)
+**Requirements**: EXTRACT-01, EXTRACT-02, EXTRACT-03, EXTRACT-03b, EXTRACT-04, EXTRACT-05, EXTRACT-06, EXTRACT-07, EXTRACT-08, EXTRACT-09, EXTRACT-10, EXTRACT-11, EXTRACT-12
+**Success Criteria** (what must be TRUE):
+  1. A user uploads a GST DRC-01 PDF on `/dashboard/compliance/notices/new` and within 10 seconds sees the form pre-populated with at least notice_number, authority, issued_date, and response_deadline, each carrying a visible confidence indicator
+  2. Each pre-populated field can be accepted as-is, edited inline, or discarded before Save; edits are recorded in the audit log against the same notice id
+  3. A low-confidence extraction (average below 0.85, OR notice_number below 0.85, OR authority below 0.85) routes the upload to the existing Phase 10 review queue; a structurally invalid GSTIN / PAN / CIN / date counts as a confidence downgrade per D-33
+  4. Gmail-ingested notices arrive with extracted fields already populated and the same provenance disclosure is visible on the notice detail page
+  5. Tenants without an `AICredential` configured see a quiet inline banner and can still upload and fill manually; no 500s, no broken state
+  6. Every extraction call writes exactly one `audit_log` row with action `notice_ai_extract` containing provider, model, latency, average confidence, and body SHA-256 (no raw text, no extracted values)
+  7. RLS isolation holds: an extraction artefact on a notice in client A is invisible to a user authenticated against client B
+  8. The Phase 9 audit immutability trigger refuses any UPDATE or DELETE attempt on extraction audit rows (verified by an automated test, not a manual probe)
+  9. Smoke script (`scripts/smoke_phase17_v20.py`) passes end to end against a real provider call
+**Plans**: 7 plans
+- [x] 17-01-PLAN.md — Wave 0 test infrastructure (8 backend pytest stubs + 3 frontend vitest stubs + extraction fixtures gating Plans 02-07)
+- [x] 17-02-PLAN.md — Wave 1 schema (migration 0034, 5 columns, status CHECK, confidence CHECK, partial index, Pydantic schemas, NOTICE_AI_EXTRACT permission)
+- [x] 17-03-PLAN.md — Wave 2 extractor service (`extract_notice_fields`, prompt module, structural validator, routing helper)
+- [x] 17-04-PLAN.md — Wave 3 wiring (Celery `process_document_task` + Gmail `process_classified_email` + first-upload-wins guard)
+- [x] 17-05-PLAN.md — Wave 4 routers (extract-preview, get-extraction, accept-extraction; rate limit; 412 on no credential)
+- [x] 17-06-PLAN.md — Wave 5 upload-first UI (`ExtractionPreviewForm`, `ExtractedFieldRow`, provenance disclosure)
+- [x] 17-07-PLAN.md — Wave 6 smoke + README + ROADMAP + STATE + SUMMARY (smoke 12/12 PASS on 2026-05-25)
+**UI hint**: yes
+
 ## Progress
 
-**Execution Order:** Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
+**Execution Order:** Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -155,11 +181,9 @@ Phases 1-8 shipped. See archived roadmap: [milestones/v1.0-ROADMAP.md](milestone
 | 12. Response Drafting + Evidence Management | v2.0 | 1/1 v2.0 + 0/N v2.1 | v2.0 CODE-COMPLETE + smoke PASSED; v2.1 deferred (templates + LLM drafts + PDF merge + ITC recon + regulation library) | 2026-05-05 |
 | 13. Elasticsearch + Cross-Entity Search | v2.0 | 1/1 v2.0 + 0/N v2.1 | v2.0 CODE-COMPLETE + smoke PASSED via PG-FTS; v2.1 deferred (Elastic Cloud + outbox + reconciliation) | 2026-05-05 |
 | 14. Government Portal Integration | v2.0 | 0/TBD | CONTEXT seeded 2026-05-05 — **BLOCKED on GSP empanelment + IT API decisions** | - |
-| 15. Gmail MCP Integration | v2.0 | 7/7 | Complete    | 2026-05-07 |
-| 12. Response Drafting + Evidence Management | v2.0 | 0/TBD | Not started | - |
-| 13. Elasticsearch + Cross-Entity Search + Reporting | v2.0 | 0/TBD | Not started | - |
-| 14. Government Portal Integration | v2.0 | 0/TBD | Not started | - |
-| 15. Gmail MCP Integration & Email Document Ingestion | v2.0 | 0/TBD | Not started (context seeded) | - |
+| 15. Gmail MCP Integration | v2.0 | 7/7 | ✅ Shipped | 2026-05-07 |
+| 16. BYOK AI Assistant | v2.1 | 1/1 | ✅ Shipped (per-tenant Anthropic / Gemini key, 5 task surfaces, scope-locked SYSTEM prompt) | 2026-05-08 |
+| 17. AI Notice Field Extraction, BYOK | v2.0 | 7/7 | ✅ Shipped (upload-first flow, 0.85 conjunctive gate, structural validators, PII-redacted audit chain, smoke 12/12 PASS) | 2026-05-25 |
 
 ---
-*Last updated: 2026-05-05 — **Phases 10 + 11 + 12 + 13 v2.0 CODE-COMPLETE**. Phase 10 + 12 + 13 end-to-end smokes PASSED. 4-agent hardening audit landed 13 fixes earlier in the session. 161 backend tests GREEN. Phase 14 CONTEXT seeded (external-credential blockers documented). Phase 15 CONTEXT seeded 2026-04-28. v2.1 deferrals enumerated in each phase's RESEARCH-FINAL.md.*
+*Last updated: 2026-05-25 — **Phase 17 v2.0 SHIPPED**. End-to-end smoke `scripts/smoke_phase17_v20.py` cleared 12 of 12 checks against a live Gemini call (avg confidence 0.99, 13 of 14 fields returned, 3.6s latency). Audit redaction, immutability, and RLS isolation all verified by the smoke. Phase 14 remains BLOCKED on GSP empanelment + IT API decisions. v2.1 deferrals for Phase 17: supervised NER / BERT bake-off, tabular line-item extraction, bulk re-extraction of historical notices, cross-validation of extracted GSTIN / PAN against authoritative registries, active-learning loop on accepted edits.*

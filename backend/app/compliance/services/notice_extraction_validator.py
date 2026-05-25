@@ -31,7 +31,6 @@ from typing import Any
 
 from app.compliance.utils.indian_validators import (
     CIN_RX,
-    GSTIN_RX,
     PAN_RX,
     validate_gstin,
 )

@@ -7,10 +7,8 @@ and accepted values plus `was_edited`.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 
 def test_accept_extraction_requires_two_permissions():

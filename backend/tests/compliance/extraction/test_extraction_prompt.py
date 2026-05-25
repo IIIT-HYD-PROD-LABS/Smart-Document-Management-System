@@ -6,7 +6,6 @@ build_user_prompt(text). The SYSTEM prompt is reused from Phase 16
 """
 from __future__ import annotations
 
-import pytest
 
 from .conftest import EXTRACTION_FIELDS  # local fixture mirror
 

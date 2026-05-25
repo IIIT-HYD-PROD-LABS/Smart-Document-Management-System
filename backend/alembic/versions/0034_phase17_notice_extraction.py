@@ -31,8 +31,6 @@ Idempotency:
     All adds use IF NOT EXISTS guards so the migration is safe to re-run.
 """
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB
 
 
 revision = "0034_phase17_notice_extraction"

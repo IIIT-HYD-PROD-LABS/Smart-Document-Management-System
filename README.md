@@ -34,6 +34,17 @@ TaxSync
 - **Vendor invoices rebrand** — the email-driven Bills feature relabeled as "Vendor invoices" everywhere user-visible (sidebar nav, dashboard metrics, dashboard quick action, notice page copy). Data model, APIs, and `/api/email/bills/*` paths unchanged — pure UI/copy. Sidebar icon swapped `FiCreditCard` → `FiClipboard`. Reflects the descope of personal/household-bill positioning per 2026-05-08 client guidance.
 - **Dashboard SSG fix** — `dynamic = 'force-dynamic'` on `app/dashboard/layout.tsx` plus `QueryClientProvider` hoisted from `compliance/layout` to `dashboard/layout`. Fixes a pre-existing `next build` break on auth-gated pages and gives the new sidebar `useQuery` a provider above it on every dashboard route.
 
+### v2.0 Phase 15: Gmail MCP Integration (2026-05-07)
+- **Gmail OAuth + 6 MCP tools.** Connect a tenant's Gmail once, refresh tokens stored Fernet-encrypted, six MCP tools (`gmail_search`, `gmail_read_message`, `gmail_list_attachments`, `gmail_get_attachment`, `gmail_list_labels`, `gmail_modify_labels`) exposed to internal compliance agents via the in-memory FastMCP transport, every invocation writes a PII-redacted audit row. Scheduled scanner (5min to 24hr cadence) ingests attachments into the DMS, auto-creates `ComplianceNotice` rows for regulatory senders, and routes personal or household bills (now branded "Vendor invoices") to the bill dashboard with T-3, T-1, and overdue reminders. See `scripts/smoke_phase15_v20.py` for the automated smoke and `.planning/phases/15-gmail-mcp-integration/15-SMOKE-CHECKLIST.md` for the 12-step manual OAuth checklist.
+
+### v2.0 Phase 17: AI Notice Field Extraction, BYOK (2026-05-25)
+- **Upload-first notice creation** at `/dashboard/compliance/notices/new`. Drop a PDF, JPG, or PNG and the page extracts canonical notice fields (notice_number, authority, issued_date, response_deadline, tax_demand, interest, penalty, total_liability, GSTIN, PAN, CIN, taxpayer_name, legal_sections, notice_type) using the tenant's Phase 16 BYOK key. The 14-field schema lines up with the create-notice form so each row carries an accept, edit, or discard affordance plus a per-field confidence badge (emerald `Confident` at >= 0.75, amber `Review` at >= 0.55, rose `Needs review` below).
+- **Conjunctive routing gate.** Auto-apply requires ALL of: average confidence >= 0.85, `notice_number` >= 0.85, and `authority` >= 0.85 (D-06). Any miss routes the artefact to the Phase 10 review queue with reason `low_confidence_extraction`. Structural validation (GSTIN, PAN, CIN, ISO dates, liability arithmetic) halves the per-field confidence before the gate runs, so a model that reports 0.95 on a malformed GSTIN drops to 0.475 and falls into the review path.
+- **PII-redacted audit chain.** One `notice_ai_extract` row per call with provider, model, latency, tokens, average confidence, body SHA-256, and the list of returned field KEYS only (no raw text, no extracted values). Accepting fields writes one `notice_ai_extract_accepted` row per field carrying `original_value_sha256`, `accepted_value_sha256`, and `was_edited`. Both row types inherit the Phase 9 immutability trigger.
+- **Provenance disclosure** on the notice detail page surfaces provider, model, average confidence, extracted-at timestamp, and per-field confidences with hover tooltips explaining any structural validation failures. Manually-created notices remain uncluttered (no disclosure when `extraction_status` is null).
+- **Wiring parity across ingestion paths.** The same `extract_notice_fields` service runs from the synchronous `extract-preview` endpoint (D-19), from `process_document_task` when a Celery-OCR'd document is attached to a notice (D-23), and from `process_classified_email` before a Gmail-routed notice row is created (D-24). One routing helper, one audit shape, one set of guarantees. First-upload-wins is enforced; re-uploading does NOT clobber already-accepted fields.
+- **Smoke command.** `docker cp scripts/smoke_phase17_v20.py smartdocs-backend:/tmp/ && docker exec -e ANTHROPIC_API_KEY_SMOKE=$KEY smartdocs-backend python /tmp/smoke_phase17_v20.py` runs 12 checks end to end against the live provider (Anthropic preferred per D-32; Gemini accepted via `GEMINI_API_KEY_SMOKE`). Skips cleanly with exit 0 when no key is set, so it is CI-safe. Verified 12/12 PASS on 2026-05-25 against `gemini-2.5-flash-lite` at avg confidence 0.99.
+
 ---
 
 ## Architecture
@@ -60,7 +71,7 @@ TaxSync
 |-------|-----------|
 | Frontend | Next.js 15 (App Router, standalone build), React 19, TypeScript, Tailwind CSS, TanStack Query, Zustand, react-day-picker v9, framer-motion |
 | Backend | FastAPI, SQLAlchemy, Pydantic v2, Uvicorn, structlog |
-| Database | PostgreSQL (Supabase Cloud — session-mode pooler for Phase 9 RLS), Alembic migrations (head: `0032_add_ai_credentials`) |
+| Database | PostgreSQL (Supabase Cloud, session-mode pooler for Phase 9 RLS), Alembic migrations (head: `0034_phase17_notice_extraction`) |
 | AI/LLM | Multi-provider (Ollama, Gemini, Anthropic, OpenAI, local regex fallback) with degraded-mode tracking |
 | Phase 10 ML | InLegalBERT (deferred), rule-based risk scorer + SHAP-style factors, scikit-learn (LinearSVC + CalibratedClassifierCV + TF-IDF), Tesseract OCR, pdfplumber, python-docx, spaCy NER |
 | Phase 11 alerts | APScheduler (durable), holidays (Indian FY 2025-26), Twilio SMS adapter, WebSocket via FastAPI; SendGrid migration deferred to v2.1 |
@@ -417,7 +428,9 @@ docker-compose.yml           # Redis, Backend, Celery, Frontend
 | 12 | Response Drafting + Evidence (v2.0) | ✅ Code-complete + smoke PASSED 2026-05-05 (v2.1 templates + LLM drafts + PDF merge + ITC recon deferred) |
 | 13 | Elasticsearch + Cross-Entity Search (v2.0) | ✅ Code-complete + smoke PASSED 2026-05-05 via PG-FTS (v2.1 Elastic Cloud + outbox deferred) |
 | 14 | Government Portal Integration (v2.0) | CONTEXT seeded 2026-05-05 — BLOCKED on GSP empanelment + IT API access |
-| 15 | Gmail MCP Integration (v2.0) | CONTEXT seeded 2026-04-28 |
+| 15 | Gmail MCP Integration (v2.0) | ✅ Shipped 2026-05-07 (7/7 plans) |
+| 16 | BYOK AI Assistant (v2.1) | ✅ Shipped 2026-05-08 |
+| 17 | AI Notice Field Extraction, BYOK (v2.0) | ✅ Shipped 2026-05-25 (7/7 plans, smoke 12/12 PASS) |
 
 ### Completed
 
