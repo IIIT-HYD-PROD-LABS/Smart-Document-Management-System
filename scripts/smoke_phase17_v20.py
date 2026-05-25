@@ -81,7 +81,7 @@ def _skip(reason: str) -> int:
     return 0
 
 
-def _resolve_provider() -> tuple[str, str, str] | None:
+def _resolve_provider_from_env() -> tuple[str, str, str] | None:
     """Pick the provider, model, and API key from environment.
 
     Preference order matches D-32 (Anthropic first). Returns (provider,
@@ -93,20 +93,54 @@ def _resolve_provider() -> tuple[str, str, str] | None:
         return ("anthropic", model, anth)
     gem = os.environ.get("GEMINI_API_KEY_SMOKE")
     if gem:
-        model = os.environ.get("GEMINI_MODEL_SMOKE", "gemini-2.0-flash")
+        model = os.environ.get("GEMINI_MODEL_SMOKE", "gemini-2.5-flash-lite")
         return ("google", model, gem)
     return None
 
 
+def _resolve_provider_from_db(db_url: str) -> tuple[str, str, str] | None:
+    """Fallback: read any existing AICredential and decrypt the key.
+
+    Per the user directive 2026-05-25, the project should reuse one
+    persistent provider key across product and smoke surfaces. The
+    encrypted key lives in `ai_credentials`; this fallback decrypts the
+    most-recently-used row so the smoke can run without re-pasting the
+    key on every invocation.
+    """
+    try:
+        from sqlalchemy import create_engine, text
+        from app.compliance.utils.pii_encryption import decrypt_field
+    except ImportError:
+        return None
+    try:
+        e = create_engine(db_url, pool_pre_ping=True)
+        with e.connect() as c:
+            row = c.execute(text(
+                "SELECT provider, model, api_key_enc FROM ai_credentials "
+                "ORDER BY last_used_at DESC NULLS LAST, id DESC LIMIT 1"
+            )).fetchone()
+    except Exception:
+        return None
+    if row is None:
+        return None
+    provider, model, enc = row[0], row[1], row[2]
+    # psycopg2 returns BYTEA as memoryview; decrypt_field wants bytes.
+    if isinstance(enc, memoryview):
+        enc = bytes(enc)
+    try:
+        plaintext = decrypt_field(enc)
+    except Exception:
+        return None
+    if not plaintext:
+        return None
+    if isinstance(plaintext, (bytes, bytearray)):
+        plaintext = bytes(plaintext).decode("utf-8", errors="ignore")
+    return (provider, model, plaintext)
+
+
 def main() -> int:
-    resolved = _resolve_provider()
-    if resolved is None:
-        return _skip(
-            "Neither ANTHROPIC_API_KEY_SMOKE nor GEMINI_API_KEY_SMOKE set; "
-            "Phase 17 real-call smoke skipped. Set either env var to a "
-            "working provider key to run the full path."
-        )
-    provider_name, smoke_model, smoke_api_key = resolved
+    # Step 1: try env vars
+    resolved = _resolve_provider_from_env()
 
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
@@ -131,6 +165,24 @@ def main() -> int:
     for cand in candidate_backend_dirs:
         if os.path.isdir(cand) and cand not in sys.path:
             sys.path.insert(0, cand)
+
+    # Step 2: if env vars empty, fall back to the encrypted AICredential row
+    # any tenant already has on file. User directive 2026-05-25: reuse one
+    # persistent provider key across product and smoke surfaces.
+    if resolved is None:
+        resolved = _resolve_provider_from_db(db_url)
+        if resolved is not None:
+            _info(
+                f"Smoke key sourced from existing AICredential "
+                f"(provider={resolved[0]}, model={resolved[1]})"
+            )
+    if resolved is None:
+        return _skip(
+            "No smoke provider key available: neither ANTHROPIC_API_KEY_SMOKE "
+            "nor GEMINI_API_KEY_SMOKE is set, and no AICredential row exists "
+            "in the database. Set one via the product UI or env var."
+        )
+    provider_name, smoke_model, smoke_api_key = resolved
 
     from sqlalchemy import create_engine, inspect, text
     from sqlalchemy.exc import DatabaseError
@@ -195,8 +247,12 @@ def main() -> int:
             head = db.execute(
                 text("SELECT version_num FROM alembic_version LIMIT 1")
             ).scalar()
-            assert head == "0034_phase17_notice_extraction", (
-                f"head is {head!r}; expected 0034_phase17_notice_extraction"
+            # 0034 added the Phase 17 extraction columns; later migrations
+            # (0035 cross_client_view widening, etc.) preserve that schema.
+            # Accept any head at-or-after 0034 so the smoke survives forward
+            # migrations.
+            assert head and head >= "0034_phase17", (
+                f"head is {head!r}; expected at-or-after 0034_phase17_*"
             )
             _passed(1, f"alembic_head ({head})")
         except Exception as e:

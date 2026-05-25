@@ -354,6 +354,21 @@ export const complianceApi = {
             withTenant(),
         ),
 
+    // ──── Phase 18 — AI response drafting (BYOK) ────
+    aiDraftResponse: (noticeId: number, userGuidance?: string) =>
+        api.post<{
+            draft_body_markdown: string;
+            model: string;
+            tokens_in: number;
+            tokens_out: number;
+            latency_ms: number;
+            extracted_fields_used: string[];
+        }>(
+            `/compliance/ai/notice-response-draft/${noticeId}`,
+            { user_guidance: userGuidance ?? "" },
+            withTenant(),
+        ),
+
     listActivity: (id: number) =>
         api.get<NoticeActivity[]>(
             `/compliance/notices/${id}/activity`,

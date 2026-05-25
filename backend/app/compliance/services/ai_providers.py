@@ -19,6 +19,7 @@ The output is plain text. Markdown / JSON parsing happens in `ai_service`.
 from __future__ import annotations
 
 import logging
+import re
 from abc import ABC, abstractmethod
 
 import httpx
@@ -169,9 +170,19 @@ class GoogleProvider(AIProvider):
     stable for the Gemini family since 1.0."""
 
     _BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+    # Gemini model identifiers are lowercase letters, digits, dots, and
+    # hyphens (gemini-1.5-flash, gemini-2.5-flash-lite, etc.). Reject
+    # anything else BEFORE embedding the value in a URL path so a path
+    # traversal payload in the user-supplied model field cannot redirect
+    # the request elsewhere on googleapis.com or escape the API base.
+    _MODEL_PATTERN = re.compile(r"^[a-z0-9][a-z0-9.\-]{0,99}$")
 
     def __init__(self, api_key: str, model: str):
         self._api_key = api_key
+        if not isinstance(model, str) or not self._MODEL_PATTERN.match(model):
+            raise AIProviderError(
+                "Invalid Gemini model identifier. Must match [a-z0-9][a-z0-9.-]{0,99}."
+            )
         self._model = model
 
     @staticmethod

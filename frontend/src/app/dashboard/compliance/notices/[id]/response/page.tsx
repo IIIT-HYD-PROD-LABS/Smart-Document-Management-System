@@ -12,7 +12,9 @@ import {
     FiCheck,
     FiX,
     FiRotateCcw,
+    FiCpu,
 } from "react-icons/fi";
+import toast from "react-hot-toast";
 import { complianceApi } from "@/lib/api/compliance";
 import type { NoticeResponseDetail, ResponseStatus } from "@/types/compliance";
 import { ResponseStatusBadge } from "@/components/compliance/ResponseStatusBadge";
@@ -126,6 +128,76 @@ export default function ResponseEditorPage() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ["notice-response", noticeId] }),
     });
 
+    // Phase 18 — AI draft (BYOK). Preview-only; the user reviews + saves.
+    const [aiGuidance, setAiGuidance] = useState("");
+    const aiDraft = useMutation({
+        mutationFn: async () => {
+            const { data } = await complianceApi.aiDraftResponse(
+                noticeId,
+                aiGuidance.trim() || undefined,
+            );
+            return data;
+        },
+        onSuccess: (data) => {
+            // Extract a "Subject:" line if the model put one at the top.
+            const lines = data.draft_body_markdown.split("\n");
+            const subjectLine = lines.find((l) => /^Subject:/i.test(l.trim()));
+            if (subjectLine && !subject) {
+                setSubject(subjectLine.replace(/^Subject:\s*/i, "").trim());
+            }
+            setBody(data.draft_body_markdown);
+            toast.success(
+                `AI draft generated (${data.tokens_out} chars, ${Math.round(data.latency_ms / 100) / 10}s)`,
+            );
+        },
+        onError: (err: unknown) => {
+            const e = err as {
+                response?: {
+                    status?: number;
+                    data?: {
+                        detail?:
+                            | string
+                            | {
+                                  code?: string;
+                                  message?: string;
+                                  allowed_roles?: string[];
+                              };
+                    };
+                };
+            };
+            const detail = e.response?.data?.detail;
+            const stat = e.response?.status;
+            if (stat === 412) {
+                toast.error(
+                    "Connect an AI provider in Settings to enable drafting.",
+                    { duration: 6000 },
+                );
+                return;
+            }
+            if (
+                stat === 403 &&
+                typeof detail === "object" &&
+                detail?.code === "role_lacks_permission"
+            ) {
+                const allowed = detail.allowed_roles?.join(", ") ?? "drafter role";
+                toast.error(
+                    `Your role cannot AI-draft. Switch to a client where you hold one of: ${allowed}.`,
+                    { duration: 8000 },
+                );
+                return;
+            }
+            const msg =
+                typeof detail === "string"
+                    ? detail
+                    : typeof detail === "object" && detail?.message
+                    ? detail.message
+                    : err instanceof Error
+                    ? err.message
+                    : "AI draft failed";
+            toast.error(msg);
+        },
+    });
+
     if (!valid) {
         return (
             <div className="px-6 py-8 max-w-5xl mx-auto">
@@ -178,6 +250,18 @@ export default function ResponseEditorPage() {
                         body={body}
                         recipient={recipient}
                         responseDate={responseDate}
+                        aiGuidance={aiGuidance}
+                        onAiGuidanceChange={setAiGuidance}
+                        onAiDraft={() => {
+                            if (body.trim().length > 0) {
+                                const ok = window.confirm(
+                                    "Replace the current draft body with an AI-generated draft? This cannot be undone (but the previous body can be re-pasted).",
+                                );
+                                if (!ok) return;
+                            }
+                            aiDraft.mutate();
+                        }}
+                        aiDrafting={aiDraft.isPending}
                         onChange={(s, b, r, d) => {
                             setSubject(s);
                             setBody(b);
@@ -241,6 +325,10 @@ function DraftEditor({
     body,
     recipient,
     responseDate,
+    aiGuidance,
+    onAiGuidanceChange,
+    onAiDraft,
+    aiDrafting,
     onChange,
 }: {
     editable: boolean;
@@ -248,6 +336,10 @@ function DraftEditor({
     body: string;
     recipient: string;
     responseDate: string;
+    aiGuidance: string;
+    onAiGuidanceChange: (v: string) => void;
+    onAiDraft: () => void;
+    aiDrafting: boolean;
     onChange: (s: string, b: string, r: string, d: string) => void;
 }) {
     const inputClass =
@@ -286,6 +378,31 @@ function DraftEditor({
                 </Field>
             </div>
             <Field label="Body (Markdown)">
+                {editable && (
+                    <div className="flex flex-wrap items-center gap-2 mb-2 p-2 rounded border border-dashed border-[var(--border-default)] bg-[var(--bg-hover)]/30">
+                        <FiCpu className="w-3.5 h-3.5 text-[var(--accent)]" />
+                        <span className="text-[11px] text-[var(--text-muted)]">
+                            Phase 18 AI draft (BYOK):
+                        </span>
+                        <input
+                            type="text"
+                            value={aiGuidance}
+                            onChange={(e) => onAiGuidanceChange(e.target.value.slice(0, 800))}
+                            placeholder="Optional guidance, e.g. 'be more terse' or 'cite Section 17(5)'"
+                            maxLength={800}
+                            className="flex-1 min-w-[200px] bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-2 h-7 text-[12px] text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:border-[var(--accent)]"
+                        />
+                        <button
+                            type="button"
+                            onClick={onAiDraft}
+                            disabled={aiDrafting}
+                            className="inline-flex items-center gap-1 h-7 px-2.5 rounded bg-[var(--accent)] text-[var(--accent-fg)] text-[11px] font-medium hover:bg-[var(--accent-hover)] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <FiCpu className="w-3 h-3" />
+                            {aiDrafting ? "Drafting..." : "Draft with AI"}
+                        </button>
+                    </div>
+                )}
                 <textarea
                     value={body}
                     onChange={(e) => onChange(subject, e.target.value, recipient, responseDate)}

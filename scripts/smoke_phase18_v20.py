@@ -66,7 +66,7 @@ def _skip(reason: str) -> int:
     return 0
 
 
-def _resolve_provider() -> tuple[str, str, str] | None:
+def _resolve_provider_from_env() -> tuple[str, str, str] | None:
     anth = os.environ.get("ANTHROPIC_API_KEY_SMOKE")
     if anth:
         model = os.environ.get("ANTHROPIC_MODEL_SMOKE", "claude-sonnet-4-5")
@@ -78,14 +78,44 @@ def _resolve_provider() -> tuple[str, str, str] | None:
     return None
 
 
+def _resolve_provider_from_db(db_url: str) -> tuple[str, str, str] | None:
+    """Fallback to the encrypted AICredential row any tenant already has.
+
+    User directive 2026-05-25: reuse one persistent provider key across
+    product and smoke surfaces.
+    """
+    try:
+        from sqlalchemy import create_engine, text
+        from app.compliance.utils.pii_encryption import decrypt_field
+    except ImportError:
+        return None
+    try:
+        e = create_engine(db_url, pool_pre_ping=True)
+        with e.connect() as c:
+            row = c.execute(text(
+                "SELECT provider, model, api_key_enc FROM ai_credentials "
+                "ORDER BY last_used_at DESC NULLS LAST, id DESC LIMIT 1"
+            )).fetchone()
+    except Exception:
+        return None
+    if row is None:
+        return None
+    provider, model, enc = row[0], row[1], row[2]
+    if isinstance(enc, memoryview):
+        enc = bytes(enc)
+    try:
+        plaintext = decrypt_field(enc)
+    except Exception:
+        return None
+    if not plaintext:
+        return None
+    if isinstance(plaintext, (bytes, bytearray)):
+        plaintext = bytes(plaintext).decode("utf-8", errors="ignore")
+    return (provider, model, plaintext)
+
+
 def main() -> int:
-    resolved = _resolve_provider()
-    if resolved is None:
-        return _skip(
-            "Neither ANTHROPIC_API_KEY_SMOKE nor GEMINI_API_KEY_SMOKE set; "
-            "Phase 18 real-call smoke skipped."
-        )
-    provider_name, smoke_model, smoke_api_key = resolved
+    resolved = _resolve_provider_from_env()
 
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
@@ -102,6 +132,21 @@ def main() -> int:
     for cand in candidate_backend_dirs:
         if os.path.isdir(cand) and cand not in sys.path:
             sys.path.insert(0, cand)
+
+    if resolved is None:
+        resolved = _resolve_provider_from_db(db_url)
+        if resolved is not None:
+            _info(
+                f"Smoke key sourced from existing AICredential "
+                f"(provider={resolved[0]}, model={resolved[1]})"
+            )
+    if resolved is None:
+        return _skip(
+            "No smoke provider key available: neither ANTHROPIC_API_KEY_SMOKE "
+            "nor GEMINI_API_KEY_SMOKE is set, and no AICredential row exists "
+            "in the database."
+        )
+    provider_name, smoke_model, smoke_api_key = resolved
 
     from sqlalchemy import create_engine, text
     from sqlalchemy.exc import DatabaseError

@@ -22,7 +22,7 @@ TaxSync
 ### v2.0 — Compliance Notice Management
 - **Multi-tenant compliance** (Phase 9) — 7-role × 12-permission matrix with row-level security (RLS), audit immutability via DB triggers + `REVOKE` on the `app_runtime` runtime role, and a `cross_client_view` PERMISSIVE policy for senior auditors
 - **ML risk scoring + auto-escalation** (Phase 10) — rule-based scorer with SHAP-style factor explanations; review queue for low-confidence classifications; escalation activity + audit log on critical-tier notices
-- **Alerts + statutory calendar** (Phase 11) — APScheduler-backed multi-channel alert pipeline (email + WebSocket; SMS scaffolded). 37 FY 2025-26 statutory deadlines pre-seeded. Indian holiday-aware deadline adjustment. Real-time `NotificationBell` with auto-reconnecting WebSocket
+- **Alerts + statutory calendar** (Phase 11) — APScheduler-backed multi-channel alert pipeline (email + WebSocket; SMS scaffolded). 45 statutory deadlines pre-seeded for calendar year 2026 spanning GST returns, IT advance tax, MCA, RBI, SEBI filings plus Indian public holidays. Indian holiday-aware deadline adjustment. Real-time `NotificationBell` with auto-reconnecting WebSocket
 - **Response drafting + 4-stage approval** (Phase 12) — Drafter → Reviewer → Legal → CFO workflow with versioned drafts and evidence linking
 - **Cross-entity unified search + analytics** (Phase 13) — single FTS query across `compliance_notices` + `documents` (`tsvector` + GIN trigger). Three analytics endpoints: penalty by authority, notice volume by status, response-time percentiles
 - **CSV report export** (v2.0.1) — Download Generate-summary + the 3 Phase 13 aggregations as CSV from `/dashboard/compliance/reports`. Stdlib `csv` + `StreamingResponse`, charset=utf-8 declared; no new dependencies
@@ -278,7 +278,7 @@ npm run dev
 |--------|----------|-------------|
 | GET | `/api/compliance/clients/me` | List the tenants the current user has membership on |
 | GET | `/api/compliance/audit` | Read-only immutable audit log (DB trigger + `REVOKE` on `app_runtime` enforce append-only) |
-| GET | `/api/compliance/calendar/entries` | 37 statutory FY 2025-26 deadlines (year/month/authority/category filterable) |
+| GET | `/api/compliance/calendar/entries` | 45 statutory deadlines for calendar year 2026 (year/month/authority/category filterable) |
 | GET | `/api/compliance/calendar/compliance-score` | Rolling 90-day compliance health score |
 | GET | `/api/compliance/review/pending` | Phase 10 ML review queue |
 | PATCH | `/api/compliance/review/{review_id}/assign` | Assign authority + notice type for low-confidence ML output |

@@ -86,7 +86,10 @@ def unified_search(
         )
     except SQLAlchemyError:
         # Hardening (F4) — surface a 503 instead of FastAPI default 500.
-        logger.exception("unified_search_failed: q=%r user_id=%s", q, current_user.id)
+        # Sanitize the user query before logging: strip control chars and
+        # cap length to defang log-injection payloads (CodeQL py/log-injection).
+        safe_q = "".join(ch for ch in (q or "") if ch.isprintable())[:120]
+        logger.exception("unified_search_failed: q=%r user_id=%s", safe_q, current_user.id)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Search temporarily unavailable; please retry.",
