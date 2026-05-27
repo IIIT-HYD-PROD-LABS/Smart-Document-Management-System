@@ -40,7 +40,7 @@ dateparser==1.2.0
 Babel==2.16.0
 
 # Phase 10 — SEBI / RBI training data scrapers (datasets/scrape_*.py)
-beautifulsoup4==4.12.3
+beautifulsoup4==4.14.3
 lxml==6.1.0
 
 # Phase 11 — alert pipeline (APScheduler durable scheduler, Twilio SMS adapter,
