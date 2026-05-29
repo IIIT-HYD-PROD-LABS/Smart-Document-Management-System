@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { documentsApi } from "@/lib/api";
-import { LoadingSpinner } from "@/components";
+import { LoadingSpinner, Skeleton } from "@/components";
 
 const TrendsChart = dynamic(() => import("@/components/analytics/TrendsChart"), {
     ssr: false,
@@ -65,9 +65,26 @@ export default function AnalyticsPage() {
     }, [isError]);
 
     if (loading) {
+        // Mirror the real layout (header + 4 stat cards + trends chart + the
+        // two-up donut/status row) so the 2-3s cold fetch against the remote
+        // DB reads as "this page is arriving", not a spinner on a blank area.
         return (
-            <div className="flex items-center justify-center h-64">
-                <LoadingSpinner />
+            <div role="status" aria-busy="true" aria-live="polite">
+                <span className="sr-only">Loading analytics</span>
+                <div className="mb-8">
+                    <h1 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>Analytics</h1>
+                    <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Insights into your document library</p>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} className="h-[92px]" />
+                    ))}
+                </div>
+                <Skeleton className="h-[268px] mb-4" />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <Skeleton className="h-[248px]" />
+                    <Skeleton className="h-[248px]" />
+                </div>
             </div>
         );
     }

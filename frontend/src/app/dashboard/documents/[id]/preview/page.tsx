@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api";
-import { LoadingSpinner } from "@/components";
+import { LoadingSpinner, Skeleton } from "@/components";
 import { FiArrowLeft, FiDownload, FiZoomIn, FiZoomOut, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import toast from "react-hot-toast";
 import Cookies from "js-cookie";
@@ -143,8 +143,38 @@ export default function PreviewPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-[80vh]">
-                <LoadingSpinner size="w-6 h-6" />
+            <div
+                role="status"
+                aria-busy="true"
+                aria-live="polite"
+                className="flex flex-col h-[calc(100vh-3.5rem-3rem)] md:h-[calc(100vh-4rem)]"
+            >
+                <span className="sr-only">Loading document preview</span>
+                {/* Top bar */}
+                <div
+                    className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b"
+                    style={{
+                        borderColor: "var(--border-default)",
+                        background: "var(--bg-elevated)",
+                    }}
+                >
+                    <div className="flex items-center gap-3 min-w-0">
+                        <Skeleton className="w-5 h-5 shrink-0" />
+                        <Skeleton className="h-4 w-40 sm:w-56" />
+                        <Skeleton className="h-3 w-8 hidden sm:block" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Skeleton className="h-7 w-24 mr-1 sm:mr-3" />
+                        <Skeleton className="h-7 w-24 rounded" />
+                    </div>
+                </div>
+                {/* Content */}
+                <div
+                    className="flex-1 overflow-hidden p-4"
+                    style={{ background: "var(--bg-page)" }}
+                >
+                    <Skeleton className="w-full h-full" />
+                </div>
             </div>
         );
     }

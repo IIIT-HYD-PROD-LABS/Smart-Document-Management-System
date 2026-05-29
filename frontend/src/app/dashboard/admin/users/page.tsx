@@ -14,7 +14,7 @@ import {
 
 import { useAuth } from "@/context/AuthContext";
 import { adminApi, extractErrorMessage } from "@/lib/api";
-import { LoadingSpinner } from "@/components";
+import { Skeleton } from "@/components";
 import DeleteUserModal from "@/components/admin/DeleteUserModal";
 
 export const dynamic = "force-dynamic";
@@ -106,8 +106,45 @@ export default function AdminUsersPage() {
 
     if (usersQuery.isLoading && !data) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <LoadingSpinner />
+            <div
+                className="space-y-6"
+                role="status"
+                aria-busy="true"
+                aria-live="polite"
+            >
+                <span className="sr-only">Loading users</span>
+                <header>
+                    <p className="microtype mb-2">Admin</p>
+                    <h1 className="text-[22px] font-semibold tracking-tight text-[var(--text-primary)]">
+                        Users
+                    </h1>
+                    <p className="text-[13px] text-[var(--text-muted)] mt-1.5">
+                        Click a row for details.
+                    </p>
+                </header>
+
+                <div className="flex items-center gap-3">
+                    <div className="relative flex-1 max-w-sm">
+                        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search by name, email, username..."
+                            aria-label="Search users"
+                            className="w-full pl-9 pr-3 py-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md text-sm text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)] transition-colors"
+                        />
+                    </div>
+                </div>
+
+                <div className="surface-card overflow-hidden">
+                    <Skeleton className="h-12 w-full rounded-none" />
+                    <div className="divide-y divide-[var(--border-subtle)]">
+                        {Array.from({ length: 8 }).map((_, i) => (
+                            <Skeleton key={i} className="h-12 w-full rounded-none" />
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }

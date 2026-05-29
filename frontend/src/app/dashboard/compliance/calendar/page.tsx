@@ -17,6 +17,7 @@ import type {
     ComplianceNotice,
 } from "@/types/compliance";
 import { AUTHORITY_CONFIG } from "@/components/compliance/AuthorityBadge";
+import { Skeleton } from "@/components";
 
 /** Local-only widening of the CalendarEntry shape so we can render notice
  *  response-deadlines on the same grid without touching the canonical
@@ -82,6 +83,13 @@ export default function CalendarPage() {
         },
         enabled: activeClientId !== null,
     });
+
+    // Drive a skeleton state on the grid: the statutory feed is always
+    // fetched; the notice overlay only when a client is active. Without this
+    // the grid rendered a silent empty month for the whole 2-3s cold fetch,
+    // reading as "no deadlines" rather than "loading".
+    const loading =
+        entriesQ.isLoading || (activeClientId !== null && noticesQ.isLoading);
 
     const entries = entriesQ.data ?? [];
     const noticeEntries: CalendarItem[] = useMemo(() => {
@@ -180,7 +188,7 @@ export default function CalendarPage() {
                 </span>
             </div>
 
-            <MonthGrid year={year} month={month} entriesByDate={entriesByDate} />
+            <MonthGrid year={year} month={month} entriesByDate={entriesByDate} loading={loading} />
 
             <Legend />
         </div>
@@ -293,10 +301,12 @@ function MonthGrid({
     year,
     month,
     entriesByDate,
+    loading,
 }: {
     year: number;
     month: number;
     entriesByDate: Map<string, CalendarItem[]>;
+    loading: boolean;
 }) {
     // Build the grid (Sun-Sat, padded for first week's offset)
     const firstOfMonth = new Date(year, month - 1, 1);
@@ -354,13 +364,27 @@ function MonthGrid({
                                 {c.day}
                             </span>
                             <div className="mt-1 space-y-1">
-                                {dateEntries.slice(0, 3).map((e) => (
-                                    <DayEntry key={e.id} entry={e} />
-                                ))}
-                                {dateEntries.length > 3 && (
-                                    <span className="text-[10px] text-[var(--text-muted)]">
-                                        +{dateEntries.length - 3} more
-                                    </span>
+                                {loading ? (
+                                    // Shimmer pills sized like real DayEntry rows.
+                                    // Vary the count by date so the month reads
+                                    // as "populating", not a uniform grey grid.
+                                    <>
+                                        <Skeleton className="h-[18px] w-full" />
+                                        {c.day % 4 === 0 && (
+                                            <Skeleton className="h-[18px] w-2/3" />
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        {dateEntries.slice(0, 3).map((e) => (
+                                            <DayEntry key={e.id} entry={e} />
+                                        ))}
+                                        {dateEntries.length > 3 && (
+                                            <span className="text-[10px] text-[var(--text-muted)]">
+                                                +{dateEntries.length - 3} more
+                                            </span>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>

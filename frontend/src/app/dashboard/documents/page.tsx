@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { documentsApi } from "@/lib/api";
-import { ConfidenceBadge, StatusBadge, CategoryBadge, LoadingSpinner } from "@/components";
+import { ConfidenceBadge, StatusBadge, CategoryBadge, Skeleton } from "@/components";
 import { FiFileText, FiTrash2, FiFilter, FiCheckSquare, FiSquare, FiX, FiMail, FiUpload, FiShare2, FiSearch } from "react-icons/fi";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -22,34 +23,49 @@ interface DocumentListItem {
     source?: string;
 }
 
+const DOCS_QUERY_KEY = ["documents", "all"] as const;
+
 export default function DocumentsPage() {
     const router = useRouter();
-    const [docs, setDocs] = useState<DocumentListItem[]>([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
     const [filter, setFilter] = useState("all");
     const [selected, setSelected] = useState<Set<number>>(new Set());
     const [deleting, setDeleting] = useState(false);
 
-    useEffect(() => {
-        loadDocs();
-    }, []);
+    // React Query (was useState+useEffect): shares the dashboard cache so a
+    // revisit inside staleTime is instant, and the sidebar's hover-prefetch
+    // (same key + queryFn) lands a warm cache here on arrival.
+    const { data: docs = [], isLoading: loading, isError } = useQuery<DocumentListItem[]>({
+        queryKey: DOCS_QUERY_KEY,
+        queryFn: () => documentsApi.getAll().then((r) => r.data.documents ?? []),
+    });
 
-    const loadDocs = async () => {
-        try {
-            const res = await documentsApi.getAll();
-            setDocs(res.data.documents || []);
-        } catch {
-            setDocs([]);
-            toast.error("Something went wrong");
-        } finally {
-            setLoading(false);
-        }
-    };
+    useEffect(() => {
+        if (isError) toast.error("Something went wrong");
+    }, [isError]);
+
+    // A background refetch (stale revisit) can drop rows that were deleted
+    // elsewhere. Prune `selected` to ids still present so batch-delete never
+    // targets a stale selection.
+    useEffect(() => {
+        setSelected((prev) => {
+            const live = new Set(docs.map((d) => d.id));
+            const next = new Set([...prev].filter((id) => live.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+    }, [docs]);
+
+    // Local mutations write through the cache so the list updates instantly
+    // without a refetch round-trip to the remote DB.
+    const removeFromCache = (ids: Set<number>) =>
+        queryClient.setQueryData<DocumentListItem[]>(DOCS_QUERY_KEY, (prev) =>
+            (prev ?? []).filter((d) => !ids.has(d.id)),
+        );
 
     const handleDelete = async (id: number) => {
         try {
             await documentsApi.delete(id);
-            setDocs((prev) => prev.filter((d) => d.id !== id));
+            removeFromCache(new Set([id]));
             setSelected((prev) => { const next = new Set(prev); next.delete(id); return next; });
         } catch { toast.error("Something went wrong"); }
     };
@@ -60,7 +76,7 @@ export default function DocumentsPage() {
         try {
             const ids = Array.from(selected);
             await documentsApi.batchDelete(ids);
-            setDocs((prev) => prev.filter((d) => !selected.has(d.id)));
+            removeFromCache(selected);
             setSelected(new Set());
         } catch { toast.error("Something went wrong"); }
         setDeleting(false);
@@ -90,8 +106,24 @@ export default function DocumentsPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <LoadingSpinner />
+            <div role="status" aria-busy="true" aria-live="polite">
+                <span className="sr-only">Loading documents</span>
+                <div className="flex items-center justify-between mb-6">
+                    <div>
+                        <Skeleton className="h-6 w-40" />
+                        <Skeleton className="h-4 w-56 mt-2" />
+                    </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                    <Skeleton className="h-[60px]" />
+                    <Skeleton className="h-[60px]" />
+                    <Skeleton className="h-[60px]" />
+                </div>
+                <div className="space-y-2">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                        <Skeleton key={i} className="h-14 w-full" />
+                    ))}
+                </div>
             </div>
         );
     }

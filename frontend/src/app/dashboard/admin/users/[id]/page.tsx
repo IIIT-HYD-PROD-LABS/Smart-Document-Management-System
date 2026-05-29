@@ -19,7 +19,7 @@ import {
 
 import { useAuth } from "@/context/AuthContext";
 import { adminApi, extractErrorMessage } from "@/lib/api";
-import { LoadingSpinner } from "@/components";
+import { LoadingSpinner, Skeleton } from "@/components";
 import DeleteUserModal from "@/components/admin/DeleteUserModal";
 
 export const dynamic = "force-dynamic";
@@ -168,8 +168,50 @@ export default function AdminUserDetailPage() {
 
     if (userQuery.isLoading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <LoadingSpinner />
+            <div
+                className="space-y-6"
+                role="status"
+                aria-busy="true"
+                aria-live="polite"
+            >
+                <span className="sr-only">Loading user details</span>
+
+                <Skeleton className="h-4 w-28" />
+
+                <div className="flex items-start gap-4">
+                    <Skeleton className="w-12 h-12 rounded-md shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-2">
+                        <Skeleton className="h-6 w-48" />
+                        <Skeleton className="h-4 w-64" />
+                    </div>
+                    <Skeleton className="h-6 w-16 rounded" />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div className="lg:col-span-2 surface-card p-5">
+                        <Skeleton className="h-4 w-20 mb-3" />
+                        {Array.from({ length: 8 }).map((_, i) => (
+                            <div
+                                key={i}
+                                className="flex items-start gap-3 py-2.5 border-b border-[var(--border-subtle)] last:border-0"
+                            >
+                                <Skeleton className="w-4 h-4 rounded-sm mt-0.5 shrink-0" />
+                                <div className="flex-1 min-w-0 space-y-1.5">
+                                    <Skeleton className="h-3 w-24" />
+                                    <Skeleton className="h-3.5 w-40" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="surface-card p-5 space-y-4">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-[58px] w-full" />
+                        <Skeleton className="h-9 w-full" />
+                        <Skeleton className="h-9 w-full" />
+                        <Skeleton className="h-9 w-full" />
+                    </div>
+                </div>
             </div>
         );
     }

@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { documentsApi, sharingApi, extractErrorMessage } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import toast from "react-hot-toast";
-import { ConfidenceBadge, StatusBadge, LoadingSpinner } from "@/components";
+import { ConfidenceBadge, StatusBadge, Skeleton } from "@/components";
 import { FiArrowLeft, FiFile, FiCalendar, FiTag, FiHash, FiCopy, FiCheck, FiEdit3, FiX, FiSave, FiShare2, FiTrash2, FiEye, FiClock, FiRotateCcw } from "react-icons/fi";
 import Link from "next/link";
 
@@ -357,8 +357,75 @@ export default function DocumentDetailPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <LoadingSpinner />
+            <div
+                className="max-w-4xl"
+                role="status"
+                aria-busy="true"
+                aria-live="polite"
+            >
+                <span className="sr-only">Loading document</span>
+
+                {/* Back button */}
+                <Skeleton className="h-5 w-16 mb-6" />
+
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+                    <div className="flex items-center gap-4 min-w-0">
+                        <Skeleton className="w-12 h-12 rounded-lg shrink-0" />
+                        <div className="min-w-0 space-y-2">
+                            <Skeleton className="h-5 w-56" />
+                            <Skeleton className="h-3 w-28" />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap shrink-0">
+                        <Skeleton className="h-7 w-20 rounded-md" />
+                        <Skeleton className="h-7 w-16 rounded-md" />
+                        <Skeleton className="h-6 w-20 rounded-full" />
+                    </div>
+                </div>
+
+                {/* Hero metadata tile row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <div
+                            key={i}
+                            className="surface-card stat-stripe-left p-4 flex items-start gap-3 min-h-[80px]"
+                            style={{ color: "var(--text-muted)" }}
+                        >
+                            <Skeleton className="w-8 h-8 rounded-md shrink-0 mt-0.5" />
+                            <div className="min-w-0 flex-1 space-y-2">
+                                <Skeleton className="h-2.5 w-16" />
+                                <Skeleton className="h-4 w-24" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Extracted text card */}
+                <div
+                    className="rounded-lg border mb-6"
+                    style={{
+                        background: "var(--bg-elevated)",
+                        borderColor: "var(--border-default)",
+                        boxShadow: "var(--shadow-sm)",
+                    }}
+                >
+                    <div
+                        className="flex items-center justify-between px-5 py-3 border-b"
+                        style={{ borderColor: "var(--border-default)" }}
+                    >
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-4 w-16" />
+                    </div>
+                    <div className="p-5 space-y-3">
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-11/12" />
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-4/5" />
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-3/4" />
+                    </div>
+                </div>
             </div>
         );
     }

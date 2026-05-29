@@ -13,7 +13,7 @@ import {
 } from "react-icons/fi";
 
 import { adminApi, extractErrorMessage } from "@/lib/api";
-import { LoadingSpinner } from "@/components";
+import { Skeleton } from "@/components";
 
 export const dynamic = "force-dynamic";
 
@@ -203,8 +203,63 @@ export default function EarlyAccessPage() {
             </div>
 
             {loading ? (
-                <div className="flex items-center justify-center h-64">
-                    <LoadingSpinner />
+                <div
+                    role="status"
+                    aria-busy="true"
+                    aria-live="polite"
+                    className="space-y-6"
+                >
+                    <span className="sr-only">Loading early access requests</span>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="surface-card p-5">
+                                <Skeleton className="h-4 w-20 mb-3" />
+                                <Skeleton className="h-7 w-12" />
+                            </div>
+                        ))}
+                    </div>
+                    <div className="surface-card overflow-x-auto">
+                        <table className="w-full min-w-[800px]">
+                            <thead>
+                                <tr className="border-b border-[var(--border-default)]">
+                                    <th className="text-left px-4 py-3 microtype">Applicant</th>
+                                    <th className="text-left px-4 py-3 microtype">Company</th>
+                                    <th className="text-left px-4 py-3 microtype">Reason</th>
+                                    <th className="text-left px-4 py-3 microtype">Status</th>
+                                    <th className="text-left px-4 py-3 microtype">Submitted</th>
+                                    <th className="text-left px-4 py-3 microtype">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {Array.from({ length: 6 }).map((_, i) => (
+                                    <tr
+                                        key={i}
+                                        className="border-b border-[var(--border-subtle)] last:border-0"
+                                    >
+                                        <td className="px-4 py-3">
+                                            <Skeleton className="h-[13px] w-32 mb-1.5" />
+                                            <Skeleton className="h-[11.5px] w-40" />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <Skeleton className="h-[12px] w-24" />
+                                        </td>
+                                        <td className="px-4 py-3 max-w-[220px]">
+                                            <Skeleton className="h-[12px] w-44" />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <Skeleton className="h-[18px] w-16 rounded" />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <Skeleton className="h-[11.5px] w-20" />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <Skeleton className="h-7 w-16 rounded" />
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             ) : (
                 <>

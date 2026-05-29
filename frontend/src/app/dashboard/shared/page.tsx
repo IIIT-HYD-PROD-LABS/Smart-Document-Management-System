@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { sharingApi } from "@/lib/api";
-import { StatusBadge, LoadingSpinner } from "@/components";
+import { StatusBadge, Skeleton } from "@/components";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { FiFile, FiChevronLeft, FiChevronRight } from "react-icons/fi";
@@ -39,8 +39,15 @@ export default function SharedWithMePage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <LoadingSpinner />
+            <div role="status" aria-busy="true" aria-live="polite">
+                <span className="sr-only">Loading shared documents</span>
+                <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-6">Shared with me</h1>
+                <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg overflow-hidden">
+                    <Skeleton className="h-11 w-full rounded-none" />
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <Skeleton key={i} className="h-14 w-full rounded-none border-b border-[var(--border-default)] last:border-0" />
+                    ))}
+                </div>
             </div>
         );
     }

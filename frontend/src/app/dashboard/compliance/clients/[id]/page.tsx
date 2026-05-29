@@ -70,7 +70,7 @@ export default function ClientDetailPage({
         );
     }
 
-    if (isLoading) {
+    if (isLoading || !tenantReady) {
         return (
             <div className="px-6 py-8 max-w-5xl mx-auto space-y-6">
                 <div className="h-7 w-48 bg-[var(--bg-hover)] animate-pulse rounded" />

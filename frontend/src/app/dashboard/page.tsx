@@ -21,7 +21,7 @@ import toast from "react-hot-toast";
 import { useQuery } from "@tanstack/react-query";
 
 import { documentsApi } from "@/lib/api";
-import { LoadingSpinner, StatusBadge } from "@/components";
+import { Skeleton, StatusBadge } from "@/components";
 import { useAuth } from "@/context/AuthContext";
 
 /**
@@ -97,8 +97,22 @@ export default function DashboardPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <LoadingSpinner />
+            <div className="space-y-8" role="status" aria-busy="true" aria-live="polite">
+                <span className="sr-only">Loading dashboard</span>
+                <div>
+                    <Skeleton className="h-3 w-44" />
+                    <Skeleton className="h-8 w-72 mt-3" />
+                    <Skeleton className="h-4 w-full max-w-2xl mt-3" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} className="h-[140px]" />
+                    ))}
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                    <Skeleton className="lg:col-span-7 h-72" />
+                    <Skeleton className="lg:col-span-5 h-72" />
+                </div>
             </div>
         );
     }

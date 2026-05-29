@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { mlApi } from "@/lib/api";
-import { LoadingSpinner } from "@/components";
+import { Skeleton } from "@/components";
 import { useAuth } from "@/context/AuthContext";
 import { FiBarChart2 } from "react-icons/fi";
 
@@ -82,8 +82,57 @@ export default function ModelEvaluationPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <LoadingSpinner />
+            <div role="status" aria-busy="true" aria-live="polite">
+                <span className="sr-only">Loading model evaluation report</span>
+                <div className="mb-8">
+                    <h1 className="text-lg font-semibold text-[var(--text-primary)]">Model Evaluation Report</h1>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">Classification model performance metrics</p>
+                </div>
+
+                {/* Overall Metrics */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg p-4">
+                            <Skeleton className="h-3 w-20 mb-2" />
+                            <Skeleton className="h-7 w-16" />
+                        </div>
+                    ))}
+                </div>
+
+                {/* Data Split */}
+                <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg p-4 mb-8">
+                    <Skeleton className="h-4 w-24 mb-3" />
+                    <div className="flex flex-wrap gap-6">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                            <Skeleton key={i} className="h-4 w-28" />
+                        ))}
+                    </div>
+                </div>
+
+                {/* Per-Category Metrics Table */}
+                <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg overflow-hidden mb-8">
+                    <div className="px-4 py-3 border-b border-[var(--border-default)]">
+                        <Skeleton className="h-4 w-40" />
+                    </div>
+                    <div className="p-4 space-y-3">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <Skeleton key={i} className="h-6 w-full" />
+                        ))}
+                    </div>
+                </div>
+
+                {/* Confusion Matrix */}
+                <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg overflow-hidden">
+                    <div className="px-4 py-3 border-b border-[var(--border-default)]">
+                        <Skeleton className="h-4 w-36 mb-1" />
+                        <Skeleton className="h-3 w-48" />
+                    </div>
+                    <div className="p-4 space-y-3">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                            <Skeleton key={i} className="h-6 w-full" />
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }

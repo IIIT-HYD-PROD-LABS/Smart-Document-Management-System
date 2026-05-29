@@ -8,8 +8,10 @@ import {
     QueryClient,
     QueryClientProvider,
     useQuery,
+    useQueryClient,
 } from "@tanstack/react-query";
-import { LoadingSpinner } from "@/components";
+import { LoadingSpinner, Skeleton } from "@/components";
+import { documentsApi } from "@/lib/api";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import AIChatFloating from "@/components/AIChatFloating";
 import { UserMenu } from "@/components/UserMenu";
@@ -99,8 +101,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             new QueryClient({
                 defaultOptions: {
                     queries: {
-                        staleTime: 30_000,
+                        // Bumped 30s → 60s: the data source is a remote
+                        // Supabase pooler reached over the WARP tunnel, so
+                        // each refetch costs ~0.7–3s. A longer stale window
+                        // makes a revisit inside 60s render cached data
+                        // instantly instead of re-spinning.
+                        staleTime: 60_000,
+                        // Keep results in cache for 5 min after a query goes
+                        // unused so back/forward navigation between dashboard
+                        // pages restores instantly rather than refetching.
+                        gcTime: 300_000,
+                        // NOTE: deliberately NOT setting placeholderData:
+                        // keepPreviousData globally. The always-mounted
+                        // ["client", activeClientId] query re-keys in place on
+                        // a client switch; keepPreviousData would then render
+                        // the PREVIOUS tenant's name/logo (and a deep-link to
+                        // it) for the whole refetch window — a multi-tenant
+                        // identity-confusion bug. Scope keepPreviousData to a
+                        // specific paginated query if one ever needs it.
                         refetchOnWindowFocus: false,
+                        refetchOnReconnect: true,
                         retry: 1,
                     },
                 },
@@ -122,6 +142,61 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
     const activeClientId = useCurrentClient((s) => s.activeClientId);
     const crossClientMode = useCurrentClient((s) => s.crossClientMode);
+    const queryClient = useQueryClient();
+
+    // Data prefetch on link hover/focus. <Link> already prefetches the route
+    // JS+RSC, but the page's data is what costs ~1s against the remote DB.
+    // Warming the React Query cache on intent (hover/focus, before the click)
+    // makes these high-traffic destinations render instantly on arrival.
+    // Keyed to the same queryKey + queryFn the destination page uses, so the
+    // click is a cache hit, not a duplicate fetch.
+    const prefetchByHref: Record<string, () => void> = {
+        "/dashboard": () =>
+            void queryClient.prefetchQuery({
+                queryKey: ["dashboard", "stats"],
+                queryFn: () => documentsApi.getStats().then((r) => r.data),
+            }),
+        "/dashboard/documents": () =>
+            void queryClient.prefetchQuery({
+                queryKey: ["documents", "all"],
+                // Must mirror DocumentsPage's queryFn exactly (same key +
+                // same result shape) so the click is a cache hit, not a
+                // shape mismatch.
+                queryFn: () =>
+                    documentsApi.getAll().then((r) => r.data.documents ?? []),
+            }),
+        "/dashboard/analytics": () => {
+            // AnalyticsPage fires two queries; warm both. Keys + queryFns
+            // mirror analytics/page.tsx exactly so arrival is a cache hit.
+            void queryClient.prefetchQuery({
+                queryKey: ["docs", "stats"],
+                queryFn: () => documentsApi.getStats().then((r) => r.data),
+            });
+            void queryClient.prefetchQuery({
+                queryKey: ["docs", "trends", 12],
+                queryFn: () => documentsApi.getTrends(12).then((r) => r.data),
+            });
+        },
+        "/dashboard/compliance": () => {
+            // Notices dashboard is scoped to the active client. Mirror the
+            // page's enabled:(activeClientId !== null) guard so we never fire
+            // the null-client fetch the page itself skips.
+            if (activeClientId === null) return;
+            void queryClient.prefetchQuery({
+                queryKey: ["client-dashboard", activeClientId],
+                queryFn: () =>
+                    complianceApi
+                        .getClientDashboard(activeClientId)
+                        .then((r) => r.data),
+            });
+        },
+        "/dashboard/compliance/review": () =>
+            void queryClient.prefetchQuery({
+                queryKey: ["compliance-review-pending"],
+                queryFn: () =>
+                    complianceApi.listPendingReview(1, 200).then((r) => r.data),
+            }),
+    };
 
     // Co-brand cluster: fetch the active client's name + logo so the
     // sidebar can render its identity. Stays empty until a client is
@@ -158,15 +233,73 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     }, [pathname]);
 
     if (isLoading) {
+        // App-shell skeleton, not a lonely centered spinner. On a hard load
+        // (refresh / direct URL / post-login) the session check costs ~2-3s
+        // against the remote backend; showing the sidebar frame + a content
+        // skeleton reads as "TaxSync is booting", not a blank page. Mirrors
+        // the real <aside w-60> + <main md:ml-60> chrome below.
         return (
-            <div className="min-h-screen bg-[var(--bg-page)] flex items-center justify-center">
-                <LoadingSpinner />
+            <div
+                className="min-h-screen bg-[var(--bg-page)] flex"
+                role="status"
+                aria-busy="true"
+                aria-live="polite"
+            >
+                <span className="sr-only">Loading TaxSync</span>
+                <aside className="hidden md:flex w-60 fixed left-0 top-0 h-full bg-[var(--bg-surface)] border-r border-[var(--border-default)] flex-col z-50">
+                    <div className="h-16 px-4 flex items-center gap-3 border-b border-[var(--border-default)]">
+                        <Skeleton className="w-8 h-8 rounded-md" />
+                        <div className="flex-1">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="h-2 w-16 mt-2" />
+                        </div>
+                    </div>
+                    <div className="flex-1 px-3 py-4 space-y-6">
+                        {[3, 2, 4].map((n, gi) => (
+                            <div key={gi} className="space-y-2">
+                                <Skeleton className="h-2 w-16 ml-2 mb-1" />
+                                {Array.from({ length: n }).map((_, i) => (
+                                    <Skeleton key={i} className="h-8 w-full rounded-md" />
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                    <div className="px-3 py-4 border-t border-[var(--border-default)]">
+                        <Skeleton className="h-10 w-full rounded-md" />
+                    </div>
+                </aside>
+                <main className="flex-1 md:ml-60 mt-14 md:mt-0">
+                    <div className="hidden md:flex h-14 px-6 lg:px-10 items-center justify-end border-b border-[var(--border-default)]">
+                        <Skeleton className="h-8 w-20 rounded-md" />
+                    </div>
+                    <div className="p-6 md:p-10">
+                        <div className="max-w-7xl mx-auto space-y-8">
+                            <div>
+                                <Skeleton className="h-3 w-40" />
+                                <Skeleton className="h-7 w-64 mt-3" />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {Array.from({ length: 4 }).map((_, i) => (
+                                    <Skeleton key={i} className="h-[110px]" />
+                                ))}
+                            </div>
+                            <Skeleton className="h-72 w-full" />
+                        </div>
+                    </div>
+                </main>
             </div>
         );
     }
 
     if (!user) {
-        return null;
+        // Session resolved to "no user" (expired/cleared). The redirect to
+        // /login fires from the effect above; render a spinner in the meantime
+        // instead of a blank white screen during that hand-off.
+        return (
+            <div className="min-h-screen bg-[var(--bg-page)] flex items-center justify-center">
+                <LoadingSpinner />
+            </div>
+        );
     }
 
     const role = user.role || "viewer";
@@ -313,6 +446,8 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                             <li key={item.href}>
                                                 <Link
                                                     href={item.href}
+                                                    onMouseEnter={prefetchByHref[item.href]}
+                                                    onFocus={prefetchByHref[item.href]}
                                                     className={`
                                                         relative flex items-center gap-2.5 px-3 py-2 rounded-md
                                                         text-[13.5px] cursor-pointer
