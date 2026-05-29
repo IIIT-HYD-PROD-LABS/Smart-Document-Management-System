@@ -35,6 +35,11 @@ jobs:
 
     env:
       SECRET_KEY: test-secret-key-for-ci-pipeline-minimum-32-chars-long
+      # CI-only Fernet key (test data only, not a real secret). The app
+      # requires FERNET_KEY at runtime for TOTP-secret and PII encryption;
+      # the MFA enroll/confirm tests 500 without it. CI has lacked this since
+      # the MFA feature merged, so the test job was red until now.
+      FERNET_KEY: hiUVDEzvbCXOLkqiRvrL44PGuUSUjbedaUu20xUsquw=
       DATABASE_URL: postgresql://test:test@localhost:5432/smartdocs_test
       REDIS_URL: redis://localhost:6379/0
       CELERY_BROKER_URL: redis://localhost:6379/0
