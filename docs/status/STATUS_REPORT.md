@@ -1,7 +1,19 @@
 # Smart Document Management System, Status Report
 
 **Organization:** Product Labs, IIIT Hyderabad
-**Last Updated:** 2026-05-22 (admin shell + auth hardening, register-bypass + first-user-race CRITICAL fixes, compliance defense-in-depth, frontend perf)
+**Last Updated:** 2026-05-29 (Opus 4.8 end-to-end audit: cross-tenant IDOR + segregation-of-duties + MFA-token + input-validation fixes; RLS-inactive finding documented with an activation runbook)
+
+## 2026-05-29, Opus 4.8 end-to-end audit
+
+A super-agent audit (17 read-only domain agents with an adversarial verifier per Critical/High finding) plus an 18-agent fix pass, run on Opus 4.8. Full record: `docs/status/AUDIT-4.8-2026-05-29.md`.
+
+- Closed several cross-tenant IDORs surfaced by the finding that runtime RLS is inactive (the app connects as a BYPASSRLS role and the tenant listener never issues `SET ROLE`): notice notes, notice metadata edits, review-queue assignment, and all response queries now carry explicit client_id scoping; the transition error path no longer leaks a foreign notice's status.
+- Segregation of duties hardened: self-approval is now fail-closed on an unknown (NULL) draft author, and response withdrawal requires the author or a supervisor.
+- MFA enroll and disable revoke outstanding refresh tokens, so a pre-enrollment token cannot bypass the new gate.
+- Crash and denial-of-service surfaces closed: bounded report window, NUL-byte filter rejection, capped tags and draft body, OpenAI choices guard, AI-error code mapping, and a request-body size limit.
+- Race and correctness: escalation advisory lock (M1), IST deadline date (M7), Gmail re-scan duplicate-notice regression, sub-rupee risk clamp, and the calendar next-year seed bug.
+- Verified: 613 backend tests pass, ruff clean, alembic head clean, tsc clean, Next.js build passes.
+- Deferred with a runbook: activating RLS as defense in depth (needs Supabase-side grants and a staged role switch), and the frontend httpOnly-cookie plus CSP nonce work.
 
 ## 2026-05-22, admin shell + auth hardening
 

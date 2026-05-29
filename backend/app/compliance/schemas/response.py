@@ -74,7 +74,7 @@ class ResponseDraftPayload(BaseModel):
     """
 
     subject: Optional[str] = Field(None, max_length=500)
-    body_markdown: str = Field(default="")
+    body_markdown: str = Field(default="", max_length=100000)
     recipient: Optional[str] = Field(None, max_length=500)
     response_date: Optional[date] = None
     metadata_json: Optional[dict] = None

@@ -123,6 +123,32 @@ app.add_middleware(CorrelationIdMiddleware)
 # on incoming requests (before dependencies resolve get_db).
 app.add_middleware(TenantContextMiddleware)
 
+
+# Reject oversized JSON/form bodies before they are buffered into memory.
+# Multipart/file-upload routes (notice/document uploads) legitimately send
+# large bodies and stream to disk/storage, so they are exempt from the cap.
+MAX_REQUEST_BODY_BYTES = 2_000_000  # 2 MB cap for non-upload payloads
+
+
+@app.middleware("http")
+async def limit_request_body_size(request: Request, call_next):
+    content_type = request.headers.get("content-type", "")
+    # File uploads stream large bodies by design; skip the cap for them.
+    if not content_type.startswith("multipart/form-data"):
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                declared = int(content_length)
+            except ValueError:
+                declared = None
+            if declared is not None and declared > MAX_REQUEST_BODY_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": "Request body too large."},
+                )
+    return await call_next(request)
+
+
 # Include routers
 app.include_router(auth.router)
 app.include_router(documents.router)

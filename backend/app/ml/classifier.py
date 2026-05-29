@@ -59,12 +59,20 @@ def classify_document(text: str) -> tuple[str, float]:
     if not cleaned:
         return "unknown", 0.0
 
-    # Vectorize
-    text_vec = _vectorizer.transform([cleaned])
+    # D3: a model/vectorizer inference failure (corrupt artifact, sklearn
+    # version skew, OOM) is transient/operational and must not masquerade as a
+    # genuine low-confidence ("unknown", 0.0) result -- that would mark the
+    # document permanently FAILED/COMPLETED instead of letting the task layer
+    # retry. Re-raise so the distinction is preserved; the legitimate
+    # low-confidence branch below still returns "unknown".
+    try:
+        text_vec = _vectorizer.transform([cleaned])
+        prediction = _model.predict(text_vec)[0]
+        probabilities = _model.predict_proba(text_vec)[0]
+    except Exception as exc:
+        logger.error("classification_inference_failed", error=str(exc), error_type=type(exc).__name__)
+        raise
 
-    # Predict with probability
-    prediction = _model.predict(text_vec)[0]
-    probabilities = _model.predict_proba(text_vec)[0]
     confidence = float(max(probabilities))
 
     # If confidence is below threshold, return unknown

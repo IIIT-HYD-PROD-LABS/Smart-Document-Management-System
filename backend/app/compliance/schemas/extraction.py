@@ -91,6 +91,12 @@ class AcceptExtractionPayload(BaseModel):
     """POST /api/compliance/notices/{id}/accept-extraction body."""
 
     items: List[AcceptExtractionItem] = Field(..., min_length=1, max_length=14)
+    # Upload-first flow (D-19): extract-preview is stateless, so the freshly
+    # created notice has no persisted envelope. The client replays the
+    # reviewed envelope here so the notice gains its extraction artefact at
+    # accept time. Omitted by the notice-scoped flow (Gmail / async task),
+    # where apply_extraction_to_notice already wrote it.
+    envelope: Optional[ExtractionEnvelope] = None
 
 
 class ExtractionResponse(BaseModel):

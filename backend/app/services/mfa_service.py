@@ -125,10 +125,23 @@ def issue_challenge_token(user_id: int) -> str:
     payload = {
         "sub": str(user_id),
         "type": MFA_CHALLENGE_TYPE,
+        # Per-challenge id so a successful verify can mark it single-use and a
+        # replay within the TTL is rejected (mirrors the OAuth exchange jti).
+        "jti": secrets.token_urlsafe(16),
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=settings.MFA_CHALLENGE_EXPIRE_MINUTES)).timestamp()),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def _decode_challenge_payload(token: str) -> dict:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except jwt.PyJWTError as e:
+        raise ValueError("invalid or expired challenge token") from e
+    if payload.get("type") != MFA_CHALLENGE_TYPE:
+        raise ValueError("wrong token type")
+    return payload
 
 
 def decode_challenge_token(token: str) -> int:
@@ -136,13 +149,21 @@ def decode_challenge_token(token: str) -> int:
 
     Distinct ``type`` claim and standalone decode keep it from being usable as
     an access token (and vice-versa: decode_access_token rejects this type)."""
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except jwt.PyJWTError as e:
-        raise ValueError("invalid or expired challenge token") from e
-    if payload.get("type") != MFA_CHALLENGE_TYPE:
-        raise ValueError("wrong token type")
+    payload = _decode_challenge_payload(token)
     try:
         return int(payload.get("sub"))
+    except (TypeError, ValueError) as e:
+        raise ValueError("malformed challenge token") from e
+
+
+def decode_challenge_token_with_jti(token: str) -> tuple[int, str]:
+    """Like decode_challenge_token but also returns the jti for single-use
+    tracking. Raises ValueError on a malformed token or a missing jti."""
+    payload = _decode_challenge_payload(token)
+    jti = payload.get("jti")
+    if not jti:
+        raise ValueError("malformed challenge token")
+    try:
+        return int(payload.get("sub")), jti
     except (TypeError, ValueError) as e:
         raise ValueError("malformed challenge token") from e

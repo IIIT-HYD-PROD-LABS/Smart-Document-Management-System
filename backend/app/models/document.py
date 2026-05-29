@@ -4,7 +4,7 @@ import enum
 from datetime import datetime, timezone
 from sqlalchemy import (
     BigInteger, Column, Integer, String, Float, Text, DateTime, Enum,
-    ForeignKey, Index, JSON,
+    ForeignKey, Index, JSON, text,
 )
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import relationship
@@ -136,6 +136,16 @@ class Document(Base):
     __table_args__ = (
         Index("idx_documents_category_user", "category", "user_id"),
         Index("idx_documents_created_at", "created_at"),
+        # Migration 0037 D1: block duplicate first-time uploads of the same
+        # original filename per user. Partial so a failed upload can be
+        # retried with the same name; the version path reuses the live row.
+        Index(
+            "uq_documents_user_filename",
+            "user_id",
+            "original_filename",
+            unique=True,
+            postgresql_where=text("status <> 'failed'"),
+        ),
     )
 
     @property

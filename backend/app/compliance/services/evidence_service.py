@@ -122,7 +122,31 @@ def detach_document(
     document_id: int,
     user_id: Optional[int],
 ) -> bool:
-    """Remove an evidence attachment. Returns True if removed, False if not present."""
+    """Remove an evidence attachment. Returns True if removed, False if not present.
+
+    R6 — symmetric with attach_document: the caller must own the document
+    or hold a DocumentPermission row before they can detach it as evidence.
+    Without this, attach was guarded but detach was not, letting any holder
+    of NOTICE_ATTACH_EVIDENCE strip another user's document off a notice.
+    """
+    if user_id is not None:
+        document = db.get(Document, document_id)
+        if document is not None and int(document.user_id) != int(user_id):
+            from app.models.document_permission import DocumentPermission
+            shared = (
+                db.query(DocumentPermission)
+                .filter(
+                    DocumentPermission.document_id == document_id,
+                    DocumentPermission.user_id == user_id,
+                )
+                .first()
+            )
+            if shared is None:
+                raise DocumentAccessDenied(
+                    f"User {user_id} cannot detach document {document_id} from "
+                    "evidence: not owner and no DocumentPermission row exists"
+                )
+
     existing = (
         db.query(NoticeEvidenceAttachment)
         .filter(
@@ -149,14 +173,21 @@ def detach_document(
 
 
 def list_attachments(
-    db: Session, *, notice_id: int
+    db: Session, *, notice_id: int, client_id: Optional[int] = None
 ) -> list[NoticeEvidenceAttachment]:
-    return (
-        db.query(NoticeEvidenceAttachment)
-        .filter(NoticeEvidenceAttachment.notice_id == notice_id)
-        .order_by(
-            NoticeEvidenceAttachment.display_order,
-            NoticeEvidenceAttachment.created_at,
-        )
-        .all()
+    """List evidence rows for a notice.
+
+    R4 — when `client_id` is supplied (the router passes the parent
+    notice's client_id, already tenant-checked) it is added as a
+    defense-in-depth filter so an RLS regression cannot surface another
+    tenant's attachment rows. Defaults to None for RLS-bypassed callers.
+    """
+    q = db.query(NoticeEvidenceAttachment).filter(
+        NoticeEvidenceAttachment.notice_id == notice_id
     )
+    if client_id is not None:
+        q = q.filter(NoticeEvidenceAttachment.client_id == client_id)
+    return q.order_by(
+        NoticeEvidenceAttachment.display_order,
+        NoticeEvidenceAttachment.created_at,
+    ).all()

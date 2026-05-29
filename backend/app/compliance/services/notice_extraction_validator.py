@@ -146,7 +146,7 @@ def _apply_cross_field_rules(fields: dict) -> dict:
     deadline = _parse_iso_date(
         out.get("response_deadline", {}).get("value") if isinstance(out.get("response_deadline"), dict) else None
     )
-    if issued and deadline and deadline <= issued:
+    if issued and deadline and deadline <= issued and not _already_failed(out.get("response_deadline")):
         out["response_deadline"] = _annotate(
             out["response_deadline"],
             "is on or before the issued date",
@@ -160,13 +160,25 @@ def _apply_cross_field_rules(fields: dict) -> dict:
             total = float(out["total_liability"]["value"])
         except (TypeError, ValueError):
             tax = interest = penalty = total = None  # type: ignore[assignment]
-        if tax is not None and abs((tax + interest + penalty) - total) > _LIABILITY_TOLERANCE_INR:
+        # Skip when total_liability already carries a single-field failure: a
+        # second _annotate would re-halve the already-halved confidence (0.25x),
+        # double-penalising one field for what the spec caps at a single 0.5x.
+        if (
+            tax is not None
+            and abs((tax + interest + penalty) - total) > _LIABILITY_TOLERANCE_INR
+            and not _already_failed(out.get("total_liability"))
+        ):
             out["total_liability"] = _annotate(
                 out["total_liability"],
                 "does not equal tax_demand + interest + penalty within 1 INR",
             )
 
     return out
+
+
+def _already_failed(payload: Any) -> bool:
+    """True when a field already carries a single-field validation failure."""
+    return isinstance(payload, dict) and payload.get("validation_failure") is not None
 
 
 def _recompute_average(fields: dict) -> float:

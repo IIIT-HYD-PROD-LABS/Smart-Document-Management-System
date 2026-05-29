@@ -75,6 +75,8 @@ def schedule_deadline_alerts(notice_id: int, deadline: Optional[datetime]) -> di
 
     Returns map of alert_type → job_id (or 'skipped' status).
     """
+    from app.compliance.calendar.adjust import adjust_deadline
+
     sched = get_scheduler()
     if sched is None:
         return {"status": "scheduler_unavailable"}
@@ -92,6 +94,21 @@ def schedule_deadline_alerts(notice_id: int, deadline: Optional[datetime]) -> di
     # arithmetic uses comparable timezone-aware values.
     if deadline_dt.tzinfo is None:
         deadline_dt = deadline_dt.replace(tzinfo=timezone.utc)
+
+    # L1 — shift the SCHEDULING basis to the next working day so the
+    # T-7/T-3/T-1/overdue offsets fire relative to the holiday-aware
+    # deadline, not the raw one (the preview endpoint already did this but
+    # scheduling silently used the raw date). The stored response_deadline
+    # column is untouched; only the scheduling math sees the adjusted date.
+    # state_code is unavailable in this signature, so central-only holidays
+    # are applied (parity with the orchestrator's cross-tenant dispatch).
+    adjusted_date = adjust_deadline(deadline_dt.date())
+    if adjusted_date != deadline_dt.date():
+        deadline_dt = deadline_dt.replace(
+            year=adjusted_date.year,
+            month=adjusted_date.month,
+            day=adjusted_date.day,
+        )
 
     now = datetime.now(timezone.utc)
     out: dict[str, str] = {}

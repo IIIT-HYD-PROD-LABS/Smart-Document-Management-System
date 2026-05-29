@@ -51,6 +51,36 @@ def test_validator_flags_liability_arithmetic_mismatch():
     assert validated["fields"]["total_liability"]["confidence"] == pytest.approx(0.45, rel=1e-3)
 
 
+def test_validator_penalises_field_at_most_once():
+    """A field failing BOTH a single-field rule and the cross-field liability
+    rule is halved once (0.5x), never twice (0.25x).
+
+    total_liability is negative (single-field failure) AND breaks the
+    tax+interest+penalty arithmetic (cross-field failure). The cross-field
+    annotation must be skipped because the field already failed, so the
+    confidence is original*0.5 and the recorded reason is the single-field one.
+    """
+    from app.compliance.services.notice_extraction_validator import validate_and_score
+
+    env = {
+        "fields": {
+            "tax_demand": {"value": 100000.0, "confidence": 0.90, "source_span": "x"},
+            "interest": {"value": 5000.0, "confidence": 0.90, "source_span": "y"},
+            "penalty": {"value": 10000.0, "confidence": 0.90, "source_span": "z"},
+            "total_liability": {"value": -50000.0, "confidence": 0.80, "source_span": "w"},
+        },
+        "average_confidence": 0.875,
+        "model": "stub", "tokens_in": 1, "tokens_out": 1, "latency_ms": 1,
+    }
+    validated = validate_and_score(env)
+    tl = validated["fields"]["total_liability"]
+    assert tl["confidence"] == pytest.approx(0.80 * 0.5, rel=1e-3)
+    assert tl["confidence"] != pytest.approx(0.80 * 0.25, rel=1e-3)
+    assert tl["original_confidence"] == 0.80
+    # Single-field rule wins; cross-field reason did not overwrite it.
+    assert tl["validation_failure"] == "is negative"
+
+
 def test_validator_passes_clean_envelope_unchanged(extraction_envelope_fixture):
     """No structural failure → confidences untouched, validation_failure=None on every field."""
     from app.compliance.services.notice_extraction_validator import validate_and_score

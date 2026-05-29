@@ -26,11 +26,30 @@ fires on every SQL statement, idempotent, and survives intra-request commits.
 The cost is one ALTER-style call per cursor.execute — measured at sub-ms per
 call against a local Postgres.
 
-Production note: `app_runtime` is a non-table-owner non-BYPASSRLS role. The
-listener calls `SET ROLE app_runtime` only when the underlying connection is
-authenticated as a higher-privilege user (postgres in dev, app_migrator in
-prod). That keeps RLS enforced even when the runtime DSN is not the literal
-app_runtime user.
+RLS STATUS — DEFENSE-IN-DEPTH, CURRENTLY INACTIVE AT RUNTIME
+------------------------------------------------------------
+This listener (`_set_tenant_before_each_statement`) ONLY calls `set_config(...)`
+to populate the `app.*` session variables. It does NOT issue `SET ROLE`. The
+production DATABASE_URL connects as the `postgres` role, which is a BYPASSRLS /
+table-owner role, so PostgreSQL skips every RLS policy regardless of the session
+variables we set. RLS (migrations 0015 + 0018) is therefore a defense-in-depth
+layer that is NOT enforced at runtime under the current DSN.
+
+The PRIMARY, currently-active tenant-isolation layer is the explicit per-endpoint
+`client_id` filtering in the routers/services (e.g. `get_active_membership` /
+`get_active_client_id` membership checks and explicit `WHERE client_id = ...`
+predicates). Do not rely on RLS to backstop a missing explicit check.
+
+To ACTIVATE RLS at runtime, ALL of the following are required:
+  (a) Connect as a non-BYPASSRLS role — set DATABASE_URL_RUNTIME to the
+      `app_runtime` user — OR add an explicit `SET ROLE app_runtime` in this
+      listener so each statement runs under a role RLS applies to.
+  (b) `GRANT app_runtime TO <connecting_role>` WITH the ability to `SET ROLE
+      app_runtime` on the database (the connecting role must be a member of
+      app_runtime).
+  (c) `GRANT` the necessary privileges to `app_runtime` on all tables and
+      sequences it must read/write (RLS only filters rows it is otherwise
+      allowed to touch).
 """
 
 import contextvars
@@ -63,8 +82,13 @@ _LISTENER_REGISTERED_MARKER = "_phase9_tenant_listener_registered"
 def register_tenant_listener(engine) -> None:
     """Register the per-statement tenant_context listener ONCE at startup.
 
-    Reads ContextVars and runs `set_config()` + `SET ROLE` on every cursor
-    execute. Idempotent: if already registered on this engine, no-op.
+    Reads ContextVars and runs `set_config()` on every cursor execute to
+    populate the `app.*` session variables. It does NOT issue `SET ROLE`, so
+    these variables only drive RLS when the connection runs under a
+    non-BYPASSRLS role; under the production `postgres` DSN they are inert and
+    explicit per-endpoint `client_id` checks are the active isolation layer
+    (see module docstring "RLS STATUS"). Idempotent: if already registered on
+    this engine, no-op.
     """
     if getattr(engine, _LISTENER_REGISTERED_MARKER, False):
         return

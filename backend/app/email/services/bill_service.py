@@ -115,8 +115,15 @@ def mark_paid(
     payment_reference: str,
     payment_method: str,
     user_id: int,
+    client_id: int,
 ) -> Bill:
-    bill = db.query(Bill).filter(Bill.id == bill_id).first()
+    # SEC1: explicit client_id scope in addition to RLS — defence-in-depth so
+    # mark_paid cannot mutate a bill belonging to another tenant.
+    bill = (
+        db.query(Bill)
+        .filter(Bill.id == bill_id, Bill.client_id == client_id)
+        .first()
+    )
     if bill is None:
         raise ValueError(f"Bill {bill_id} not found")
     if payment_method not in Bill.PAYMENT_METHODS:

@@ -1,14 +1,23 @@
 """Application configuration loaded from environment variables."""
 
+import ipaddress
 import os
+import urllib.parse
 from pathlib import Path
-from pydantic import field_validator
+
+import structlog
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = structlog.stdlib.get_logger()
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Recognized LLM providers. "ollama+gemini" runs Ollama then Gemini as fallback.
+KNOWN_LLM_PROVIDERS = {"local", "ollama", "gemini", "ollama+gemini", "anthropic", "openai"}
 
 
 class Settings(BaseSettings):
@@ -198,6 +207,71 @@ class Settings(BaseSettings):
                 f"SECRET_KEY has too few unique characters (needs 10+). {_generate_hint}"
             )
         return v
+
+    @field_validator("OLLAMA_BASE_URL")
+    @classmethod
+    def ollama_base_url_must_be_safe(cls, v: str) -> str:
+        # SEC4: OLLAMA_BASE_URL is fetched verbatim by OllamaProvider, so an
+        # attacker-controlled or misconfigured value (e.g. the cloud metadata
+        # endpoint 169.254.169.254) would let us SSRF. Restrict the scheme to
+        # http/https and the host to loopback / RFC1918 private ranges /
+        # host.docker.internal; reject anything else at startup.
+        if not v:
+            return v
+        parsed = urllib.parse.urlparse(v)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(
+                f"OLLAMA_BASE_URL scheme must be http or https (got '{parsed.scheme}')."
+            )
+        host = parsed.hostname
+        if not host:
+            raise ValueError(f"OLLAMA_BASE_URL has no host: '{v}'.")
+        allowed_names = {"localhost", "host.docker.internal"}
+        if host.lower() in allowed_names:
+            return v
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            raise ValueError(
+                f"OLLAMA_BASE_URL host '{host}' is not allowed. Use localhost, "
+                "host.docker.internal, or a loopback/private (RFC1918) address."
+            ) from None
+        if not (ip.is_loopback or ip.is_private):
+            raise ValueError(
+                f"OLLAMA_BASE_URL host '{host}' must be a loopback or private "
+                "(RFC1918) address, not a public/link-local address."
+            )
+        return v
+
+    @model_validator(mode="after")
+    def warn_on_llm_provider_misconfiguration(self) -> "Settings":
+        # D2: an unrecognized LLM_PROVIDER (or a recognized one missing its key)
+        # silently degrades to local-only, so configured keys are ignored. Warn
+        # loudly at config load instead of crashing the app.
+        provider = self.LLM_PROVIDER.lower()
+        if provider not in KNOWN_LLM_PROVIDERS:
+            logger.warning(
+                "llm_provider_unrecognized",
+                provider=self.LLM_PROVIDER,
+                known=sorted(KNOWN_LLM_PROVIDERS),
+                effect="falling back to local-only extraction",
+            )
+            return self
+        required_key = {
+            "gemini": "GEMINI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openai": "OPENAI_API_KEY",
+        }.get(provider)
+        # ollama+gemini needs Gemini only as the second-stage fallback; Ollama
+        # itself needs no key, so don't warn for the combined provider.
+        if required_key and not getattr(self, required_key):
+            logger.warning(
+                "llm_provider_missing_key",
+                provider=provider,
+                missing=required_key,
+                effect="falling back to local-only extraction",
+            )
+        return self
 
 
 settings = Settings()

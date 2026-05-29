@@ -73,9 +73,12 @@ def extract_amounts(text: str) -> list[dict]:
             value_str = match.group(1).replace(',', '')
             try:
                 value = float(value_str)
-                if 0.01 <= value <= 10_000_000 and value not in seen:
+                # D4: key dedup on (value, currency) so "$100" and "Rs.100"
+                # are both kept rather than collapsed by amount alone.
+                key = (value, currency)
+                if 0.01 <= value <= 10_000_000 and key not in seen:
                     amounts.append({"amount": value, "currency": currency})
-                    seen.add(value)
+                    seen.add(key)
             except ValueError:
                 continue
     return amounts[:10]

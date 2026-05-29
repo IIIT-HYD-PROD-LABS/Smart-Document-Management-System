@@ -103,9 +103,16 @@ def update_filter_rule(
     ),
 ):
     """Patch a filter rule. Unset fields stay unchanged."""
+    # SEC2: GmailFilterRule has no client_id; scope ownership via the parent
+    # credential's client_id (join) in addition to RLS so a rule belonging to
+    # another tenant cannot be mutated if the RLS context is misset.
     rule = (
         db.query(GmailFilterRule)
-        .filter(GmailFilterRule.id == rule_id)
+        .join(GmailCredential, GmailFilterRule.credential_id == GmailCredential.id)
+        .filter(
+            GmailFilterRule.id == rule_id,
+            GmailCredential.client_id == membership.client_id,
+        )
         .first()
     )
     if rule is None:
@@ -131,10 +138,18 @@ def delete_filter_rule(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
 ):
-    """Hard-delete a filter rule. RLS enforces credential ownership."""
+    """Hard-delete a filter rule.
+
+    SEC2: scope via the parent credential's client_id (join) in addition to
+    RLS — GmailFilterRule has no client_id of its own.
+    """
     rule = (
         db.query(GmailFilterRule)
-        .filter(GmailFilterRule.id == rule_id)
+        .join(GmailCredential, GmailFilterRule.credential_id == GmailCredential.id)
+        .filter(
+            GmailFilterRule.id == rule_id,
+            GmailCredential.client_id == membership.client_id,
+        )
         .first()
     )
     if rule is None:

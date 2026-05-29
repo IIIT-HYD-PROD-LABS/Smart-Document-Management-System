@@ -147,7 +147,24 @@ def run_scan(credential_id: int) -> None:
                             .execute()
                         )
                         message_ids = [m["id"] for m in full.get("messages", [])]
-                        new_history_id = None
+                        # G6: the stale startHistoryId is gone (history pruned).
+                        # Re-anchor to the mailbox's current historyId so the
+                        # next scan is incremental again instead of repeatedly
+                        # falling back to a full 100-message scan.
+                        try:
+                            profile = (
+                                service.users()
+                                .getProfile(userId="me")
+                                .execute()
+                            )
+                            new_history_id = profile.get("historyId")
+                        except HttpError as pe:
+                            logger.warning(
+                                "getProfile historyId re-anchor failed for %s: %s",
+                                credential_id,
+                                pe,
+                            )
+                            new_history_id = None
                     else:
                         raise
             else:
@@ -158,7 +175,25 @@ def run_scan(credential_id: int) -> None:
                     .execute()
                 )
                 message_ids = [m["id"] for m in full.get("messages", [])]
-                new_history_id = None
+                # G6: on the INITIAL full scan there is no startHistoryId to
+                # advance, so anchor to the mailbox's current historyId. Without
+                # this, last_history_id stays NULL and every subsequent run
+                # repeats the full 100-message scan instead of going
+                # incremental. Mirrors the 404 re-anchor branch above.
+                try:
+                    profile = (
+                        service.users()
+                        .getProfile(userId="me")
+                        .execute()
+                    )
+                    new_history_id = profile.get("historyId")
+                except HttpError as pe:
+                    logger.warning(
+                        "getProfile historyId anchor failed for %s: %s",
+                        credential_id,
+                        pe,
+                    )
+                    new_history_id = None
 
             for msg_id in message_ids:
                 full_msg = (
@@ -173,7 +208,7 @@ def run_scan(credential_id: int) -> None:
                 headers = payload.get("headers", [])
                 sender = _get_header(headers, "From")
                 subject = _get_header(headers, "Subject")
-                log, route = ingest_message(
+                created, log, route = ingest_message(
                     db,
                     credential=cred,
                     gmail_message_id=msg_id,
@@ -183,6 +218,14 @@ def run_scan(credential_id: int) -> None:
                     subject=subject,
                 )
                 msgs_processed += 1
+
+                # G2/G6 idempotency: a re-observed message (history overlap or
+                # 404 full-scan fallback) was already fully processed on first
+                # ingest. Skip the side-effecting downstream pipeline so a
+                # re-scan does not create a DUPLICATE bill / ComplianceNotice
+                # / attachment Document for the same source email.
+                if not created:
+                    continue
 
                 # Bill route — extract + upsert
                 if route == GmailMessageLog.ROUTE_BILL:

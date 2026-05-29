@@ -25,6 +25,7 @@ from app.compliance.schemas.review_queue import (
 )
 from app.compliance.services.permission_registry import CompliancePermission
 from app.compliance.models.notice import ComplianceNotice
+from app.compliance.models.review_queue import NoticeReviewQueue
 from app.compliance.services.review_queue_service import (
     assign_reviewer_label,
     enqueue_manual,
@@ -78,8 +79,6 @@ def get_review(
     ),
     db: Session = Depends(get_db),
 ):
-    from app.compliance.models.review_queue import NoticeReviewQueue
-
     # Defense-in-depth: explicit client_id filter on top of RLS.
     q = db.query(NoticeReviewQueue).filter(NoticeReviewQueue.id == review_id)
     if not is_cross_client_mode():
@@ -157,6 +156,18 @@ def assign_review(
     ),
     db: Session = Depends(get_db),
 ):
+    # Defense-in-depth: explicit client_id filter on top of RLS so a tenant A
+    # user cannot assign labels on tenant B's review row (the service does an
+    # unscoped db.get on review_id).
+    q = db.query(NoticeReviewQueue).filter(NoticeReviewQueue.id == review_id)
+    if not is_cross_client_mode():
+        q = q.filter(NoticeReviewQueue.client_id == membership.client_id)
+    if q.first() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Review queue row {review_id} not found",
+        )
+
     try:
         row = assign_reviewer_label(
             db,

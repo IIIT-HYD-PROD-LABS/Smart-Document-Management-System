@@ -149,6 +149,23 @@ def _mark_exchange_used(jti: str) -> bool:
         return True
 
 
+def _consume_mfa_challenge_jti(jti: str) -> bool:
+    """Atomically mark an MFA challenge JTI single-use. Returns False on replay.
+
+    Mirrors the OAuth exchange jti pattern: Redis SET NX when available, with an
+    in-process fallback for single-worker deployments when Redis is down.
+    """
+    ttl = max(60, settings.MFA_CHALLENGE_EXPIRE_MINUTES * 60 + 30)
+    try:
+        from redis import Redis as _Redis
+        _redis = _Redis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
+        was_new = _redis.set(f"mfa_challenge_used:{jti}", "1", nx=True, ex=ttl)
+        return bool(was_new)
+    except Exception:
+        logger.warning("mfa_challenge_replay_redis_unavailable", jti=jti)
+        return _mark_exchange_used(jti)
+
+
 def _create_token_pair(user: User, db: Session) -> TokenPairResponse:
     """Create an access + refresh token pair for a user and persist the refresh token."""
     access_token = create_access_token(data={"sub": str(user.id), "role": user.role})
@@ -436,7 +453,7 @@ def mfa_verify(request: Request, response: Response, payload: MfaVerifyRequest, 
     from app.services.audit_service import log_audit_event
 
     try:
-        user_id = mfa_service.decode_challenge_token(payload.mfa_token)
+        user_id, challenge_jti = mfa_service.decode_challenge_token_with_jti(payload.mfa_token)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Invalid or expired MFA session. Sign in again.")
@@ -478,6 +495,15 @@ def mfa_verify(request: Request, response: Response, payload: MfaVerifyRequest, 
                                 detail=f"Too many failed codes. Account locked for ~{max(1, retry // 60)} min.",
                                 headers={"Retry-After": str(retry)})
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication code")
+
+    # Single-use challenge: a valid second factor only mints tokens once. Burn
+    # the challenge jti here so a replay of the same mfa_token within its TTL is
+    # rejected (also stops a captured token from re-minting a session). Done
+    # before the backup-code commit so a replay cannot re-consume a backup code.
+    if not _consume_mfa_challenge_jti(challenge_jti):
+        logger.warning("mfa_challenge_replay", user_id=user.id)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Invalid or expired MFA session. Sign in again.")
 
     # Persist the consumed backup code + lockout reset in their OWN commit first.
     # _create_token_pair rolls back on IntegrityError/OperationalError; folding
@@ -540,6 +566,12 @@ def totp_confirm(request: Request, response: Response, payload: TotpConfirmReque
     current_user.mfa_backup_codes_enc = mfa_service.encrypt_backup_codes(codes)
     current_user.mfa_enabled = True
     current_user.mfa_enrolled_at = datetime.now(timezone.utc)
+    # Revoke outstanding refresh tokens so other sessions must re-auth through
+    # the new MFA gate; a token stolen pre-enrollment must not survive it.
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == current_user.id,
+        RefreshToken.is_revoked == False,  # noqa: E712
+    ).update({"is_revoked": True, "revoked_at": datetime.now(timezone.utc)}, synchronize_session=False)
     db.commit()
     log_audit_event(user_id=current_user.id, action="mfa_enabled", resource_type="user", resource_id=current_user.id)
     return BackupCodesResponse(backup_codes=codes)
@@ -568,6 +600,12 @@ def totp_disable(request: Request, response: Response, payload: MfaDisableReques
     current_user.totp_secret_enc = None
     current_user.mfa_backup_codes_enc = None
     current_user.mfa_enrolled_at = None
+    # Revoke outstanding refresh tokens so other sessions must re-auth after the
+    # MFA state change rather than riding tokens minted under the old posture.
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == current_user.id,
+        RefreshToken.is_revoked == False,  # noqa: E712
+    ).update({"is_revoked": True, "revoked_at": datetime.now(timezone.utc)}, synchronize_session=False)
     db.commit()
     log_audit_event(user_id=current_user.id, action="mfa_disabled", resource_type="user", resource_id=current_user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -871,6 +909,10 @@ async def google_callback(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="An account with this email already exists. Please sign in with your password.",
                 )
+            # A3: re-check active state before mutating/committing oauth_id so a
+            # deactivated account returns 403 without being silently linked.
+            if not user.is_active:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
             # Safe to link: account was created via OAuth or has no password
             if not user.oauth_id:
                 user.oauth_id = oauth_id
@@ -983,21 +1025,29 @@ async def microsoft_callback(
     if not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email not provided by Microsoft")
 
-    # Microsoft Graph does not have a "verified_email" flag like Google.
-    # Reject emails that look like non-Microsoft addresses used as UPN
-    # (e.g., a personal Microsoft account aliased to victim@company.com)
-    # unless the tenant is restricted to a specific organization.
     email = email.lower()
+
+    # Microsoft Graph /me does not assert email ownership the way Google's
+    # verified_email flag does, and a multi-tenant ("common"/"organizations"/
+    # "consumers") app trusts a UPN minted by ANY Azure AD tenant — including an
+    # attacker-controlled one whose UPN can be set to victim@company.com. We only
+    # trust the asserted email when the app is locked to a single organization
+    # (a specific tenant GUID/domain), where that IdP vouches for the address.
+    _tenant = (settings.MICROSOFT_TENANT_ID or "common").lower()
+    email_is_tenant_asserted = _tenant not in ("common", "organizations", "consumers")
 
     oauth_id = f"microsoft_{user_info['id']}"
     user = db.query(User).filter(User.oauth_id == oauth_id).first()
     if not user:
         user = db.query(User).filter(User.email == email).first()
         if user:
-            if user.auth_provider == "local" and user.hashed_password:
-                # Refuse to auto-link OAuth to a password-protected local account.
-                # The user must log in with their password first, then link OAuth
-                # from account settings to prove ownership.
+            # Refuse to auto-link/authenticate a pre-existing local account on an
+            # unverified UPN match (account takeover). Password-protected accounts
+            # are always refused; passwordless local accounts are refused too
+            # unless the tenant vouches for the email (single-org app).
+            if not email_is_tenant_asserted or (
+                user.auth_provider == "local" and user.hashed_password
+            ):
                 logger.warning(
                     "oauth_link_refused_local_account",
                     email=email, provider="microsoft",
@@ -1006,7 +1056,11 @@ async def microsoft_callback(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="An account with this email already exists. Please sign in with your password.",
                 )
-            # Safe to link: account was created via OAuth or has no password
+            # A3: re-check active state before mutating/committing oauth_id so a
+            # deactivated account returns 403 without being silently linked.
+            if not user.is_active:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
+            # Safe to link: tenant-asserted email, account is OAuth-origin or passwordless.
             if not user.oauth_id:
                 user.oauth_id = oauth_id
             try:

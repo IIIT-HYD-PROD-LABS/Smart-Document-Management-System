@@ -93,7 +93,9 @@ def test_attach_raises_when_document_missing():
 
 def test_detach_returns_false_when_not_attached():
     notice = MagicMock(id=10, client_id=5)
+    document = MagicMock(user_id=7)  # owned by the detaching user
     db = MagicMock()
+    db.get.return_value = document
     db.query.return_value.filter.return_value.first.return_value = None
 
     assert detach_document(db, notice=notice, document_id=42, user_id=7) is False
@@ -101,11 +103,29 @@ def test_detach_returns_false_when_not_attached():
 
 def test_detach_returns_true_when_removed():
     notice = MagicMock(id=10, client_id=5)
+    document = MagicMock(user_id=7)  # owned by the detaching user
     existing = MagicMock(id=99)
     db = MagicMock()
+    db.get.return_value = document
     db.query.return_value.filter.return_value.first.return_value = existing
 
     with patch("app.compliance.services.evidence_service.log_audit_event"):
         result = detach_document(db, notice=notice, document_id=42, user_id=7)
     assert result is True
     db.delete.assert_called_with(existing)
+
+
+def test_detach_raises_when_document_not_owned_and_not_shared():
+    """R6 — symmetric with attach: a non-owner without a DocumentPermission
+    row cannot detach another user's document from a notice."""
+    from app.compliance.services.evidence_service import DocumentAccessDenied
+
+    notice = MagicMock(id=10, client_id=5)
+    document = MagicMock(user_id=99)  # owned by someone else
+    db = MagicMock()
+    db.get.return_value = document
+    # DocumentPermission lookup returns None (not shared with user 7).
+    db.query.return_value.filter.return_value.first.return_value = None
+
+    with pytest.raises(DocumentAccessDenied):
+        detach_document(db, notice=notice, document_id=42, user_id=7)

@@ -19,6 +19,7 @@ import logging
 import os
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.email.classifier_rules import MIN_BODY_LENGTH_FOR_CLASSIFICATION
@@ -46,8 +47,13 @@ def ingest_message(
     body: str,
     sender: str,
     subject: str,
-) -> tuple[GmailMessageLog, str]:
-    """Classify and persist message log row. Returns (message_log, route_taken).
+) -> tuple[bool, GmailMessageLog, str]:
+    """Classify and persist message log row. Returns (created, message_log, route_taken).
+
+    ``created`` is False when this message was already ingested (G2 dedup hit
+    via history overlap or 404 full-scan fallback) so the caller can skip the
+    side-effecting downstream pipeline (notice/bill creation) and avoid
+    duplicating it on every re-scan.
 
     Body lives only in this Python frame for compliance/bill routes — D-34
     fetch-once-discard. The D-39 gmail_body carve-out (no-rule-match plus
@@ -64,6 +70,21 @@ def ingest_message(
     else:
         route = GmailMessageLog.ROUTE_IGNORE
 
+    # G2: a re-observed message (history overlap or 404 full-scan fallback)
+    # would violate UNIQUE(credential_id, gmail_message_id). Treat an existing
+    # row as already-ingested and skip — the D-39 body persist already ran on
+    # first ingest, so do not re-run it.
+    existing = (
+        db.query(GmailMessageLog)
+        .filter(
+            GmailMessageLog.credential_id == credential.id,
+            GmailMessageLog.gmail_message_id == gmail_message_id,
+        )
+        .first()
+    )
+    if existing is not None:
+        return False, existing, existing.route_taken
+
     body_sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
     log = GmailMessageLog(
         credential_id=credential.id,
@@ -73,9 +94,28 @@ def ingest_message(
         body_sha256=body_sha,
         route_taken=route,
     )
-    db.add(log)
-    db.commit()
-    db.refresh(log)
+    # G2: SAVEPOINT guards the race where a concurrent scan inserts the same
+    # message between the pre-query and this commit. Swallow IntegrityError and
+    # fall back to the now-present row so the outer scan transaction is not
+    # poisoned and the batch continues.
+    try:
+        with db.begin_nested():
+            db.add(log)
+        db.commit()
+        db.refresh(log)
+    except IntegrityError:
+        db.rollback()
+        existing = (
+            db.query(GmailMessageLog)
+            .filter(
+                GmailMessageLog.credential_id == credential.id,
+                GmailMessageLog.gmail_message_id == gmail_message_id,
+            )
+            .first()
+        )
+        if existing is not None:
+            return False, existing, existing.route_taken
+        raise
 
     # D-39: rule miss + non-trivial body -> persist as gmail_body Document
     # so v1.0 ML classifies + indexes it. Best-effort; never fails the
@@ -96,7 +136,7 @@ def ingest_message(
                 e,
             )
 
-    return log, route
+    return True, log, route
 
 
 def ingest_attachment(
@@ -385,6 +425,12 @@ def process_classified_email(
             },
         )
         db.commit()
+        db.refresh(notice)
+        # Phase 10/11 — Gmail-ingested notices now enter the same classify +
+        # risk-score + deadline-alert pipeline as manually created notices,
+        # instead of sitting in 'received' until a human opens them.
+        from app.compliance.services.notice_service import process_notice_intake
+        process_notice_intake(notice.id, notice.response_deadline)
         return
 
     if not is_compliance and confidence == 0.5:

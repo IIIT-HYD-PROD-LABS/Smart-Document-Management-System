@@ -40,12 +40,44 @@ from app.models.user import User
 from app.services.audit_service import log_audit_event_strict
 
 
+def process_notice_intake(notice_id: int, response_deadline=None) -> None:
+    """Kick off post-creation processing for a freshly created notice.
+
+    Dispatches the Phase 10 classify + risk-score pipeline and, when a
+    deadline is known, schedules the T-7/T-3/T-1/overdue alerts. Wired into
+    every notice-creation path (manual create + Gmail ingestion) so a notice
+    is risk-scored, review-queue-routed, and alert-scheduled at intake rather
+    than only when a human first moves it to under_review. Both steps are
+    best-effort: a broker or scheduler outage must never fail the create, and
+    the daily recompute_all_risk_scores cron is the recovery path for a missed
+    classification.
+    """
+    import logging
+
+    try:
+        from app.tasks.compliance_tasks import classify_and_score_notice
+        classify_and_score_notice.delay(notice_id)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "intake classify dispatch failed for notice %d (non-fatal)", notice_id
+        )
+    if response_deadline is not None:
+        try:
+            from app.compliance.services.scheduler import schedule_deadline_alerts
+            schedule_deadline_alerts(notice_id, response_deadline)
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "intake alert scheduling failed for notice %d (non-fatal)", notice_id
+            )
+
+
 def transition_notice_status(
     db: Session,
     notice_id: int,
     new_status: NoticeStatus,
     user: User,
     reason: Optional[str] = None,
+    client_id: Optional[int] = None,
 ) -> ComplianceNotice:
     """Atomic notice status transition. LIFE-04 / AUDIT-02.
 
@@ -64,13 +96,17 @@ def transition_notice_status(
     Raises InvalidTransitionError if (current -> new_status) is not
     allowed by the state machine. The session is rolled back on failure
     so callers can recover; bulk_update_status relies on this contract.
+
+    `client_id` (when supplied by the router) pins the FOR UPDATE load to
+    the caller's tenant. Mutations are single-client; relying on RLS alone
+    to scope the row meant an RLS regression could let a transition land on
+    another tenant's notice. Defaults to None so existing service-layer
+    callers/tests that run RLS-bypassed keep their behaviour.
     """
-    notice = (
-        db.query(ComplianceNotice)
-        .filter(ComplianceNotice.id == notice_id)
-        .with_for_update()
-        .one()
-    )
+    q = db.query(ComplianceNotice).filter(ComplianceNotice.id == notice_id)
+    if client_id is not None:
+        q = q.filter(ComplianceNotice.client_id == client_id)
+    notice = q.with_for_update().one()
     old_status_str = notice.status
     old_status = NoticeStatus(old_status_str)
     # Raises InvalidTransitionError if not allowed; caller catches in bulk path
@@ -131,14 +167,19 @@ def transition_notice_status(
         },
     )
 
-    # Phase 10 — auto-classify + risk score on Received -> Under Review.
-    # Lazy import to avoid pulling Celery into Phase 9 test bootstrap when
-    # the broker isn't available. Failure here is non-fatal — recovery
-    # path is the daily `recompute_all_risk_scores` cron wired into
-    # `celery_app.conf.beat_schedule` (see app/tasks/__init__.py). Pre-
-    # hardening, that cron was claimed but unwired; the comment is now
-    # accurate.
-    if old_status == NoticeStatus.RECEIVED and new_status == NoticeStatus.UNDER_REVIEW:
+    # Phase 10 — auto-classify + risk score. Notices are now classified at
+    # intake (process_notice_intake on create / Gmail ingest), so this
+    # transition-time dispatch is only a fallback: it fires when a notice
+    # reached under_review without an intake score yet (created before the
+    # intake wiring, or a broker outage at create time). The
+    # `risk_scored_at is None` guard prevents a redundant second
+    # classification on the common path. Failure here is non-fatal — the daily
+    # `recompute_all_risk_scores` cron (app/tasks/__init__.py) is the recovery.
+    if (
+        old_status == NoticeStatus.RECEIVED
+        and new_status == NoticeStatus.UNDER_REVIEW
+        and notice.risk_scored_at is None
+    ):
         try:
             from app.tasks.compliance_tasks import classify_and_score_notice
             classify_and_score_notice.delay(notice.id)
@@ -173,7 +214,10 @@ def transition_notice_status(
 
 
 def get_notice_chain(
-    db: Session, notice_id: int, max_depth: int = 10
+    db: Session,
+    notice_id: int,
+    max_depth: int = 10,
+    client_id: Optional[int] = None,
 ) -> list[dict]:
     """Recursive CTE returning ancestors + descendants of `notice_id`.
 
@@ -187,6 +231,12 @@ def get_notice_chain(
     worst case. max_depth defaults to 10 — well above the 5-link
     depth observed in real-world Indian compliance trees (SCN ->
     Assessment -> Demand -> Appeal -> Remand).
+
+    `client_id` (supplied by the router for the single-client path) pins
+    every CTE member to one tenant so the parent_notice_id graph cannot
+    be walked across tenants if RLS regresses. The `:cid IS NULL` guard
+    keeps the predicate inert for RLS-bypassed service/test callers that
+    pass client_id=None.
     """
     sql = text(
         """
@@ -196,24 +246,28 @@ def get_notice_chain(
                    0 AS depth
               FROM compliance_notices
              WHERE id = :nid
+               AND (:cid IS NULL OR client_id = :cid)
             UNION ALL
             SELECT n.id, n.parent_notice_id, n.notice_number, n.status,
                    n.authority, a.depth - 1
               FROM compliance_notices n
               JOIN ancestors a ON n.id = a.parent_notice_id
              WHERE a.depth > -:max_depth
+               AND (:cid IS NULL OR n.client_id = :cid)
         ),
         descendants AS (
             SELECT id, parent_notice_id, notice_number, status, authority,
                    0 AS depth
               FROM compliance_notices
              WHERE id = :nid
+               AND (:cid IS NULL OR client_id = :cid)
             UNION ALL
             SELECT n.id, n.parent_notice_id, n.notice_number, n.status,
                    n.authority, d.depth + 1
               FROM compliance_notices n
               JOIN descendants d ON n.parent_notice_id = d.id
              WHERE d.depth < :max_depth
+               AND (:cid IS NULL OR n.client_id = :cid)
         )
         SELECT id, parent_notice_id, notice_number, status, authority, depth
           FROM ancestors WHERE depth < 0
@@ -223,7 +277,9 @@ def get_notice_chain(
         ORDER BY depth;
         """
     )
-    result = db.execute(sql, {"nid": notice_id, "max_depth": max_depth})
+    result = db.execute(
+        sql, {"nid": notice_id, "max_depth": max_depth, "cid": client_id}
+    )
     return [dict(row._mapping) for row in result]
 
 
@@ -233,6 +289,7 @@ def bulk_update_status(
     new_status: NoticeStatus,
     user: User,
     reason: Optional[str] = None,
+    client_id: Optional[int] = None,
 ) -> dict:
     """Per-row bulk status update with partial-failure semantics.
 
@@ -255,16 +312,19 @@ def bulk_update_status(
         # no-op success. This prevents spurious failures when the UI sends a
         # bulk request after a single-row transition already moved the notice
         # to the desired state (stale selection / concurrent edit).
-        current_status = (
-            db.query(ComplianceNotice.status)
-            .filter(ComplianceNotice.id == nid)
-            .scalar()
+        status_q = db.query(ComplianceNotice.status).filter(
+            ComplianceNotice.id == nid
         )
+        if client_id is not None:
+            status_q = status_q.filter(ComplianceNotice.client_id == client_id)
+        current_status = status_q.scalar()
         if current_status is not None and current_status == new_status.value:
             results.append({"id": nid, "success": True, "error": None})
             continue
         try:
-            transition_notice_status(db, nid, new_status, user, reason)
+            transition_notice_status(
+                db, nid, new_status, user, reason, client_id=client_id
+            )
         except InvalidTransitionError as exc:
             db.rollback()
             results.append({"id": nid, "success": False, "error": str(exc)})

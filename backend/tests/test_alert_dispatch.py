@@ -123,6 +123,37 @@ def test_websocket_sender_marks_queued_when_no_subscribers(monkeypatch):
     assert result.provider_message_id == "redis_subs=0"
 
 
+def test_websocket_sender_carries_target_user_ids(monkeypatch):
+    """L2 — the envelope carries the resolved recipient id in target_user_ids
+    so a bridge fanning one publish to many sockets can restrict delivery to
+    the resolved recipient set."""
+    monkeypatch.setenv("REDIS_URL", "redis://test:6379/0")
+    sender = WebSocketSender()
+    fake_redis = MagicMock()
+    fake_redis.publish.return_value = 1
+    with patch("redis.from_url", return_value=fake_redis):
+        sender.send(recipient={"user_id": 7}, payload={"client_id": 42})
+    args, _ = fake_redis.publish.call_args
+    _, message = args
+    import json
+    envelope = json.loads(message)
+    assert envelope["target_user_ids"] == [7]
+
+
+def test_websocket_sender_fails_when_recipient_user_id_missing(monkeypatch):
+    """L2 — a None recipient_user_id is treated by the bridge as
+    fan-out-to-all-client-users, bypassing role targeting. The sender now
+    fails loudly instead of publishing an untargeted envelope."""
+    monkeypatch.setenv("REDIS_URL", "redis://test:6379/0")
+    sender = WebSocketSender()
+    fake_redis = MagicMock()
+    with patch("redis.from_url", return_value=fake_redis):
+        result = sender.send(recipient={"user_id": None}, payload={"client_id": 42})
+    assert result.delivery_status == "failed"
+    assert "missing_recipient_user_id" in result.error
+    fake_redis.publish.assert_not_called()
+
+
 def test_websocket_sender_returns_failed_when_client_id_missing(monkeypatch):
     """Hardening (#2) — payload without client_id must fail loudly rather
     than fall back to a 'default' channel."""

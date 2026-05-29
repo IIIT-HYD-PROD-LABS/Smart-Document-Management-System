@@ -91,6 +91,7 @@ def test_apply_branch_pulls_notice_number_from_envelope(extraction_envelope_fixt
             self.id = 100
             self.client_id = kw.get("client_id")
             self.extraction_status = None
+            self.response_deadline = None
 
     db = MagicMock()
     db.flush = MagicMock()
@@ -140,6 +141,7 @@ def test_extraction_failure_falls_back_to_gmail_prefix_notice_number(
             self.id = 100
             self.client_id = kw.get("client_id")
             self.extraction_status = None
+            self.response_deadline = None
 
     db = MagicMock()
     db.flush = MagicMock()

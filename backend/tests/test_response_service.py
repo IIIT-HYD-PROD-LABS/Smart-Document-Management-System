@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.compliance.services.response_service import (
+    SegregationOfDutiesError,
     apply_approval,
     submit_for_review,
     withdraw,
@@ -14,14 +15,28 @@ from app.compliance.services.response_state_machine import (
 )
 
 
-def _make_response(status: str = "draft"):
+def _make_response(status: str = "draft", created_by_user_id: int = 7):
     r = MagicMock()
     r.id = 1
     r.notice_id = 10
     r.client_id = 5
     r.status = status
     r.current_version_id = 100
+    # Draft author distinct from the approver actors used below (42) so the
+    # R1 segregation-of-duties guard does not trip on the happy path.
+    r.created_by_user_id = created_by_user_id
     return r
+
+
+def _approval_db(response):
+    """MagicMock DB wired for apply_approval's R3 re-select + R1 prior-approval
+    lookup. The FOR UPDATE re-select returns the same response object; the
+    prior-approval query returns None (actor has not acted before)."""
+    db = MagicMock()
+    filt = db.query.return_value.filter.return_value
+    filt.with_for_update.return_value.first.return_value = response
+    filt.first.return_value = None
+    return db
 
 
 def test_submit_for_review_from_draft_sets_reviewer_pending():
@@ -58,7 +73,7 @@ def test_withdraw_from_terminal_raises():
 
 def test_apply_approval_reviewer_advances_to_legal():
     r = _make_response("reviewer_pending")
-    db = MagicMock()
+    db = _approval_db(r)
     with patch("app.compliance.services.response_service.log_activity"), \
          patch("app.compliance.services.response_service.log_audit_event"):
         apply_approval(
@@ -70,7 +85,7 @@ def test_apply_approval_reviewer_advances_to_legal():
 
 def test_apply_approval_cfo_marks_approved():
     r = _make_response("cfo_pending")
-    db = MagicMock()
+    db = _approval_db(r)
     with patch("app.compliance.services.response_service.log_activity"), \
          patch("app.compliance.services.response_service.log_audit_event"):
         apply_approval(
@@ -84,7 +99,7 @@ def test_apply_approval_legal_reject_returns_to_reviewer():
     """Per RESEARCH-FINAL §2 — Legal rejection sends back ONE stage (to
     reviewer_pending), not all the way to draft."""
     r = _make_response("legal_pending")
-    db = MagicMock()
+    db = _approval_db(r)
     with patch("app.compliance.services.response_service.log_activity"), \
          patch("app.compliance.services.response_service.log_audit_event"):
         apply_approval(
@@ -97,7 +112,7 @@ def test_apply_approval_legal_reject_returns_to_reviewer():
 def test_apply_approval_stage_mismatch_raises():
     """Caller passes wrong stage for the response's current pending status."""
     r = _make_response("reviewer_pending")
-    db = MagicMock()
+    db = _approval_db(r)
     with pytest.raises(InvalidResponseTransitionError):
         apply_approval(
             db, response=r, stage=ApprovalStage.LEGAL,
@@ -107,7 +122,7 @@ def test_apply_approval_stage_mismatch_raises():
 
 def test_apply_approval_from_terminal_raises():
     r = _make_response("approved")
-    db = MagicMock()
+    db = _approval_db(r)
     with pytest.raises(InvalidResponseTransitionError):
         apply_approval(
             db, response=r, stage=ApprovalStage.CFO,
@@ -117,9 +132,37 @@ def test_apply_approval_from_terminal_raises():
 
 def test_apply_approval_invalid_decision_raises():
     r = _make_response("reviewer_pending")
-    db = MagicMock()
+    db = _approval_db(r)
     with pytest.raises(ValueError):
         apply_approval(
             db, response=r, stage=ApprovalStage.REVIEWER,
             decision="maybe", user_id=42,
+        )
+
+
+def test_apply_approval_author_cannot_approve_own_draft():
+    """R1.1 — segregation of duties: the drafter may not approve their own
+    response, even if their role holds the stage permission."""
+    r = _make_response("reviewer_pending", created_by_user_id=42)
+    db = _approval_db(r)
+    with pytest.raises(SegregationOfDutiesError):
+        apply_approval(
+            db, response=r, stage=ApprovalStage.REVIEWER,
+            decision="approved", user_id=42,
+        )
+
+
+def test_apply_approval_same_actor_cannot_approve_two_stages():
+    """R1.2 — an actor who already approved a prior stage of this version
+    cannot approve a later stage."""
+    r = _make_response("legal_pending", created_by_user_id=7)
+    db = _approval_db(r)
+    # A prior approval row by this actor (user 42) for the current version.
+    db.query.return_value.filter.return_value.first.return_value = MagicMock(
+        actor_user_id=42, version_id=r.current_version_id
+    )
+    with pytest.raises(SegregationOfDutiesError):
+        apply_approval(
+            db, response=r, stage=ApprovalStage.LEGAL,
+            decision="approved", user_id=42,
         )

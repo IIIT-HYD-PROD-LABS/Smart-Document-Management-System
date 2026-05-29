@@ -206,7 +206,10 @@ def test_critical_tier_triggers_escalation():
     notice.assigned_user_id = None
     session = _patched_session({1: notice})
 
-    with patch("app.tasks.compliance_tasks.date") as mock_date, \
+    with patch(
+             "app.tasks.compliance_tasks._today_ist",
+             return_value=date(2026, 4, 28),
+         ), \
          patch("app.database.SessionLocal", return_value=session), \
          patch(
              "app.ml.compliance.escalation.should_escalate", return_value=True
@@ -214,8 +217,6 @@ def test_critical_tier_triggers_escalation():
          patch(
              "app.ml.compliance.escalation.escalate", return_value=42
          ) as mock_escalate:
-        mock_date.today.return_value = date(2026, 4, 28)
-        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
         result = classify_and_score_notice.run(1)
 
     assert result["risk_tier"] == "critical"

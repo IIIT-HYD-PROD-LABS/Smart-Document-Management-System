@@ -37,10 +37,15 @@ def _deskew(image: np.ndarray) -> np.ndarray:
     if len(coords) < 10:
         return image
     angle = cv2.minAreaRect(coords)[-1]
-    if angle < -45:
-        angle = -(90 + angle)
-    else:
-        angle = -angle
+    # D5: minAreaRect's angle range differs across OpenCV versions
+    # (pre-4.5 returns [-90, 0); 4.5+ returns (0, 90]). Fold the raw angle
+    # into [-45, 45] so the correction direction is version-independent, then
+    # clamp so a degenerate rect can never trigger a large (wrong-way) rotation.
+    angle = angle % 90.0
+    if angle > 45.0:
+        angle -= 90.0
+    angle = -angle
+    angle = max(-45.0, min(45.0, angle))
     if abs(angle) > 0.5:
         (h, w) = image.shape[:2]
         center = (w // 2, h // 2)

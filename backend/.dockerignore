@@ -18,3 +18,9 @@ data/
 *.h5
 *.pt
 *.model
+
+# Real-document test PDFs (PII risk in image layers)
+*.pdf
+cand1.pdf
+cand2.pdf
+test_real_notice.pdf

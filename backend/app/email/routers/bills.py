@@ -87,8 +87,16 @@ def get_bill(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
 ):
-    """Return a single bill by id. RLS scopes to the active client."""
-    bill = db.query(Bill).filter(Bill.id == bill_id).first()
+    """Return a single bill by id.
+
+    SEC1: explicit client_id check in addition to RLS — defence-in-depth so a
+    bill belonging to another tenant cannot leak if RLS context is misset.
+    """
+    bill = (
+        db.query(Bill)
+        .filter(Bill.id == bill_id, Bill.client_id == membership.client_id)
+        .first()
+    )
     if bill is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -119,6 +127,7 @@ def mark_bill_paid(
             payment_reference=body.payment_reference,
             payment_method=body.payment_method,
             user_id=membership.user_id,
+            client_id=membership.client_id,
         )
     except ValueError as e:
         raise HTTPException(
@@ -167,6 +176,7 @@ def bulk_mark_bills_paid(
                 payment_reference=payment_reference,
                 payment_method=payment_method,
                 user_id=membership.user_id,
+                client_id=membership.client_id,
             )
             results.append({"id": bid, "status": "ok"})
             ok += 1

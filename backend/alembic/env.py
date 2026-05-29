@@ -8,15 +8,16 @@ from app.config import settings
 from app.database import Base
 
 # CRITICAL: Import ALL models so they register with Base.metadata.
-# If a model is not imported here, Alembic autogenerate will generate
-# a DROP TABLE migration for that model's table.
-from app.models.user import User
-from app.models.document import Document
-from app.models.refresh_token import RefreshToken
-from app.models.document_permission import DocumentPermission
-from app.models.document_version import DocumentVersion
-from app.models.audit_log import AuditLog
-_models = (User, Document, RefreshToken, DocumentPermission, DocumentVersion, AuditLog)
+# If a model is not imported here, Alembic autogenerate would treat its
+# table as removed and emit a DROP TABLE. Previously only the six v1.0
+# models were imported, so every compliance / email / ai_credentials
+# table looked orphaned to autogenerate. Import the three model-package
+# aggregators (each eagerly imports its full module set) plus the one
+# stand-alone module no aggregator references (early_access).
+import app.models  # noqa: F401  v1.0 + re-exported compliance/email subset
+import app.compliance.models  # noqa: F401  all Phase 9/16 compliance + ai_credentials
+import app.email.models  # noqa: F401  Phase 15 gmail
+import app.models.early_access  # noqa: F401  not pulled in by any aggregator
 
 config = context.config
 

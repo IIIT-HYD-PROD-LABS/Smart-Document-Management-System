@@ -6,7 +6,7 @@ import sys
 
 import structlog
 
-from app.compliance.utils.log_redaction import redact_pii
+from app.compliance.utils.log_redaction import _redact_value, redact_pii
 from app.config import settings
 
 # Keys whose values must never appear in logs
@@ -20,18 +20,26 @@ _SENSITIVE_KEYS = frozenset({
 _EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
 
 
+def _mask_emails(value):
+    """Mask email addresses in scalar string values; pass through everything else."""
+    if isinstance(value, str) and _EMAIL_RE.search(value):
+        return _EMAIL_RE.sub("***@***.***", value)
+    return value
+
+
 def sanitize_sensitive_data(_, __, event_dict: dict) -> dict:
     """Scrub PII and secrets from structured log fields (defense-in-depth).
 
-    - Redacts values of known-sensitive keys entirely.
+    - Redacts values of known-sensitive keys entirely, at any nesting depth.
     - Masks email addresses found in string values of any key.
     """
-    for key in list(event_dict.keys()):
-        if key.lower() in _SENSITIVE_KEYS:
-            event_dict[key] = "***REDACTED***"
-        elif isinstance(event_dict[key], str) and _EMAIL_RE.search(event_dict[key]):
-            event_dict[key] = _EMAIL_RE.sub("***@***.***", event_dict[key])
-    return event_dict
+    return _redact_value(
+        event_dict,
+        sensitive_keys=_SENSITIVE_KEYS,
+        marker="***REDACTED***",
+        case_insensitive=True,
+        leaf_transform=_mask_emails,
+    )
 
 
 def drop_color_message_key(_, __, event_dict: dict) -> dict:

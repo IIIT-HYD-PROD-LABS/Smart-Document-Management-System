@@ -5,9 +5,9 @@ LIFE-07 (filters), LIFE-08 (bulk update partial-failure semantics).
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from app.compliance.utils.indian_validators import validate_notice_number
 
@@ -50,7 +50,9 @@ class NoticeCreate(BaseModel):
     total_liability: Optional[Decimal] = None
     legal_sections: list[str] = Field(default_factory=list)
     assigned_user_id: Optional[int] = None
-    tags: list[str] = Field(default_factory=list)
+    tags: list[Annotated[str, StringConstraints(max_length=100)]] = Field(
+        default_factory=list, max_length=50
+    )
 
     @field_validator("notice_number")
     @classmethod
@@ -156,6 +158,17 @@ class NoticeOut(BaseModel):
     source: Optional[str] = None
     classified_at: Optional[datetime] = None
     risk_scored_at: Optional[datetime] = None
+
+    # Phase 17 AI extraction provenance. These columns existed on the model
+    # but NoticeOut dropped them, so the detail page's
+    # ExtractionProvenanceDisclosure (gated on Boolean(extraction_status))
+    # never rendered and AI-extracted notices looked manually entered. The
+    # large extracted_fields JSONB stays out of this list+detail schema; the
+    # disclosure fetches it via GET /{notice_id}/extraction.
+    extraction_status: Optional[str] = None
+    extraction_confidence: Optional[Decimal] = None
+    extracted_by_provider: Optional[str] = None
+    extracted_at: Optional[datetime] = None
 
 
 class NoticeFilters(BaseModel):

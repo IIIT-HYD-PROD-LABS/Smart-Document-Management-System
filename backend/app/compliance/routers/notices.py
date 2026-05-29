@@ -65,6 +65,7 @@ from app.compliance.services.notice_service import (
     bulk_update_status,
     filter_notices,
     get_notice_chain,
+    process_notice_intake,
     transition_notice_status,
 )
 from app.compliance.services.notice_state_machine import (
@@ -176,6 +177,14 @@ def list_notices(
             detail="response_deadline_before/after must be ISO date YYYY-MM-DD",
         )
 
+    # A NUL byte reaches psycopg2 and raises ValueError -> 500. Reject it at
+    # the boundary so a malformed filter cannot DoS the endpoint.
+    if gstin_or_pan and "\x00" in gstin_or_pan:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid gstin_or_pan",
+        )
+
     items = filter_notices(
         db=db,
         client_id=membership.client_id,
@@ -277,6 +286,9 @@ def create_notice(
             },
         },
     )
+    # Phase 10/11 — classify + risk-score and schedule deadline alerts at
+    # intake so a notice does not wait for a manual move to under_review.
+    process_notice_intake(n.id, n.response_deadline)
     return n
 
 
@@ -313,9 +325,18 @@ def update_notice(
     ),
 ):
     """Edit notice metadata, LIFE-03. Status changes go through /status."""
-    q = db.query(ComplianceNotice).filter(ComplianceNotice.id == notice_id)
-    if not is_cross_client_mode():
-        q = q.filter(ComplianceNotice.client_id == membership.client_id)
+    # Mutations are single-client. In cross-client mode get_active_membership
+    # supplies an arbitrary eligible membership, so an edit would be scoped to
+    # an unrelated client_id; cross-client mode is READ-only, refuse the write.
+    if is_cross_client_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Metadata edits require a specific X-Client-Id",
+        )
+    q = db.query(ComplianceNotice).filter(
+        ComplianceNotice.id == notice_id,
+        ComplianceNotice.client_id == membership.client_id,
+    )
     n = q.first()
     if not n:
         raise HTTPException(
@@ -499,10 +520,13 @@ def assign_notice(
         )
     db.refresh(n)
 
+    # log_activity's param is `type` and the only assignment value accepted by
+    # VALID_ACTIVITY_TYPES + the DB CHECK is "assigned". The audit row below
+    # keeps the richer "notice_assigned" action string.
     log_activity(
         db=db,
         notice_id=n.id,
-        activity_type="notice_assigned",
+        type="assigned",
         user_id=current_user.id,
         details={
             "before_assigned_user_id": before,
@@ -547,6 +571,14 @@ def transition_status(
     (NOTICE_SUBMIT vs NOTICE_APPROVE vs NOTICE_DRAFT_RESPONSE). Returns 422
     with valid_next_statuses when the requested transition is invalid.
     """
+    # Mutations are single-client. In cross-client mode get_active_membership
+    # returns an arbitrary eligible membership, so a transition would be
+    # scoped to an unrelated client_id; refuse rather than guess.
+    if is_cross_client_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Status transitions require a specific X-Client-Id (not '*')",
+        )
     target = NoticeStatus(payload.new_status)
     try:
         role = ComplianceRole(membership.compliance_role)
@@ -572,16 +604,21 @@ def transition_status(
             new_status=target,
             user=current_user,
             reason=payload.reason,
+            client_id=membership.client_id,
         )
     except InvalidTransitionError:
         # Reload current status for the helpful error payload — the service
         # rolled back so the row is unchanged. Use a fresh query so the
-        # session is clean.
-        current = (
-            db.query(ComplianceNotice.status)
-            .filter(ComplianceNotice.id == notice_id)
-            .scalar()
+        # session is clean. Scope to the caller's client_id so a foreign
+        # notice's status cannot be probed as an oracle via this path.
+        status_q = db.query(ComplianceNotice.status).filter(
+            ComplianceNotice.id == notice_id
         )
+        if not is_cross_client_mode():
+            status_q = status_q.filter(
+                ComplianceNotice.client_id == membership.client_id
+            )
+        current = status_q.scalar()
         valid: List[str] = []
         if current:
             valid = sorted(
@@ -614,18 +651,44 @@ def bulk_update(
     payload: BulkUpdateRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    _gate: ClientMembership = Depends(
+    membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_BULK_UPDATE)
     ),
 ):
-    """Bulk status update with partial-failure semantics — LIFE-08."""
+    """Bulk status update with partial-failure semantics — LIFE-08.
+
+    NOTICE_BULK_UPDATE alone is NOT sufficient: it authorizes the bulk
+    *mechanism*, but the actual transition still requires the same
+    target-status permission that the single-notice PATCH enforces via
+    _permissions_for_target_status. Without this re-check a role holding
+    NOTICE_BULK_UPDATE but lacking e.g. NOTICE_APPROVE could mass-resolve
+    notices it could not resolve one-by-one.
+    """
     target = NoticeStatus(payload.new_status)
+    try:
+        role = ComplianceRole(membership.compliance_role)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Invalid compliance role: {membership.compliance_role}",
+        )
+    accepted_perms = _permissions_for_target_status(target)
+    if not any(has_permission(role, p) for p in accepted_perms):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Role '{role.value}' lacks any of permissions "
+                f"{[p.value for p in accepted_perms]} "
+                f"for bulk transition to '{target.value}'"
+            ),
+        )
     return bulk_update_status(
         db=db,
         notice_ids=payload.notice_ids,
         new_status=target,
         user=current_user,
         reason=payload.reason,
+        client_id=membership.client_id,
     )
 
 
@@ -638,8 +701,25 @@ def notice_chain(
     ),
     db: Session = Depends(get_db),
 ):
-    """Recursive CTE notice chain (ancestors + descendants) — LIFE-05."""
-    return get_notice_chain(db, notice_id=notice_id, max_depth=max_depth)
+    """Recursive CTE notice chain (ancestors + descendants) — LIFE-05.
+
+    The CTE is scoped to the caller's client_id so a chain cannot walk
+    across tenants via parent_notice_id. Cross-client mode is refused
+    explicitly: get_active_membership would supply an arbitrary eligible
+    client_id, which would silently filter the chain to one unrelated
+    tenant rather than honestly widening it.
+    """
+    if is_cross_client_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Notice chain requires a specific X-Client-Id (not '*')",
+        )
+    return get_notice_chain(
+        db,
+        notice_id=notice_id,
+        max_depth=max_depth,
+        client_id=membership.client_id,
+    )
 
 
 @router.post("/{notice_id}/upload", response_model=NoticeOut)
@@ -811,6 +891,17 @@ def add_note(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Role lacks permission to add notes",
         )
+    # Defense-in-depth: explicit client_id filter on top of RLS so an
+    # accidental policy regression cannot let one tenant write notes onto
+    # another tenant's notice. log_activity takes no client_id of its own.
+    q = db.query(ComplianceNotice).filter(ComplianceNotice.id == notice_id)
+    if not is_cross_client_mode():
+        q = q.filter(ComplianceNotice.client_id == membership.client_id)
+    if q.first() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notice not found",
+        )
     row = log_activity(
         db=db,
         notice_id=notice_id,
@@ -928,6 +1019,38 @@ def extract_preview(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="AI provider returned an unparseable response",
         )
+    # AIAuthError / AIRateLimitError are subclasses of AIProviderError, so
+    # they MUST be caught first. Never surface the provider response body
+    # (the SDK echoes it into the exception string) to the API caller.
+    except ai_service.AIAuthError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "AI provider rejected the configured credential. "
+                "Check the key in Settings → AI."
+            ),
+        )
+    except ai_service.AIRateLimitError:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="AI provider rate-limited the request. Try again shortly.",
+        )
+    except ai_service.AIProviderError:
+        import logging
+        logging.getLogger(__name__).warning(
+            "extract_preview_ai_provider_error", exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="AI provider returned an error; details have been logged.",
+        )
+    except Exception:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).exception("extract_preview_unexpected_error")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Extraction failed unexpectedly.",
+        )
 
     decision = route_or_apply(envelope)
     return {"envelope": envelope, "decision": decision}
@@ -1028,6 +1151,25 @@ def accept_extraction(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notice not found",
         )
+
+    # Upload-first flow (D-19): extract-preview is stateless, so a notice
+    # created from that flow is still 'pending' with no envelope. When the
+    # client replays the reviewed envelope, persist it now (status ->
+    # 'completed') so acceptance has provenance to record and the detail
+    # page's provenance disclosure renders. action='apply' skips the
+    # review-queue enqueue: the user accepting here IS the human reviewer.
+    if (
+        notice.extraction_status not in ("completed", "accepted")
+        and payload.envelope is not None
+    ):
+        from app.compliance.services.extraction_routing_service import (
+            apply_extraction_to_notice,
+        )
+
+        apply_extraction_to_notice(
+            db, notice, payload.envelope.model_dump(), {"action": "apply"}
+        )
+
     if notice.extraction_status not in ("completed", "accepted"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

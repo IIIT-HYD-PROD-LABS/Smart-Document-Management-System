@@ -65,9 +65,14 @@ def update_credential(
     ),
 ):
     """Update credential cadence_minutes (5..1440 enforced by Pydantic)."""
+    # SEC2: explicit client_id ownership check in addition to RLS — prevents a
+    # cross-tenant credential mutation if the RLS context is misset.
     cred = (
         db.query(GmailCredential)
-        .filter(GmailCredential.id == credential_id)
+        .filter(
+            GmailCredential.id == credential_id,
+            GmailCredential.client_id == membership.client_id,
+        )
         .first()
     )
     if cred is None:
@@ -114,9 +119,13 @@ def delete_credential(
     would orphan source_email_id FKs from already-ingested
     Documents/ComplianceNotices.
     """
+    # SEC2: explicit client_id ownership check in addition to RLS.
     cred = (
         db.query(GmailCredential)
-        .filter(GmailCredential.id == credential_id)
+        .filter(
+            GmailCredential.id == credential_id,
+            GmailCredential.client_id == membership.client_id,
+        )
         .first()
     )
     if cred is None:

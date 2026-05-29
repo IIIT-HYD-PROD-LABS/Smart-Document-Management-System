@@ -17,9 +17,21 @@ from app.models.user import User
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 security_scheme = HTTPBearer(auto_error=False)
 
+# bcrypt only hashes the first 72 bytes and silently ignores the rest, so two
+# passwords sharing a 72-byte prefix would verify interchangeably. Reject longer
+# inputs at the boundary instead of letting the tail be silently dropped.
+BCRYPT_MAX_BYTES = 72
+
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
+    """Hash a password using bcrypt.
+
+    Raises ValueError if the password exceeds bcrypt's 72-byte limit, so the
+    silent-truncation footgun cannot reach the hash. Callers validate length at
+    the API boundary first; this is the last-line guard for internal callers.
+    """
+    if len(password.encode("utf-8")) > BCRYPT_MAX_BYTES:
+        raise ValueError(f"Password must not exceed {BCRYPT_MAX_BYTES} bytes")
     return pwd_context.hash(password)
 
 

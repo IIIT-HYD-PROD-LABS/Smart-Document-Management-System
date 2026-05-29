@@ -111,7 +111,7 @@ def test_escalate_assigns_compliance_head_and_writes_activity_and_audit():
             "app.compliance.services.activity_service.log_activity"
         ) as mock_log_activity,
         patch(
-            "app.services.audit_service.log_audit_event"
+            "app.services.audit_service.log_audit_event_strict"
         ) as mock_log_audit,
     ):
         result = escalate(
@@ -152,7 +152,7 @@ def test_escalate_logs_warning_when_no_compliance_head():
             "app.compliance.services.activity_service.log_activity"
         ) as mock_log_activity,
         patch(
-            "app.services.audit_service.log_audit_event"
+            "app.services.audit_service.log_audit_event_strict"
         ) as mock_log_audit,
     ):
         result = escalate(

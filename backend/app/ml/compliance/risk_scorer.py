@@ -134,9 +134,14 @@ def score(
         float(tax_demand or 0),
     )
     if largest_amount > 0:
-        penalty_points = min(
-            math.log10(largest_amount) * PENALTY_LOG_FACTOR,
-            30.0,
+        # Clamp to >= 0: a sub-1 amount yields a negative log10 and must never
+        # lower risk below the no-penalty baseline.
+        penalty_points = max(
+            0.0,
+            min(
+                math.log10(largest_amount) * PENALTY_LOG_FACTOR,
+                30.0,
+            ),
         )
         amount_label = "Penalty" if (penalty_amount or 0) >= (tax_demand or 0) else "Tax demand"
         amount_str = _format_inr(largest_amount)

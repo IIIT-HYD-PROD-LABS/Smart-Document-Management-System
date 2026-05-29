@@ -147,6 +147,12 @@ def compliance_score(
                 else:
                     overdue += 1
             else:
+                # L6 — limitation: when response_deadline or
+                # status_changed_at is missing we can't prove lateness, so
+                # the notice is counted on-time (optimistic). status_changed_at
+                # is only populated by the transition path, so notices closed
+                # before that column existed inflate the score slightly. A
+                # severity-weighted v2.1 rework is the proper fix.
                 on_time += 1
         elif n.status == "dismissed":
             on_time += 1

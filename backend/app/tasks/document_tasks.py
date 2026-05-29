@@ -22,7 +22,9 @@ def _safe_set_status(db, doc, status: DocumentStatus, message: str, document_id:
         return
     try:
         doc.status = status
-        doc.extracted_text = message
+        # D6: write the status/error message to the dedicated error column so
+        # it does not clobber the document's extracted_text (OCR content).
+        doc.ai_error = message
         db.commit()
     except Exception as commit_err:
         logger.error("status_update_failed", document_id=document_id, error=str(commit_err))
@@ -68,6 +70,9 @@ def _run_phase17_extraction(
     is left behind so the supplementary upload is visible on the timeline.
     """
     try:
+        from app.compliance.middleware.tenant_context import (
+            set_tenant_context_for_celery,
+        )
         from app.compliance.models.notice import ComplianceNotice
         from app.compliance.services.activity_service import log_activity
         from app.compliance.services.extraction_routing_service import (
@@ -87,9 +92,18 @@ def _run_phase17_extraction(
         )
         return
 
+    # Celery workers do NOT inherit the tenant middleware (Pitfall 6). Set
+    # cross-client mode FIRST so the notice lookup works under RLS before we
+    # know its client_id, then narrow to the notice's client for the rest.
+    set_tenant_context_for_celery(client_id=None, user_id=user_id, cross_mode=True)
+
     notice = db.get(ComplianceNotice, notice_id)
     if notice is None:
         return
+
+    set_tenant_context_for_celery(
+        client_id=notice.client_id, user_id=user_id, cross_mode=False
+    )
 
     if should_skip_extraction(notice):
         try:
@@ -130,6 +144,28 @@ def _run_phase17_extraction(
         )
         notice.extraction_status = "failed"
         try:
+            db.commit()
+        except Exception:
+            db.rollback()
+        return
+
+    # Close the TOCTOU window: the freeze check above ran before the
+    # multi-second AI extraction. In the upload-first flow the user accepts
+    # the extraction concurrently (notice_id/upload enqueues this task, then
+    # accept-extraction flips status to 'accepted'). Re-read and re-check here
+    # so a concurrent acceptance during extraction is honored — discard this
+    # supplementary re-extraction rather than clobbering 'accepted' back to
+    # 'completed'.
+    db.refresh(notice)
+    if should_skip_extraction(notice):
+        try:
+            log_activity(
+                db,
+                notice_id=notice.id,
+                user_id=user_id,
+                type="file_attached",
+                details={"document_id": document_id, "supplementary_extraction_skipped": True},
+            )
             db.commit()
         except Exception:
             db.rollback()

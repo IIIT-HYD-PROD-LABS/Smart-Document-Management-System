@@ -30,8 +30,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    migrator_pwd = os.environ.get("APP_MIGRATOR_PASSWORD", "smartdocs_migrator_dev")
-    runtime_pwd = os.environ.get("APP_RUNTIME_PASSWORD", "smartdocs_runtime_dev")
+    # Escape single quotes so a quote in the password can't break out of the SQL literal
+    migrator_pwd = os.environ.get("APP_MIGRATOR_PASSWORD", "smartdocs_migrator_dev").replace("'", "''")
+    runtime_pwd = os.environ.get("APP_RUNTIME_PASSWORD", "smartdocs_runtime_dev").replace("'", "''")
 
     # Idempotent role creation — safe to re-run
     op.execute(f"""

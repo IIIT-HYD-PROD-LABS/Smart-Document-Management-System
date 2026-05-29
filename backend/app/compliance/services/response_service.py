@@ -49,6 +49,12 @@ from app.compliance.services.response_state_machine import (
 from app.services.audit_service import log_audit_event_strict as log_audit_event
 
 
+class SegregationOfDutiesError(PermissionError):
+    """R1 — the actor is not permitted to approve this response because they
+    authored the draft or already approved a prior stage of this version.
+    Routers map this to HTTP 403."""
+
+
 def _next_version_no(db: Session, response_id: int) -> int:
     """Return the next sequential version_no for a response."""
     max_no = db.execute(
@@ -188,6 +194,17 @@ def rollback_to_version(
 
     Per RESEARCH-FINAL §3 — never mutate an existing version row.
     """
+    # Re-read the row under a write lock so the can_edit_draft check below
+    # cannot race with submit_for_review changing the status concurrently.
+    locked = (
+        db.query(NoticeResponse)
+        .filter(NoticeResponse.id == response.id)
+        .with_for_update()
+        .first()
+    )
+    if locked is not None:
+        response = locked
+
     current_status = ResponseStatus(response.status)
     if not can_edit_draft(current_status):
         raise InvalidResponseTransitionError(
@@ -329,9 +346,41 @@ def apply_approval(
     Enforces that the stage matches the response's current pending status —
     e.g., calling apply_approval(stage=LEGAL) when status='reviewer_pending'
     raises InvalidResponseTransitionError.
+
+    R1 — segregation of duties: the draft author may not approve their own
+    response, and no single actor may act on more than one stage of the
+    same response version. Violations raise SegregationOfDutiesError (403).
+
+    R3 — the response row is re-selected FOR UPDATE and its status
+    re-validated against the value seen by the caller, so two concurrent
+    approvers cannot both advance the same pending stage (compare-and-set).
     """
     if decision not in ("approved", "rejected"):
         raise ValueError(f"decision must be 'approved' or 'rejected', got {decision!r}")
+
+    # R3 — re-read the row under a write lock so the status check below acts
+    # as a compare-and-set: a racing approval on the same stage must wait,
+    # then fail the stage/status validation instead of double-advancing.
+    locked = (
+        db.query(NoticeResponse)
+        .filter(NoticeResponse.id == response.id)
+        .with_for_update()
+        .first()
+    )
+    if locked is not None:
+        response = locked
+
+    # R1.1 — the drafter cannot approve/reject their own response.
+    # Fail-closed on unknown author: block when the author is unknown OR is
+    # the same actor, so a NULL created_by_user_id cannot bypass the guard.
+    if user_id is not None and (
+        response.created_by_user_id is None
+        or user_id == response.created_by_user_id
+    ):
+        raise SegregationOfDutiesError(
+            "The author of a response draft cannot approve or reject it "
+            "(segregation of duties)."
+        )
 
     current = ResponseStatus(response.status)
     expected_stage = PENDING_STAGE_FOR_STATUS.get(current)
@@ -344,6 +393,26 @@ def apply_approval(
             f"Stage mismatch — response awaits {expected_stage.value!r}, "
             f"caller passed {stage.value!r}"
         )
+
+    # R1.2 — this actor must not already have acted on a prior stage of the
+    # current version. Approvals are append-only per version, so one prior
+    # row by this actor is enough to disqualify them from a second stage.
+    if user_id is not None:
+        prior = (
+            db.query(NoticeResponseApproval)
+            .filter(
+                NoticeResponseApproval.response_id == response.id,
+                NoticeResponseApproval.version_id == response.current_version_id,
+                NoticeResponseApproval.actor_user_id == user_id,
+            )
+            .first()
+        )
+        if prior is not None:
+            raise SegregationOfDutiesError(
+                "This user already approved a prior stage of this response "
+                "version; a different approver is required for each stage "
+                "(segregation of duties)."
+            )
 
     if decision == "approved":
         next_status = status_after_approve(current, stage)

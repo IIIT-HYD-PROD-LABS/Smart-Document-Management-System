@@ -289,7 +289,7 @@ export function ExtractionPreviewForm({
                 }
                 if (items.length) {
                     try {
-                        await complianceApi.acceptExtraction(notice.id, items);
+                        await complianceApi.acceptExtraction(notice.id, items, envelope.envelope);
                     } catch (acceptErr) {
                         // Non-fatal: notice exists; user can revisit and accept later.
                         toast(
@@ -426,7 +426,7 @@ export function ExtractionPreviewForm({
                     <div>
                         Connect an AI provider in{" "}
                         <Link
-                            href="/dashboard/settings/ai-credentials"
+                            href="/dashboard/settings/ai"
                             className="underline hover:no-underline"
                         >
                             settings

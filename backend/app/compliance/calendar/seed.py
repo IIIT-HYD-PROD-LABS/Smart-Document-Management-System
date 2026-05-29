@@ -1,6 +1,9 @@
 """Seed the compliance_regulatory_calendar with FY 2025-26 statutory deadlines.
 
-Idempotent — uses ON CONFLICT DO NOTHING via SQLAlchemy `merge`.
+Idempotent via an explicit existence check on the full natural key
+(year, date, label, category, authority) before each INSERT. A UNIQUE
+constraint on that key is added by a separate migration; until it lands
+this pre-check is what makes re-seeding a no-op.
 Run via:
     docker exec smartdocs-backend python -m app.compliance.calendar.seed --year 2026
 """
@@ -29,13 +32,22 @@ def seed_year(db: Session, year: int) -> dict[str, int]:
     inserted = 0
     skipped = 0
     for d in deadlines:
+        # Store under the deadline's actual calendar year, not the seed
+        # arg: some FY `year` deadlines (GSTR-1/3B for Dec, TDS Q3) land in
+        # Jan of `year+1`. The calendar query filters on year AND derives
+        # month from the date, so a row whose year != date.year is invisible.
+        row_year = d.due_date.year
+        # L4 — match the full natural key the INSERT writes (authority was
+        # omitted before, so two deadlines differing only by authority would
+        # collapse to one and re-seeding wasn't truly idempotent).
         existing = (
             db.query(RegulatoryCalendar)
             .filter(
-                RegulatoryCalendar.year == year,
+                RegulatoryCalendar.year == row_year,
                 RegulatoryCalendar.date == d.due_date,
                 RegulatoryCalendar.label == d.label,
                 RegulatoryCalendar.category == d.category,
+                RegulatoryCalendar.authority == d.authority,
             )
             .first()
         )
@@ -43,7 +55,7 @@ def seed_year(db: Session, year: int) -> dict[str, int]:
             skipped += 1
             continue
         row = RegulatoryCalendar(
-            year=year,
+            year=row_year,
             date=d.due_date,
             authority=d.authority,
             label=d.label,

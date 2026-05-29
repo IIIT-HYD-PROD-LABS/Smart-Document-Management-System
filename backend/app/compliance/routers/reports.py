@@ -19,12 +19,15 @@ import csv
 import io
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from app.compliance.dependencies import require_compliance_permission
+from app.compliance.dependencies import (
+    is_cross_client_mode,
+    require_compliance_permission,
+)
 from app.compliance.models.membership import ClientMembership
 from app.compliance.services.permission_registry import CompliancePermission
 from app.compliance.services.report_service import (
@@ -62,6 +65,24 @@ def _csv_response(buf: io.StringIO, filename_prefix: str) -> StreamingResponse:
     )
 
 
+def _reject_cross_client_mode() -> None:
+    """S1 — analytics + export endpoints must run against a single client.
+
+    In cross-client mode (X-Client-Id: *) get_active_membership returns an
+    arbitrary eligible membership, so `membership.client_id` would scope the
+    aggregation to one unrelated tenant and render it as authoritative. Fail
+    loud with 400 and require the caller to pick a concrete client.
+    """
+    if is_cross_client_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Reports require a specific X-Client-Id (not '*'); "
+                "select a single client to view or export its analytics."
+            ),
+        )
+
+
 router = APIRouter(prefix="/reports", tags=["compliance-reports"])
 
 
@@ -89,11 +110,20 @@ class HealthSummaryResponse(BaseModel):
 def health_summary(
     payload: HealthSummaryRequest,
     db: Session = Depends(get_db),
-    _gate: ClientMembership = Depends(
+    membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_EXPORT)
     ),
 ):
     """Generate a monthly compliance health summary — CLIENT-07."""
+    _reject_cross_client_mode()
+    # S2 — the body carries its own client_id; bind it to the active
+    # membership so a caller cannot request a summary for a client they hold
+    # no membership on (the service does not re-check tenancy).
+    if payload.client_id != membership.client_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot generate a report for a non-active client",
+        )
     try:
         return generate_health_summary(
             db=db,
@@ -137,12 +167,13 @@ class ResponseTimeStats(BaseModel):
     summary="Penalty + tax-demand totals grouped by authority",
 )
 def penalty_by_authority_endpoint(
-    window_days: int = 90,
+    window_days: int = Query(90, ge=1, le=3660),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_VIEW)
     ),
     db: Session = Depends(get_db),
 ):
+    _reject_cross_client_mode()
     rows = penalty_by_authority(
         db, client_id=membership.client_id, window_days=window_days
     )
@@ -155,12 +186,13 @@ def penalty_by_authority_endpoint(
     summary="Notice counts grouped by status",
 )
 def notice_volume_by_status_endpoint(
-    window_days: int = 90,
+    window_days: int = Query(90, ge=1, le=3660),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_VIEW)
     ),
     db: Session = Depends(get_db),
 ):
+    _reject_cross_client_mode()
     rows = notice_volume_by_status(
         db, client_id=membership.client_id, window_days=window_days
     )
@@ -173,12 +205,13 @@ def notice_volume_by_status_endpoint(
     summary="Response time percentile distribution (resolved/submitted notices)",
 )
 def response_time_endpoint(
-    window_days: int = 90,
+    window_days: int = Query(90, ge=1, le=3660),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_VIEW)
     ),
     db: Session = Depends(get_db),
 ):
+    _reject_cross_client_mode()
     return ResponseTimeStats(
         **response_time_distribution(
             db, client_id=membership.client_id, window_days=window_days
@@ -201,12 +234,13 @@ def response_time_endpoint(
     summary="Download penalty-by-authority aggregation as CSV",
 )
 def export_penalty_by_authority(
-    window_days: int = 90,
+    window_days: int = Query(90, ge=1, le=3660),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_EXPORT)
     ),
     db: Session = Depends(get_db),
 ):
+    _reject_cross_client_mode()
     rows = penalty_by_authority(
         db, client_id=membership.client_id, window_days=window_days
     )
@@ -222,12 +256,13 @@ def export_penalty_by_authority(
     summary="Download notice-volume-by-status aggregation as CSV",
 )
 def export_notice_volume_by_status(
-    window_days: int = 90,
+    window_days: int = Query(90, ge=1, le=3660),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_EXPORT)
     ),
     db: Session = Depends(get_db),
 ):
+    _reject_cross_client_mode()
     rows = notice_volume_by_status(
         db, client_id=membership.client_id, window_days=window_days
     )
@@ -240,12 +275,13 @@ def export_notice_volume_by_status(
     summary="Download response-time percentile stats as CSV",
 )
 def export_response_time(
-    window_days: int = 90,
+    window_days: int = Query(90, ge=1, le=3660),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_EXPORT)
     ),
     db: Session = Depends(get_db),
 ):
+    _reject_cross_client_mode()
     stats = response_time_distribution(
         db, client_id=membership.client_id, window_days=window_days
     )
@@ -272,11 +308,17 @@ def export_response_time(
 def export_health_summary(
     payload: HealthSummaryRequest,
     db: Session = Depends(get_db),
-    _gate: ClientMembership = Depends(
+    membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_EXPORT)
     ),
 ):
     """CSV form of the monthly health summary — same data as the JSON endpoint."""
+    _reject_cross_client_mode()
+    if payload.client_id != membership.client_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot generate a report for a non-active client",
+        )
     try:
         result = generate_health_summary(
             db=db,

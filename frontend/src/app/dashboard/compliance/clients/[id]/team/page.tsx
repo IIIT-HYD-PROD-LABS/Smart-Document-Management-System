@@ -1,8 +1,8 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FiPlus, FiClock, FiTrash2 } from "react-icons/fi";
+import { FiPlus, FiClock, FiTrash2, FiAlertTriangle } from "react-icons/fi";
 import toast from "react-hot-toast";
 import { complianceApi } from "@/lib/api/compliance";
 import {
@@ -57,6 +57,11 @@ export default function TeamPage({
     const qc = useQueryClient();
     const [showAdd, setShowAdd] = useState(false);
     const [drawerRole, setDrawerRole] = useState<ComplianceRole | null>(null);
+    const [pendingRemoval, setPendingRemoval] = useState<{
+        membershipId: number;
+        userId: number;
+    } | null>(null);
+    const [removing, setRemoving] = useState(false);
 
     const { data: client, isLoading, error } = useQuery<ClientDetail>({
         queryKey: ["client", clientId],
@@ -64,20 +69,32 @@ export default function TeamPage({
         enabled: !Number.isNaN(clientId),
     });
 
-    const removeMember = async (membershipId: number, userId: number) => {
-        // eslint-disable-next-line no-alert
-        const confirmed = confirm(
-            `Revoke access for User #${userId}? Their access ends immediately.`
-        );
-        if (!confirmed) return;
+    const confirmRemoval = async () => {
+        if (!pendingRemoval || removing) return;
+        setRemoving(true);
         try {
-            await complianceApi.removeMember(clientId, membershipId);
+            await complianceApi.removeMember(
+                clientId,
+                pendingRemoval.membershipId
+            );
             toast.success("Member removed");
             qc.invalidateQueries({ queryKey: ["client", clientId] });
+            setPendingRemoval(null);
         } catch (err) {
             toast.error(extractErrorMessage(err, "Failed to remove member"));
+        } finally {
+            setRemoving(false);
         }
     };
+
+    useEffect(() => {
+        if (!pendingRemoval) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape" && !removing) setPendingRemoval(null);
+        };
+        document.addEventListener("keydown", onKey);
+        return () => document.removeEventListener("keydown", onKey);
+    }, [pendingRemoval, removing]);
 
     if (Number.isNaN(clientId)) {
         return (
@@ -213,7 +230,10 @@ export default function TeamPage({
                                 <button
                                     type="button"
                                     onClick={() =>
-                                        removeMember(m.id, m.user_id)
+                                        setPendingRemoval({
+                                            membershipId: m.id,
+                                            userId: m.user_id,
+                                        })
                                     }
                                     className="p-1.5 text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors focus:outline-none focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--danger)_40%,transparent)] rounded"
                                     aria-label={`Remove user ${m.user_id}`}
@@ -242,6 +262,62 @@ export default function TeamPage({
                     role={drawerRole}
                     onClose={() => setDrawerRole(null)}
                 />
+            )}
+            {pendingRemoval && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.45)] backdrop-blur-sm motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150"
+                    onClick={() => !removing && setPendingRemoval(null)}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="revoke-title"
+                    aria-describedby="revoke-desc"
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="
+                            w-[420px] max-w-[92vw] rounded-[10px]
+                            bg-[var(--bg-elevated)] border border-[var(--border-emphasis)]
+                            shadow-[var(--shadow-lg)] p-5
+                            motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-150
+                        "
+                    >
+                        <div className="flex items-start gap-3">
+                            <FiAlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-[var(--danger)]" aria-hidden="true" />
+                            <div>
+                                <h2
+                                    id="revoke-title"
+                                    className="text-sm font-semibold text-[var(--text-primary)]"
+                                >
+                                    Revoke access for User #{pendingRemoval.userId}?
+                                </h2>
+                                <p
+                                    id="revoke-desc"
+                                    className="mt-1 text-sm text-[var(--text-muted)]"
+                                >
+                                    Their access ends immediately.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="mt-5 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setPendingRemoval(null)}
+                                disabled={removing}
+                                className="px-3 py-1.5 rounded-md text-sm font-medium text-[var(--text-primary)] border border-[var(--border-default)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={confirmRemoval}
+                                disabled={removing}
+                                className="px-3 py-1.5 rounded-md text-sm font-medium text-white bg-[var(--danger)] hover:opacity-90 transition-opacity disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--danger)_40%,transparent)]"
+                            >
+                                {removing ? "Revoking..." : "Revoke access"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

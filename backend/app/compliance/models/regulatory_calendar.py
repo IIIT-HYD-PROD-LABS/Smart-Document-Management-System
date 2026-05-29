@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    text,
 )
 
 from app.database import Base
@@ -52,6 +53,18 @@ class RegulatoryCalendar(Base):
             name="ck_calendar_category",
         ),
         Index("ix_calendar_year_date", "year", "date"),
+        # Migration 0037 L4: natural-key uniqueness. authority is nullable and
+        # Postgres treats NULLs as distinct under a plain UNIQUE, so we collapse
+        # NULL authority via COALESCE so general-holiday rows dedupe too.
+        Index(
+            "uq_calendar_natural_key",
+            "year",
+            "date",
+            "label",
+            "category",
+            text("COALESCE(authority, '')"),
+            unique=True,
+        ),
     )
 
     def __repr__(self):

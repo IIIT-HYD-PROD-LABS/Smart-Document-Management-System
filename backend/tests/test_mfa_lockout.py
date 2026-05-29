@@ -3,7 +3,6 @@
 Pure logic (no DB, no HTTP). A throwaway FERNET_KEY is set so the encryption
 paths are hermetic regardless of the container's .env.
 """
-import json
 import types
 from datetime import datetime, timedelta, timezone
 

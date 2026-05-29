@@ -347,10 +347,14 @@ export const complianceApi = {
             withTenant(),
         ),
 
-    acceptExtraction: (id: number, items: AcceptExtractionItem[]) =>
+    acceptExtraction: (
+        id: number,
+        items: AcceptExtractionItem[],
+        envelope?: ExtractionEnvelopeDto,
+    ) =>
         api.post<ComplianceNotice>(
             `/compliance/notices/${id}/accept-extraction`,
-            { items },
+            { items, envelope },
             withTenant(),
         ),
 

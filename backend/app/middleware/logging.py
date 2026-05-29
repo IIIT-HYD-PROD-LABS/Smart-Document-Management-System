@@ -26,18 +26,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             client_ip=request.client.host if request.client else "unknown",
         )
 
-        # Try to extract user from Authorization header for logging context
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            try:
-                import jwt
-                from app.config import settings
-                token = auth_header.split(" ")[1]
-                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-                structlog.contextvars.bind_contextvars(user_id=payload.get("sub"))
-            except Exception:
-                pass
-
         start = time.perf_counter()
 
         try:
@@ -48,6 +36,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "request_completed",
                 status_code=response.status_code,
                 duration_ms=duration_ms,
+                **_user_id_field(),
             )
             return response
 
@@ -57,5 +46,19 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "request_failed",
                 duration_ms=duration_ms,
                 exc_info=True,
+                **_user_id_field(),
             )
             raise
+
+
+def _user_id_field() -> dict:
+    """user_id for log context, sourced ONLY from the value the auth dependency
+    set after validating the token. Never decode the Authorization header here:
+    an unverified `sub` claim would let any caller poison the log context."""
+    try:
+        from app.compliance.middleware.tenant_context import current_user_id_var
+
+        uid = current_user_id_var.get()
+    except Exception:
+        uid = None
+    return {"user_id": uid} if uid is not None else {}

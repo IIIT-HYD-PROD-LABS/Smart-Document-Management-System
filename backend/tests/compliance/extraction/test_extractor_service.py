@@ -119,7 +119,7 @@ def test_extract_notice_fields_writes_redacted_audit_row(
 
 
 def test_extract_notice_fields_truncates_to_max_window():
-    """D-15: input is truncated to 4000 chars in the prompt so token budget holds."""
+    """D-15: input is clipped to MAX_TEXT_WINDOW chars so the token budget holds."""
     from app.compliance.services.notice_extraction_prompt import (
         MAX_TEXT_WINDOW,
         build_user_prompt,
@@ -130,6 +130,24 @@ def test_extract_notice_fields_truncates_to_max_window():
     long_text = marker * (MAX_TEXT_WINDOW * 3)
     user_msg = build_user_prompt(long_text)
     assert user_msg.count(marker) == MAX_TEXT_WINDOW, "prompt must clip text to MAX_TEXT_WINDOW chars"
+
+
+def test_extract_window_covers_fields_past_legacy_4000_chars():
+    """Regression: real notices lead with letterhead + legal recitals and place
+    the demand table / response deadline later in the document. The legacy
+    4000-char window clipped those, so financial fields came back blank. The
+    window must reach the demand block of a normal multi-page notice."""
+    from app.compliance.services.notice_extraction_prompt import (
+        MAX_TEXT_WINDOW,
+        build_user_prompt,
+    )
+    preamble = "WHEREAS on examination of the records it is observed that ... " * 110
+    assert len(preamble) > 4000, "preamble must exceed the legacy window for a valid regression"
+    demand = "DEMAND Tax 145000 Interest 12000 Penalty 5000 Total 162000 respond by 2026-05-30"
+    prompt = build_user_prompt(preamble + demand)
+    assert MAX_TEXT_WINDOW >= 16000, "window must cover a multi-page notice, not just one page"
+    assert "DEMAND Tax 145000" in prompt, "demand block past 4000 chars must reach the model"
+    assert "2026-05-30" in prompt, "response deadline past 4000 chars must reach the model"
 
 
 def test_extract_notice_fields_propagates_out_of_scope():

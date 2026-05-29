@@ -42,9 +42,14 @@ FIELD_SCHEMA: Final[dict[str, str]] = {
     "legal_sections": "List of statutory sections cited (e.g. ['Section 73 of the CGST Act, 2017']).",
 }
 
-# Source-text window the extractor sees. 17-CONTEXT D-15 anchors this at
-# 4000 characters to stay under provider input caps.
-MAX_TEXT_WINDOW: Final[int] = 4000
+# Source-text window the extractor sees. The original 4000 (17-CONTEXT D-15)
+# silently clipped real notices: letterhead + legal recitals fill the first
+# page, so the demand table (tax/interest/penalty/total) and the response
+# deadline routinely sat past char 4000 and never reached the model, coming
+# back blank. Modern BYOK providers (Gemini 2.5 Flash Lite ~1M tokens, Claude
+# ~200k) make a larger window trivial; 24000 chars (~7 pages) covers a single
+# notice end to end while staying far under provider input caps.
+MAX_TEXT_WINDOW: Final[int] = 24000
 
 
 def _format_field_list() -> str:

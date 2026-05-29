@@ -103,6 +103,10 @@ class AnthropicProvider(LLMProvider):
             messages=[{"role": "user", "content": _build_extraction_prompt(text, category)}],
             timeout=settings.LLM_TIMEOUT_SECONDS,
         )
+        # D7: a stop_reason like "max_tokens" or a safety filter can yield an
+        # empty content list; guard before indexing [0].
+        if not message.content:
+            raise ValueError("Anthropic returned no content blocks")
         return _parse_llm_response(message.content[0].text)
 
 
@@ -122,6 +126,10 @@ class OpenAIProvider(LLMProvider):
             max_tokens=1024,
             timeout=settings.LLM_TIMEOUT_SECONDS,
         )
+        # D7: a finish_reason like "length" or a content filter can yield an
+        # empty choices list; guard before indexing [0].
+        if not response.choices:
+            raise ValueError("OpenAI returned no choices")
         return _parse_llm_response(response.choices[0].message.content)
 
 

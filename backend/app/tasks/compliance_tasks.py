@@ -22,10 +22,21 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import text
 
 from app.tasks import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+def _today_ist() -> date:
+    """Current date in IST. India statutory deadlines are evaluated in India
+    time, not the Celery worker's server-local timezone, so deadline-pressure
+    scoring is stable regardless of where the worker runs (M7). Exposed as a
+    module-level helper so tests can patch a deterministic 'today'."""
+    return datetime.now(timezone.utc).astimezone(ZoneInfo("Asia/Kolkata")).date()
 
 
 @celery_app.task(
@@ -135,7 +146,7 @@ def classify_and_score_notice(self, notice_id: int) -> dict:
             penalty_amount=notice.penalty,
             tax_demand=notice.tax_demand,
             deadline=notice.response_deadline,
-            today=date.today(),
+            today=_today_ist(),
             legal_sections=deduped_sections,
             has_show_cause_chain=has_show_cause_chain,
         )
@@ -217,6 +228,15 @@ def classify_and_score_notice(self, notice_id: int) -> dict:
         if assessment.tier == "critical":
             try:
                 from app.ml.compliance import escalation as escalation_mod
+
+                # M1: serialize concurrent workers escalating the same notice.
+                # The xact-scoped advisory lock is held until this transaction
+                # commits; escalate() commits internally and releases it, so a
+                # concurrent worker blocks here, then re-runs should_escalate
+                # and observes the prior escalation -> no double-escalate.
+                db.execute(
+                    text("SELECT pg_advisory_xact_lock(:k)"), {"k": notice_id}
+                )
                 if escalation_mod.should_escalate(
                     db, notice=notice, risk_tier=assessment.tier
                 ):

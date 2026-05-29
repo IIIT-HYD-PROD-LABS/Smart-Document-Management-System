@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FiX, FiCheck, FiMail } from "react-icons/fi";
 import { earlyAccessApi, extractErrorMessage } from "@/lib/api";
 import toast from "react-hot-toast";
@@ -14,6 +14,24 @@ export default function EarlyAccessModal({ open, onClose }: Props) {
     const [form, setForm] = useState({ full_name: "", email: "", company: "", reason: "" });
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const closeRef = useRef<HTMLButtonElement>(null);
+
+    const handleClose = () => {
+        setSubmitted(false);
+        setForm({ full_name: "", email: "", company: "", reason: "" });
+        onClose();
+    };
+
+    useEffect(() => {
+        if (!open) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape" && !submitting) handleClose();
+        };
+        document.addEventListener("keydown", onKey);
+        requestAnimationFrame(() => closeRef.current?.focus());
+        return () => document.removeEventListener("keydown", onKey);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, submitting]);
 
     if (!open) return null;
 
@@ -38,14 +56,8 @@ export default function EarlyAccessModal({ open, onClose }: Props) {
         }
     };
 
-    const handleClose = () => {
-        setSubmitted(false);
-        setForm({ full_name: "", email: "", company: "", reason: "" });
-        onClose();
-    };
-
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4" role="dialog" aria-modal="true">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} aria-hidden />
 
             <div className="relative w-full max-w-md bg-[#111113] border border-[#27272a] rounded-lg shadow-2xl">
@@ -53,7 +65,7 @@ export default function EarlyAccessModal({ open, onClose }: Props) {
                     <h2 className="text-base font-semibold text-white">
                         {submitted ? "Request Submitted" : "Join Early Access"}
                     </h2>
-                    <button onClick={handleClose} className="text-[#52525b] hover:text-white transition-colors cursor-pointer" aria-label="Close">
+                    <button ref={closeRef} onClick={handleClose} className="text-[#52525b] hover:text-white transition-colors cursor-pointer" aria-label="Close">
                         <FiX className="w-4 h-4" />
                     </button>
                 </div>

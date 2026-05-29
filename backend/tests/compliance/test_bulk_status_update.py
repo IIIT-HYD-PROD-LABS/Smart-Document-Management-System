@@ -107,7 +107,7 @@ def test_bulk_update_mixed_idempotent_and_valid():
 
     transition_call_count = {"n": 0}
 
-    def _mock_transition(db_, nid, new_status, user_, reason=None):
+    def _mock_transition(db_, nid, new_status, user_, reason=None, client_id=None):
         transition_call_count["n"] += 1
 
     with patch(

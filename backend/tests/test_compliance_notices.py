@@ -1,6 +1,53 @@
 """LIFE-01, LIFE-08: notice upload + bulk update."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
+
+
+def test_assign_notice_logs_activity_with_valid_type():
+    """C1 regression — assign_notice must call log_activity with the param
+    name `type` and the value "assigned" (the only assignment value in
+    VALID_ACTIVITY_TYPES + the DB CHECK). The pre-fix call used
+    activity_type="notice_assigned", which both used a non-existent kwarg
+    and an invalid value, raising TypeError -> HTTP 500 on every assign.
+
+    Pure-unit (no DB): drives the router function with mocked deps.
+    """
+    from app.compliance.routers.notices import assign_notice
+
+    notice = MagicMock()
+    notice.id = 1
+    notice.client_id = 5
+    notice.assigned_user_id = 3
+    notice.notice_number = "N-1"
+    notice.authority = "GST"
+    notice.response_deadline = None
+
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = notice
+    current_user = MagicMock(id=42)
+    membership = MagicMock(client_id=5)
+
+    with patch(
+        "app.compliance.routers.notices.log_activity"
+    ) as mock_log_activity, patch(
+        "app.compliance.routers.notices.log_audit_event"
+    ):
+        # assigned_user_id=None clears the assignment, skipping the realtime
+        # notification branch so we exercise only the activity write.
+        assign_notice(
+            notice_id=1,
+            payload={"assigned_user_id": None},
+            current_user=current_user,
+            db=db,
+            membership=membership,
+        )
+
+    mock_log_activity.assert_called_once()
+    kwargs = mock_log_activity.call_args.kwargs
+    assert kwargs.get("type") == "assigned"
+    assert "activity_type" not in kwargs
 
 
 pytestmark = pytest.mark.integration

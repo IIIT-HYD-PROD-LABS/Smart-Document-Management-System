@@ -69,3 +69,9 @@ frontend/out/
 # Status report binary artifacts (regenerated from STATUS_REPORT.md)
 Smart_Document_Management_System_Status_Report*.docx
 .env.bak
+
+# Real-document test PDFs (PII; never commit). Tracked fixtures live under docs/exports/.
+/backend/*.pdf
+backend/cand1.pdf
+backend/cand2.pdf
+backend/test_real_notice.pdf

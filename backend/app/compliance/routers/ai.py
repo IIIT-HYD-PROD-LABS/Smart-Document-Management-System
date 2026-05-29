@@ -29,6 +29,7 @@ can use the AI on the data they can already read.
 import logging
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.compliance.dependencies import require_compliance_permission
@@ -328,6 +329,22 @@ def notice_actions(
 # ─────────────────────────────────────────────────────────────────────
 
 
+class NoticeResponseDraftRequest(BaseModel):
+    """Body for POST /ai/notice-response-draft/{notice_id}.
+
+    `user_guidance` is the only accepted field; `extra="forbid"` rejects
+    oversized/unexpected payloads at the boundary (mirrors ChatRequest).
+    The 800-char cap matches MAX_GUIDANCE_CHARS in
+    services/response_drafter_prompt.py, where the service still truncates as
+    defence-in-depth; rejecting here means an overlong payload fails at the
+    boundary instead of being silently clipped.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_guidance: str = Field(default="", max_length=800)
+
+
 @router.post(
     "/notice-response-draft/{notice_id}",
 )
@@ -336,7 +353,7 @@ def notice_response_draft(
     request: Request,
     response: Response,
     notice_id: int,
-    body: dict | None = Body(default=None),
+    body: NoticeResponseDraftRequest = Body(default_factory=NoticeResponseDraftRequest),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_DRAFT_RESPONSE)
     ),
@@ -359,18 +376,13 @@ def notice_response_draft(
 
     _require_credential(db, membership.client_id)
     notice = _require_notice(db, notice_id, membership.client_id)
-    guidance = ""
-    if isinstance(body, dict):
-        raw = body.get("user_guidance")
-        if isinstance(raw, str):
-            guidance = raw
 
     try:
         return draft_response_for_notice(
             db,
             notice=notice,
             user_id=membership.user_id,
-            user_guidance=guidance,
+            user_guidance=body.user_guidance,
         )
     except ResponseDraftCredentialMissingError:
         raise HTTPException(
@@ -476,24 +488,11 @@ def chat(
         )
 
     cred = _require_credential(db, membership.client_id)
+    # No substring scrubbing of history: dropping any message merely CONTAINING
+    # "OUT_OF_SCOPE"/"ignore previous instructions" corrupted legitimate content
+    # (e.g. a user asking ABOUT those phrases) and was trivially bypassed. The
+    # scope-locked SYSTEM prompt in ai_service is the real defence and stays intact.
     msgs = [m.model_dump() for m in payload.messages]
-
-    # Defensive: a hostile client could craft fake `assistant` turns
-    # containing the OUT_OF_SCOPE sentinel or instructions designed to
-    # poison the conversation history the model sees ("ignore your
-    # earlier instructions"). The system prompt already tells the model
-    # to ignore tampered history, but this is cheap belt-and-braces.
-    msgs = [
-        m for m in msgs
-        if "OUT_OF_SCOPE" not in m["content"]
-        and "ignore your earlier" not in m["content"].lower()
-        and "ignore previous instructions" not in m["content"].lower()
-    ]
-    if not msgs or msgs[-1]["role"] != "user":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Message history is empty or ends on an assistant turn.",
-        )
 
     try:
         return ai_service.chat_with_assistant(db, cred, msgs)

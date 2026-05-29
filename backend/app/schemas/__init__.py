@@ -35,6 +35,9 @@ class UserRegister(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password_complexity(cls, v: str) -> str:
+        # bcrypt silently truncates beyond 72 bytes, so cap here at the boundary.
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Password must not exceed 72 bytes")
         if not re.search(r'[A-Z]', v):
             raise ValueError("Password must contain at least one uppercase letter")
         if not re.search(r'[a-z]', v):
@@ -159,6 +162,14 @@ class AcceptInviteRequest(BaseModel):
     token: str = Field(..., min_length=1, max_length=2048)
     password: str = Field(..., min_length=12, max_length=128)
 
+    @field_validator("password")
+    @classmethod
+    def _cap_password_bytes(cls, v: str) -> str:
+        # bcrypt silently truncates beyond 72 bytes, so cap here at the boundary.
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Password must not exceed 72 bytes")
+        return v
+
 
 class ForgotPasswordRequest(BaseModel):
     """Body for POST /api/auth/forgot-password. Caller-side intake only."""
@@ -184,6 +195,9 @@ class ResetPasswordRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def _validate_complexity(cls, v: str) -> str:
+        # bcrypt silently truncates beyond 72 bytes, so cap here at the boundary.
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Password must not exceed 72 bytes")
         if not re.search(r"[A-Z]", v):
             raise ValueError("Password must contain at least one uppercase letter")
         if not re.search(r"[a-z]", v):

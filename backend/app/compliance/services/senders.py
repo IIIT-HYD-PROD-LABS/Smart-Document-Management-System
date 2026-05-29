@@ -4,7 +4,7 @@ Each sender returns a SendResult with delivery_status + provider_message_id.
 The dispatch_alert orchestrator persists this to notice_alert_log.
 
 v2.0 implementation:
-  - EmailSender    : reuses existing Resend SMTP via app/utils/email.send_email
+  - EmailSender    : reuses existing Gmail SMTP via app/utils/email.send_email
                      User-controlled fields are HTML-escaped before
                      interpolation (hardening #7) — ``notice_number`` and
                      ``authority`` originate from user input and would otherwise
@@ -41,8 +41,8 @@ class SendResult:
 
 
 class EmailSender:
-    """Reuses existing SMTP path. Phase 11 doesn't change deliverability;
-    SendGrid swap is v2.1."""
+    """Reuses existing Gmail SMTP path. Phase 11 doesn't change
+    deliverability; SendGrid swap is v2.1."""
 
     def send(self, *, recipient: dict, payload: dict) -> SendResult:
         email = recipient.get("email")
@@ -190,12 +190,30 @@ class WebSocketSender:
                 error="missing_client_id_in_payload",
             )
 
+        target_user_id = recipient.get("user_id")
+        if target_user_id is None:
+            # L2 — the bridge (websocket/manager.broadcast) treats a None
+            # recipient_user_id as "fan out to every connected user of the
+            # client", which silently bypasses the role targeting that
+            # resolve_recipients computed. A senders-level call always
+            # represents one resolved recipient, so a missing user_id means
+            # the envelope can't be targeted: fail loudly rather than
+            # broadcast to the whole tenant.
+            return SendResult(
+                delivery_status="failed",
+                error="missing_recipient_user_id",
+            )
+
         try:
             r = redis.from_url(url)
             channel = f"notifications:{client_id}"
             envelope = {
                 "type": "notice_alert",
-                "recipient_user_id": recipient.get("user_id"),
+                "recipient_user_id": target_user_id,
+                # L2 — carry the resolved target id explicitly so a bridge
+                # that fans a single publish out to multiple sockets can
+                # still restrict delivery to the resolved recipient set.
+                "target_user_ids": [target_user_id],
                 "payload": payload,
             }
             subs = r.publish(channel, json.dumps(envelope))

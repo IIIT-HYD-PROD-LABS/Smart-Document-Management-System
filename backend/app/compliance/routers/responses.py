@@ -61,6 +61,7 @@ from app.compliance.services.permission_registry import (
     has_permission,
 )
 from app.compliance.services.response_service import (
+    SegregationOfDutiesError,
     apply_approval,
     get_or_create_response,
     rollback_to_version,
@@ -76,6 +77,7 @@ from app.compliance.services.response_state_machine import (
 )
 from app.database import get_db
 from app.models.user import User
+from app.services.audit_service import log_audit_event
 from app.utils.security import get_current_user
 
 
@@ -156,6 +158,7 @@ def get_response(
     response = (
         db.query(NoticeResponse)
         .filter(NoticeResponse.notice_id == notice.id)
+        .filter(NoticeResponse.client_id == membership.client_id)
         .first()
     )
     if response is None:
@@ -215,6 +218,7 @@ def update_response_draft(
     response = (
         db.query(NoticeResponse)
         .filter(NoticeResponse.notice_id == notice.id)
+        .filter(NoticeResponse.client_id == membership.client_id)
         .first()
     )
     if response is None:
@@ -254,6 +258,7 @@ def submit_response(
     response = (
         db.query(NoticeResponse)
         .filter(NoticeResponse.notice_id == notice.id)
+        .filter(NoticeResponse.client_id == membership.client_id)
         .first()
     )
     if response is None:
@@ -283,14 +288,36 @@ def withdraw_response(
     response = (
         db.query(NoticeResponse)
         .filter(NoticeResponse.notice_id == notice.id)
+        .filter(NoticeResponse.client_id == membership.client_id)
         .first()
     )
     if response is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="No response to withdraw"
         )
+    is_author = response.created_by_user_id == current_user.id
+    is_supervisor = membership.compliance_role in (
+        ComplianceRole.COMPLIANCE_HEAD.value,
+        ComplianceRole.CA_CONSULTANT.value,
+    )
+    if not (is_author or is_supervisor):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the draft author or a supervisor may withdraw this response",
+        )
     try:
         withdraw(db, response=response, user_id=current_user.id)
+        if is_supervisor and not is_author:
+            log_audit_event(
+                user_id=current_user.id,
+                action="notice_response_withdraw_override",
+                resource_type="NoticeResponse",
+                resource_id=response.id,
+                details={
+                    "override_by_role": membership.compliance_role,
+                    "original_author_user_id": response.created_by_user_id,
+                },
+            )
     except InvalidResponseTransitionError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(e)
@@ -312,6 +339,7 @@ def rollback_response(
     response = (
         db.query(NoticeResponse)
         .filter(NoticeResponse.notice_id == notice.id)
+        .filter(NoticeResponse.client_id == membership.client_id)
         .first()
     )
     if response is None:
@@ -376,6 +404,7 @@ def _decide(
     response = (
         db.query(NoticeResponse)
         .filter(NoticeResponse.notice_id == notice.id)
+        .filter(NoticeResponse.client_id == membership.client_id)
         .first()
     )
     if response is None:
@@ -408,6 +437,10 @@ def _decide(
             decision=decision,
             user_id=current_user.id,
             reason=payload.reason,
+        )
+    except SegregationOfDutiesError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
         )
     except InvalidResponseTransitionError as e:
         raise HTTPException(
@@ -488,8 +521,8 @@ def list_evidence(
     ),
     db: Session = Depends(get_db),
 ):
-    _get_notice(db, notice_id, membership=membership)
-    rows = list_attachments(db, notice_id=notice_id)
+    notice = _get_notice(db, notice_id, membership=membership)
+    rows = list_attachments(db, notice_id=notice_id, client_id=notice.client_id)
     return [EvidenceAttachOut.model_validate(r) for r in rows]
 
 
@@ -535,9 +568,14 @@ def remove_evidence(
     db: Session = Depends(get_db),
 ):
     notice = _get_notice(db, notice_id, membership=membership)
-    removed = detach_document(
-        db, notice=notice, document_id=document_id, user_id=current_user.id
-    )
+    try:
+        removed = detach_document(
+            db, notice=notice, document_id=document_id, user_id=current_user.id
+        )
+    except DocumentAccessDenied as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(e)
+        )
     if not removed:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
