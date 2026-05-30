@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import {
     FiAlertTriangle,
@@ -9,6 +9,7 @@ import {
     FiInbox,
 } from "react-icons/fi";
 import BillCard from "./BillCard";
+import { Skeleton } from "@/components";
 import {
     Bill,
     BillStatusBucket,
@@ -282,8 +283,16 @@ export default function BillDashboard() {
 
             {/* Grid */}
             {loading ? (
-                <div className="text-[13px] text-[var(--text-muted)]">
-                    Loading invoices…
+                <div
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+                    role="status"
+                    aria-busy="true"
+                    aria-live="polite"
+                >
+                    <span className="sr-only">Loading invoices</span>
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <Skeleton key={i} className="h-[116px] rounded-md" />
+                    ))}
                 </div>
             ) : bills.length === 0 ? (
                 <div
@@ -299,18 +308,24 @@ export default function BillDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {bills.map((b) => (
                         <div key={b.id} className="relative">
-                            <input
-                                type="checkbox"
-                                checked={selected.has(b.id)}
-                                onChange={() => toggle(b.id)}
-                                onClick={(e) => e.stopPropagation()}
+                            <label
                                 className="
-                                    absolute top-3 left-3 z-10 accent-[var(--accent)]
+                                    touch-target absolute top-1.5 left-1.5 z-10
+                                    flex items-center justify-center rounded
+                                    bg-[var(--bg-elevated)] border border-[var(--border-default)]
                                     cursor-pointer
                                 "
-                                aria-label={`Select ${b.biller_name}`}
-                            />
-                            <div className="pl-5">
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={selected.has(b.id)}
+                                    onChange={() => toggle(b.id)}
+                                    className="accent-[var(--accent)] cursor-pointer"
+                                    aria-label={`Select ${b.biller_name}`}
+                                />
+                            </label>
+                            <div className="pl-9">
                                 <BillCard bill={b} />
                             </div>
                         </div>
@@ -345,6 +360,43 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
     const [reference, setReference] = useState("");
     const [method, setMethod] = useState<typeof PAYMENT_METHODS[number]>("upi");
     const [busy, setBusy] = useState(false);
+    const formRef = useRef<HTMLFormElement>(null);
+
+    // a11y: focus first field on open, restore trigger focus on close, trap Tab
+    useEffect(() => {
+        const previouslyFocused = document.activeElement as HTMLElement | null;
+        const focusables = () =>
+            Array.from(
+                formRef.current?.querySelectorAll<HTMLElement>(
+                    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+                ) ?? [],
+            );
+        focusables()[0]?.focus();
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                onClose();
+                return;
+            }
+            if (e.key === "Tab") {
+                const els = focusables();
+                if (els.length === 0) return;
+                const first = els[0];
+                const last = els[els.length - 1];
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+            document.removeEventListener("keydown", onKeyDown);
+            previouslyFocused?.focus();
+        };
+    }, [onClose]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -375,7 +427,15 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
                     .join(", ");
                 toast(
                     `Marked ${ok} paid, ${failed} failed: ${failedIds}`,
-                    { icon: "⚠", duration: 8000 },
+                    {
+                        icon: (
+                            <FiAlertTriangle
+                                className="w-4 h-4 text-[var(--warning)]"
+                                aria-hidden
+                            />
+                        ),
+                        duration: 8000,
+                    },
                 );
             }
             onDone();
@@ -391,12 +451,14 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.45)] backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
             onClick={onClose}
             role="dialog"
             aria-modal="true"
+            aria-labelledby="bulk-mark-paid-title"
         >
             <form
+                ref={formRef}
                 onSubmit={handleSubmit}
                 onClick={(e) => e.stopPropagation()}
                 className="
@@ -406,7 +468,10 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
                 "
             >
                 <div className="px-5 py-3 border-b border-[var(--border-default)]">
-                    <h3 className="text-[14px] font-semibold tracking-tight text-[var(--text-primary)]">
+                    <h3
+                        id="bulk-mark-paid-title"
+                        className="text-[14px] font-semibold tracking-tight text-[var(--text-primary)]"
+                    >
                         Bulk mark paid
                     </h3>
                     <p className="text-[11.5px] text-[var(--text-muted)] mt-0.5">
@@ -430,7 +495,7 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
                                 bg-[var(--bg-page)]
                                 border border-[var(--border-default)]
                                 text-[13px] text-[var(--text-primary)] font-mono
-                                focus:outline-none focus:border-[var(--accent)]
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus:border-[var(--accent)]
                             "
                         />
                     </label>
@@ -451,7 +516,7 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
                                 border border-[var(--border-default)]
                                 text-[13px] text-[var(--text-primary)]
                                 placeholder:text-[var(--text-disabled)]
-                                focus:outline-none focus:border-[var(--accent)]
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus:border-[var(--accent)]
                             "
                         />
                     </label>
@@ -471,7 +536,7 @@ function BulkMarkPaidModal({ bills, onClose, onDone }: BulkModalProps) {
                                 bg-[var(--bg-page)]
                                 border border-[var(--border-default)]
                                 text-[13px] text-[var(--text-primary)]
-                                focus:outline-none focus:border-[var(--accent)]
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus:border-[var(--accent)]
                             "
                         >
                             {PAYMENT_METHODS.map((m) => (

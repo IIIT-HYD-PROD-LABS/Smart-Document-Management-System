@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import FetchActivity from "@/components/email/FetchActivity";
+import { Skeleton } from "@/components";
 import { emailApi } from "@/lib/email-api";
 
 /**
@@ -31,8 +32,16 @@ export default function ActivityPage() {
 
     if (loading) {
         return (
-            <div className="text-[13px] text-[var(--text-muted)]">
-                Loading…
+            <div
+                className="space-y-2"
+                role="status"
+                aria-busy="true"
+                aria-live="polite"
+            >
+                <span className="sr-only">Loading fetch activity</span>
+                {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full rounded" />
+                ))}
             </div>
         );
     }

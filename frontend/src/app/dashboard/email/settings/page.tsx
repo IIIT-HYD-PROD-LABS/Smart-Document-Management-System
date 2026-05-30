@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import FilterRulesEditor from "@/components/email/FilterRulesEditor";
+import { Skeleton } from "@/components";
 import { emailApi } from "@/lib/email-api";
 
 /**
@@ -31,8 +32,22 @@ export default function SettingsPage() {
 
     if (loading) {
         return (
-            <div className="text-[13px] text-[var(--text-muted)]">
-                Loading…
+            <div
+                className="space-y-4"
+                role="status"
+                aria-busy="true"
+                aria-live="polite"
+            >
+                <span className="sr-only">Loading filter rules</span>
+                <div className="flex items-center justify-between">
+                    <Skeleton className="h-5 w-28" />
+                    <Skeleton className="h-7 w-24 rounded-md" />
+                </div>
+                <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="h-9 w-full rounded" />
+                    ))}
+                </div>
             </div>
         );
     }

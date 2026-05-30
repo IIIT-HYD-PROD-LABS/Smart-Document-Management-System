@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { FiCpu, FiSettings } from "react-icons/fi";
+import { FiAlertTriangle, FiCpu, FiSettings } from "react-icons/fi";
 
 import { aiApi } from "@/lib/api/ai";
 import type {
@@ -48,7 +48,15 @@ export default function InvoiceAISection({ billId }: Props) {
         const detail =
             (e as { response?: { data?: { detail?: string } } })?.response?.data
                 ?.detail || "AI request failed.";
-        if (status === 422) toast(detail, { icon: "⚠" });
+        if (status === 422)
+            toast(detail, {
+                icon: (
+                    <FiAlertTriangle
+                        className="w-4 h-4 text-[var(--warning)]"
+                        aria-hidden
+                    />
+                ),
+            });
         else if (status === 412)
             toast.error("Connect an AI provider first (Settings → AI).");
         else toast.error(detail);
@@ -148,7 +156,7 @@ export default function InvoiceAISection({ billId }: Props) {
                                             key={i}
                                             className="flex gap-2 text-[12px] text-[var(--warning)]"
                                         >
-                                            <span className="leading-none mt-1">⚠</span>
+                                            <FiAlertTriangle className="w-3 h-3 mt-0.5 shrink-0" aria-hidden />
                                             <span>{a}</span>
                                         </li>
                                     ))}

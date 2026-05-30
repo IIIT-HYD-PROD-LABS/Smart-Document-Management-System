@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import ConnectGmailButton from "@/components/email/ConnectGmailButton";
+import { Skeleton } from "@/components";
 import { emailApi, GmailCredentialResponse } from "@/lib/email-api";
 
 /**
@@ -48,8 +49,9 @@ function ConnectInner() {
 
     if (loading) {
         return (
-            <div className="text-[13px] text-[var(--text-muted)]">
-                Loading Gmail credentials…
+            <div role="status" aria-busy="true" aria-live="polite">
+                <span className="sr-only">Loading Gmail credentials</span>
+                <Skeleton className="h-9 w-44 rounded-md" />
             </div>
         );
     }

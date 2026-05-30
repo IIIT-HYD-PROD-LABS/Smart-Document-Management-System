@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { FiPlus, FiTrash2 } from "react-icons/fi";
+import { Skeleton } from "@/components";
 import {
     emailApi,
     FilterRouteTo,
@@ -111,8 +112,22 @@ export default function FilterRulesEditor({ credentialId }: Props) {
 
     if (loading) {
         return (
-            <div className="text-[13px] text-[var(--text-muted)]">
-                Loading filter rules…
+            <div
+                className="space-y-4"
+                role="status"
+                aria-busy="true"
+                aria-live="polite"
+            >
+                <span className="sr-only">Loading filter rules</span>
+                <div className="flex items-center justify-between">
+                    <Skeleton className="h-5 w-28" />
+                    <Skeleton className="h-7 w-24 rounded-md" />
+                </div>
+                <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="h-9 w-full rounded" />
+                    ))}
+                </div>
             </div>
         );
     }
@@ -194,7 +209,7 @@ export default function FilterRulesEditor({ credentialId }: Props) {
                                                 bg-[var(--bg-page)]
                                                 border border-[var(--border-emphasis)]
                                                 text-[var(--text-primary)] font-mono tabular-nums
-                                                focus:outline-none focus:border-[var(--accent)]
+                                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus:border-[var(--accent)]
                                             "
                                         />
                                     </td>
@@ -216,7 +231,7 @@ export default function FilterRulesEditor({ credentialId }: Props) {
                                                 bg-[var(--bg-page)]
                                                 border border-[var(--border-emphasis)]
                                                 text-[var(--text-primary)] font-mono
-                                                focus:outline-none focus:border-[var(--accent)]
+                                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus:border-[var(--accent)]
                                             "
                                         />
                                     </td>
@@ -238,7 +253,7 @@ export default function FilterRulesEditor({ credentialId }: Props) {
                                                 bg-[var(--bg-page)]
                                                 border border-[var(--border-emphasis)]
                                                 text-[var(--text-primary)] font-mono
-                                                focus:outline-none focus:border-[var(--accent)]
+                                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus:border-[var(--accent)]
                                             "
                                         />
                                     </td>
@@ -259,7 +274,7 @@ export default function FilterRulesEditor({ credentialId }: Props) {
                                                 bg-[var(--bg-page)]
                                                 border border-[var(--border-emphasis)]
                                                 text-[var(--text-primary)]
-                                                focus:outline-none focus:border-[var(--accent)]
+                                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus:border-[var(--accent)]
                                             "
                                         >
                                             {ROUTE_OPTIONS.map((o) => (

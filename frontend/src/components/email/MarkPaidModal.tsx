@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { FiX } from "react-icons/fi";
 import { Bill, MarkPaidPayload, emailApi } from "@/lib/email-api";
@@ -41,6 +41,7 @@ export default function MarkPaidModal({
     const [reference, setReference] = useState("");
     const [method, setMethod] = useState<typeof PAYMENT_METHODS[number]>("upi");
     const [busy, setBusy] = useState(false);
+    const formRef = useRef<HTMLFormElement>(null);
 
     // Reset form when re-opening for a different bill
     useEffect(() => {
@@ -50,6 +51,43 @@ export default function MarkPaidModal({
             setMethod("upi");
         }
     }, [open, bill.id]);
+
+    // a11y: focus first field on open, restore trigger focus on close, trap Tab
+    useEffect(() => {
+        if (!open) return;
+        const previouslyFocused = document.activeElement as HTMLElement | null;
+        const focusables = () =>
+            Array.from(
+                formRef.current?.querySelectorAll<HTMLElement>(
+                    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+                ) ?? [],
+            );
+        focusables()[0]?.focus();
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                onClose();
+                return;
+            }
+            if (e.key === "Tab") {
+                const els = focusables();
+                if (els.length === 0) return;
+                const first = els[0];
+                const last = els[els.length - 1];
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+            document.removeEventListener("keydown", onKeyDown);
+            previouslyFocused?.focus();
+        };
+    }, [open, onClose]);
 
     if (!open) return null;
 
@@ -82,13 +120,14 @@ export default function MarkPaidModal({
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.45)] backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
             onClick={onClose}
             role="dialog"
             aria-modal="true"
             aria-labelledby="mark-paid-title"
         >
             <form
+                ref={formRef}
                 onSubmit={handleSubmit}
                 onClick={(e) => e.stopPropagation()}
                 className="
@@ -106,7 +145,14 @@ export default function MarkPaidModal({
                             Mark as paid
                         </h3>
                         <p className="text-[11.5px] text-[var(--text-muted)] mt-0.5">
-                            {bill.biller_name} · {bill.currency} {bill.amount_due}
+                            {bill.biller_name} ·{" "}
+                            <span className="font-mono tabular-nums">
+                                {bill.currency}{" "}
+                                {Number(bill.amount_due).toLocaleString("en-IN", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                })}
+                            </span>
                         </p>
                     </div>
                     <button
@@ -138,7 +184,7 @@ export default function MarkPaidModal({
                                 bg-[var(--bg-page)]
                                 border border-[var(--border-default)]
                                 text-[13px] text-[var(--text-primary)] font-mono
-                                focus:outline-none focus:border-[var(--accent)]
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus:border-[var(--accent)]
                             "
                         />
                     </label>
@@ -160,7 +206,7 @@ export default function MarkPaidModal({
                                 border border-[var(--border-default)]
                                 text-[13px] text-[var(--text-primary)]
                                 placeholder:text-[var(--text-disabled)]
-                                focus:outline-none focus:border-[var(--accent)]
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus:border-[var(--accent)]
                             "
                         />
                     </label>
@@ -181,7 +227,7 @@ export default function MarkPaidModal({
                                 bg-[var(--bg-page)]
                                 border border-[var(--border-default)]
                                 text-[13px] text-[var(--text-primary)]
-                                focus:outline-none focus:border-[var(--accent)]
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus:border-[var(--accent)]
                             "
                         >
                             {PAYMENT_METHODS.map((m) => (

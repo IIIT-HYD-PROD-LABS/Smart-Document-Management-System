@@ -12,6 +12,11 @@ import {
 } from "react-icons/fi";
 import MarkPaidModal from "@/components/email/MarkPaidModal";
 import InvoiceAISection from "@/components/email/InvoiceAISection";
+import {
+    VISUAL_STATUS,
+    classifyVisualStatus,
+} from "@/components/email/BillCard";
+import { Skeleton } from "@/components";
 import { Bill, SourceEmailView, emailApi } from "@/lib/email-api";
 
 /**
@@ -84,8 +89,22 @@ export default function BillDetailPage() {
 
     if (loading) {
         return (
-            <div className="text-[13px] text-[var(--text-muted)]">
-                Loading invoice…
+            <div
+                className="space-y-6 max-w-4xl"
+                role="status"
+                aria-busy="true"
+                aria-live="polite"
+            >
+                <span className="sr-only">Loading invoice</span>
+                <div>
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-6 w-48 mt-2" />
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} className="h-[76px] rounded-md" />
+                    ))}
+                </div>
             </div>
         );
     }
@@ -116,10 +135,9 @@ export default function BillDetailPage() {
         );
     }
 
-    const overdue =
-        bill.due_date &&
-        new Date(bill.due_date).getTime() < Date.now() &&
-        bill.payment_status !== "paid";
+    const visual = classifyVisualStatus(bill);
+    const visualCfg = VISUAL_STATUS[visual];
+    const StatusIcon = visualCfg.icon;
 
     return (
         <div className="space-y-6 max-w-4xl">
@@ -146,16 +164,14 @@ export default function BillDetailPage() {
                     </h1>
                 </div>
                 <span
-                    className="px-2.5 py-1 rounded text-[11px] font-medium uppercase tracking-wider"
-                    style={
-                        overdue
-                            ? { backgroundColor: "var(--danger-soft)", color: "var(--danger)" }
-                            : bill.payment_status === "paid"
-                              ? { backgroundColor: "var(--success-soft)", color: "var(--success)" }
-                              : { backgroundColor: "var(--info-soft)", color: "var(--info)" }
-                    }
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium"
+                    style={{
+                        backgroundColor: visualCfg.bg,
+                        color: visualCfg.text,
+                    }}
                 >
-                    {overdue ? "Overdue" : bill.payment_status}
+                    <StatusIcon className="w-3 h-3" aria-hidden />
+                    {visualCfg.label}
                 </span>
             </div>
 

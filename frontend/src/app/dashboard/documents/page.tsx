@@ -194,7 +194,8 @@ export default function DocumentsPage() {
                 >
                     <button
                         onClick={toggleSelectAll}
-                        className="flex items-center gap-2 text-xs transition-colors cursor-pointer"
+                        disabled={deleting}
+                        className="flex items-center gap-2 text-xs transition-colors cursor-pointer touch-target disabled:opacity-50 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                         style={{ color: "var(--text-secondary)" }}
                     >
                         {selected.size === filtered.length
@@ -208,7 +209,7 @@ export default function DocumentsPage() {
                     <button
                         onClick={handleBatchDelete}
                         disabled={deleting}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md disabled:opacity-50 transition-colors cursor-pointer border"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md disabled:opacity-50 transition-colors cursor-pointer border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                         style={{
                             background: "var(--danger-soft)",
                             color: "var(--danger)",
@@ -220,7 +221,8 @@ export default function DocumentsPage() {
                     </button>
                     <button
                         onClick={() => setSelected(new Set())}
-                        className="transition-colors cursor-pointer touch-target flex items-center justify-center"
+                        disabled={deleting}
+                        className="transition-colors cursor-pointer touch-target flex items-center justify-center disabled:opacity-50 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                         style={{ color: "var(--text-muted)" }}
                     >
                         <FiX className="w-4 h-4" />

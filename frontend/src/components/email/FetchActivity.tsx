@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { Skeleton } from "@/components";
 import {
     emailApi,
     FetchStatus,
@@ -70,8 +71,16 @@ export default function FetchActivity({ credentialId }: Props) {
 
     if (loading) {
         return (
-            <div className="text-[13px] text-[var(--text-muted)]">
-                Loading fetch activity…
+            <div
+                className="space-y-2"
+                role="status"
+                aria-busy="true"
+                aria-live="polite"
+            >
+                <span className="sr-only">Loading fetch activity</span>
+                {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full rounded" />
+                ))}
             </div>
         );
     }
@@ -102,9 +111,13 @@ export default function FetchActivity({ credentialId }: Props) {
                 <div
                     className="
                         flex items-start gap-3 p-3 rounded-md
-                        bg-[var(--danger-soft)] border border-[var(--danger)]/30
+                        bg-[var(--danger-soft)] border
                         text-[12.5px] text-[var(--danger)]
                     "
+                    style={{
+                        borderColor:
+                            "color-mix(in srgb, var(--danger) 30%, transparent)",
+                    }}
                     role="alert"
                 >
                     <div>

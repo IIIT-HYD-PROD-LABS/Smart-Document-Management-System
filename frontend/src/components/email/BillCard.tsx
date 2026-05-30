@@ -24,9 +24,9 @@ const CATEGORY_ICON: Record<
     other: FiPackage,
 };
 
-type VisualStatus = BillPaymentStatus | "due_soon";
+export type VisualStatus = BillPaymentStatus | "due_soon";
 
-const VISUAL_STATUS: Record<
+export const VISUAL_STATUS: Record<
     VisualStatus,
     { label: string; bg: string; text: string; icon: React.ComponentType<{ className?: string }> }
 > = {
@@ -68,7 +68,7 @@ interface BillCardProps {
  * also computes buckets server-side for filter queries; this client
  * derivation keeps the badge in sync with the page-load timestamp.
  */
-function classifyVisualStatus(bill: Bill): VisualStatus {
+export function classifyVisualStatus(bill: Bill): VisualStatus {
     if (bill.payment_status === "paid") return "paid";
     if (!bill.due_date) return bill.payment_status;
     const due = new Date(bill.due_date).getTime();

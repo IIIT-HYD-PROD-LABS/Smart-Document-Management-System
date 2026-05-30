@@ -636,7 +636,7 @@ export default function DocumentDetailPage() {
                                                                 className="text-[10px] px-1.5 py-0.5 rounded font-medium"
                                                                 style={{ background: "var(--success-soft)", color: "var(--success)" }}
                                                             >
-                                                                previous
+                                                                current
                                                             </span>
                                                         )}
                                                         <span className="text-xs" style={{ color: "var(--text-muted)" }}>

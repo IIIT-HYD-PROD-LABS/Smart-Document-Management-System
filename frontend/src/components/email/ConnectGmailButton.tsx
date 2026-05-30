@@ -123,9 +123,13 @@ export default function ConnectGmailButton({ credential, onChange }: Props) {
                 <div
                     className="
                         flex items-start gap-3 p-3 rounded-md
-                        bg-[var(--danger-soft)] border border-[var(--danger)]/30
+                        bg-[var(--danger-soft)] border
                         text-[13px] text-[var(--danger)]
                     "
+                    style={{
+                        borderColor:
+                            "color-mix(in srgb, var(--danger) 30%, transparent)",
+                    }}
                     role="alert"
                     data-status="revoked"
                 >
@@ -191,10 +195,14 @@ export default function ConnectGmailButton({ credential, onChange }: Props) {
                 disabled={busy}
                 className="
                     inline-flex items-center px-3 py-1.5 rounded-md text-[12.5px]
-                    border border-[var(--danger)]/30 text-[var(--danger)]
+                    border text-[var(--danger)]
                     hover:bg-[var(--danger-soft)] disabled:opacity-50
                     transition-colors duration-150
                 "
+                style={{
+                    borderColor:
+                        "color-mix(in srgb, var(--danger) 30%, transparent)",
+                }}
             >
                 Disconnect
             </button>
