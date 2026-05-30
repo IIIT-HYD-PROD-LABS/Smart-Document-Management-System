@@ -275,12 +275,12 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     <div className="p-6 md:p-10">
                         <div className="max-w-7xl mx-auto space-y-8">
                             <div>
-                                <Skeleton className="h-3 w-40" />
-                                <Skeleton className="h-7 w-64 mt-3" />
+                                <Skeleton className="h-3 w-44" />
+                                <Skeleton className="h-8 w-72 mt-3" />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 {Array.from({ length: 4 }).map((_, i) => (
-                                    <Skeleton key={i} className="h-[110px]" />
+                                    <Skeleton key={i} className="h-[140px]" />
                                 ))}
                             </div>
                             <Skeleton className="h-72 w-full" />

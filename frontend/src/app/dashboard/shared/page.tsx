@@ -41,7 +41,7 @@ export default function SharedWithMePage() {
         return (
             <div role="status" aria-busy="true" aria-live="polite">
                 <span className="sr-only">Loading shared documents</span>
-                <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-6">Shared with me</h1>
+                <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight mb-6">Shared with me</h1>
                 <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg overflow-hidden">
                     <Skeleton className="h-11 w-full rounded-none" />
                     {Array.from({ length: 6 }).map((_, i) => (
@@ -56,16 +56,23 @@ export default function SharedWithMePage() {
 
     return (
         <div>
-            <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-6">Shared with me</h1>
+            <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight mb-6">Shared with me</h1>
 
             {documents.length === 0 ? (
-                <div className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-lg p-12 text-center">
-                    <FiFile className="w-8 h-8 text-[var(--text-subtle)] mx-auto mb-3" />
-                    <p className="text-sm text-[var(--text-muted)]">No documents have been shared with you yet</p>
+                <div className="surface-card py-14 px-6 text-center">
+                    <div className="w-12 h-12 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] flex items-center justify-center mx-auto mb-4">
+                        <FiFile className="w-5 h-5 text-[var(--text-subtle)]" />
+                    </div>
+                    <p className="text-[14px] font-medium text-[var(--text-primary)] mb-1">
+                        Nothing shared yet
+                    </p>
+                    <p className="text-[13px] text-[var(--text-muted)]">
+                        Documents other people share with you will appear here.
+                    </p>
                 </div>
             ) : (
                 <>
-                    <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg overflow-x-auto">
+                    <div className="surface-card overflow-x-auto">
                         <table className="w-full min-w-[640px]">
                             <thead className="bg-[var(--bg-muted)]">
                                 <tr className="border-b border-[var(--border-default)]">

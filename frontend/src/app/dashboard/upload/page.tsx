@@ -2,12 +2,13 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useDropzone } from "react-dropzone";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { documentsApi, extractErrorMessage } from "@/lib/api";
 import { ConfidenceBadge } from "@/components";
-import { FiUploadCloud, FiFile, FiCheckCircle, FiX, FiLoader } from "react-icons/fi";
+import { FiUploadCloud, FiFile, FiCheckCircle, FiX, FiLoader, FiLock } from "react-icons/fi";
 
 interface UploadItem {
     file: File;
@@ -117,62 +118,75 @@ export default function UploadPage() {
 
     const formatSize = (bytes: number) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${(bytes / 1024).toFixed(1)} KB`;
 
-    const dropzoneStyle: React.CSSProperties = isDragActive
-        ? {
-            borderColor: "var(--accent)",
-            background: "var(--accent-soft)",
-            borderStyle: "solid",
-        }
-        : {
-            borderColor: "var(--border-default)",
-            background: "color-mix(in srgb, var(--bg-elevated) 60%, transparent)",
-            borderStyle: "dashed",
-        };
-
     // Render-time role guard (replaces the pre-hooks early return that
     // violated Rules of Hooks). All hooks above unconditionally execute.
-    if (user?.role === "viewer") return null;
+    // Render an explanatory notice instead of a blank frame during the
+    // async redirect (the effect above routes viewers back to /dashboard).
+    if (user?.role === "viewer") {
+        return (
+            <div className="surface-card py-14 px-6 text-center max-w-md mx-auto">
+                <div className="w-12 h-12 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] flex items-center justify-center mx-auto mb-4">
+                    <FiLock className="w-5 h-5 text-[var(--text-subtle)]" />
+                </div>
+                <p className="text-[14px] font-medium text-[var(--text-primary)] mb-1">
+                    Uploading requires editor access
+                </p>
+                <p className="text-[13px] text-[var(--text-muted)] mb-5">
+                    Your account has view-only access. Ask an admin to upgrade your role to upload documents.
+                </p>
+                <Link
+                    href="/dashboard"
+                    className="
+                        inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md
+                        border border-[var(--border-default)]
+                        bg-[var(--bg-surface)]
+                        text-[13px] font-medium text-[var(--text-primary)]
+                        hover:bg-[var(--bg-hover)] hover:border-[var(--border-emphasis)]
+                        transition-colors duration-150 cursor-pointer
+                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]
+                    "
+                >
+                    Back to overview
+                </Link>
+            </div>
+        );
+    }
 
     return (
         <div>
             <div className="mb-8">
-                <h1 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>Upload</h1>
-                <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Drop files to classify them with AI</p>
+                <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight">Upload</h1>
+                <p className="text-sm mt-1 text-[var(--text-muted)]">Drop files to classify them with AI</p>
             </div>
 
             <div
                 {...getRootProps()}
-                className="rounded-xl p-16 text-center cursor-pointer transition-all duration-200 border-2 hover:shadow-sm group"
-                style={dropzoneStyle}
-                onMouseEnter={(e) => {
-                    if (!isDragActive) {
-                        e.currentTarget.style.borderColor = "var(--accent)";
-                        e.currentTarget.style.background = "var(--accent-soft)";
+                className={`
+                    rounded-xl p-16 text-center cursor-pointer border-2 group
+                    transition-all duration-200 hover:shadow-sm
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]
+                    ${
+                        isDragActive
+                            ? "border-solid border-[var(--accent)] bg-[var(--accent-soft)]"
+                            : "border-dashed border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_60%,transparent)] hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
                     }
-                }}
-                onMouseLeave={(e) => {
-                    if (!isDragActive) {
-                        e.currentTarget.style.borderColor = "var(--border-default)";
-                        e.currentTarget.style.background = "color-mix(in srgb, var(--bg-elevated) 60%, transparent)";
-                    }
-                }}
+                `}
             >
                 <input {...getInputProps()} />
                 <div
-                    className="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center transition-colors"
-                    style={{
-                        background: isDragActive ? "var(--accent-soft)" : "var(--bg-muted)",
-                    }}
+                    className={`
+                        w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center transition-colors
+                        ${isDragActive ? "bg-[var(--accent-soft)]" : "bg-[var(--bg-muted)] group-hover:bg-[var(--accent-soft)]"}
+                    `}
                 >
                     <FiUploadCloud
-                        className="w-7 h-7 transition-colors"
-                        style={{ color: isDragActive ? "var(--accent)" : "var(--text-secondary)" }}
+                        className={`w-7 h-7 transition-colors ${isDragActive ? "text-[var(--accent)]" : "text-[var(--text-secondary)] group-hover:text-[var(--accent)]"}`}
                     />
                 </div>
-                <p className="text-base font-medium mb-1" style={{ color: "var(--text-primary)" }}>
+                <p className="text-base font-medium mb-1 text-[var(--text-primary)]">
                     {isDragActive ? "Release to upload" : "Drop files here or click to browse"}
                 </p>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                <p className="text-xs text-[var(--text-muted)]">
                     PDF, PNG, JPG, TIFF, DOCX &middot; up to 16 MB each
                 </p>
             </div>
@@ -180,26 +194,30 @@ export default function UploadPage() {
             {uploads.length > 0 && (
                 <div className="mt-6">
                     <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                        <span className="text-sm text-[var(--text-secondary)]">
                             {uploads.length} file{uploads.length !== 1 ? "s" : ""}
                         </span>
                         <div className="flex gap-2">
                             <button
                                 onClick={clearAll}
-                                className="text-xs transition-colors cursor-pointer"
-                                style={{ color: "var(--text-muted)" }}
-                                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                                className="
+                                    text-xs px-2 py-1 rounded-md transition-colors cursor-pointer
+                                    text-[var(--text-muted)] hover:text-[var(--text-primary)]
+                                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]
+                                "
                             >
                                 Clear
                             </button>
                             <button
                                 onClick={handleUploadAll}
                                 disabled={uploading || uploads.every((u) => u.status !== "queued")}
-                                className="px-3 py-1.5 text-xs font-medium rounded-md disabled:opacity-40 transition-colors cursor-pointer"
-                                style={{ background: "var(--accent)", color: "#ffffff" }}
-                                onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = "var(--accent-strong)"; }}
-                                onMouseLeave={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = "var(--accent)"; }}
+                                className="
+                                    px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer
+                                    bg-[var(--accent)] text-white
+                                    hover:bg-[var(--accent-strong)]
+                                    disabled:opacity-40 transition-colors
+                                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]
+                                "
                             >
                                 {uploading ? "Uploading..." : "Upload all"}
                             </button>
@@ -251,10 +269,12 @@ export default function UploadPage() {
                                             {item.status === "queued" && (
                                                 <button
                                                     onClick={() => removeItem(item.file)}
-                                                    className="cursor-pointer transition-colors touch-target flex items-center justify-center"
-                                                    style={{ color: "var(--text-muted)" }}
-                                                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; }}
-                                                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                                                    aria-label={`Remove ${item.file.name}`}
+                                                    className="
+                                                        cursor-pointer transition-colors touch-target flex items-center justify-center rounded-md
+                                                        text-[var(--text-muted)] hover:text-[var(--danger)]
+                                                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]
+                                                    "
                                                 >
                                                     <FiX className="w-3.5 h-3.5" />
                                                 </button>

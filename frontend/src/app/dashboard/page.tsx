@@ -155,19 +155,21 @@ export default function DashboardPage() {
                         View documents
                         <FiArrowRight className="w-3.5 h-3.5" />
                     </Link>
-                    <Link
-                        href="/dashboard/upload"
-                        className="
-                            inline-flex items-center gap-2 h-10 px-4 rounded-md
-                            bg-[var(--accent)] hover:bg-[var(--accent-strong)]
-                            text-[14px] font-medium text-white
-                            transition-colors duration-150 cursor-pointer
-                            shadow-sm
-                        "
-                    >
-                        <FiUpload className="w-3.5 h-3.5" />
-                        Upload document
-                    </Link>
+                    {user?.role !== "viewer" && (
+                        <Link
+                            href="/dashboard/upload"
+                            className="
+                                inline-flex items-center gap-2 h-10 px-4 rounded-md
+                                bg-[var(--accent)] hover:bg-[var(--accent-strong)]
+                                text-[14px] font-medium text-white
+                                transition-colors duration-150 cursor-pointer
+                                shadow-sm
+                            "
+                        >
+                            <FiUpload className="w-3.5 h-3.5" />
+                            Upload document
+                        </Link>
+                    )}
                 </div>
             </header>
 
@@ -216,7 +218,7 @@ export default function DashboardPage() {
                     tint="var(--success)"
                     hint={
                         total > 0
-                            ? `${classifiedRate.toFixed(0)}% accuracy`
+                            ? `${classifiedRate.toFixed(0)}% processed`
                             : "—"
                     }
                     sparkline={spark(completed, [1, 2, 4, 4, 6, 8, 10])}

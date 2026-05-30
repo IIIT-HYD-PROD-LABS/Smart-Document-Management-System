@@ -54,6 +54,17 @@ export default function SearchPage() {
         }
     };
 
+    const clearFilters = () => {
+        setQuery("");
+        setCategory("");
+        setDateFrom("");
+        setDateTo("");
+        setAmountMin("");
+        setAmountMax("");
+        setResults([]);
+        setSearched(false);
+    };
+
     const inputClass =
         "w-full px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md text-sm text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] transition-colors";
     const labelClass = "block text-xs text-[var(--text-muted)] mb-1";
@@ -61,7 +72,7 @@ export default function SearchPage() {
     return (
         <div>
             <div className="mb-8">
-                <h1 className="text-lg font-semibold text-[var(--text-primary)]">Search</h1>
+                <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight">Search</h1>
                 <p className="text-sm text-[var(--text-muted)] mt-1">Find documents by content or keywords</p>
             </div>
 
@@ -69,8 +80,10 @@ export default function SearchPage() {
                 {/* Main search bar */}
                 <div className="flex flex-col sm:flex-row gap-2">
                     <div className="relative flex-1">
+                        <label htmlFor="doc-search" className="sr-only">Search documents</label>
                         <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-subtle)] w-4 h-4" />
                         <input
+                            id="doc-search"
                             type="text"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
@@ -150,12 +163,12 @@ export default function SearchPage() {
                         {results.length} result{results.length !== 1 ? "s" : ""}
                     </p>
                     {results.length > 0 ? (
-                        <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg divide-y divide-[var(--border-default)]">
+                        <div className="surface-card divide-y divide-[var(--border-subtle)] overflow-hidden">
                             {results.map((doc) => (
                                 <div
                                     key={doc.id}
                                     onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
-                                    className="px-5 py-4 hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+                                    className="list-row px-5 py-4 cursor-pointer"
                                 >
                                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                                         <FiFileText className="w-4 h-4 text-[var(--text-subtle)] shrink-0" />
@@ -172,8 +185,31 @@ export default function SearchPage() {
                             ))}
                         </div>
                     ) : (
-                        <div className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-lg py-16 text-center">
-                            <p className="text-sm text-[var(--text-muted)]">No documents match your search</p>
+                        <div className="surface-card py-14 px-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] flex items-center justify-center mx-auto mb-4">
+                                <FiSearch className="w-5 h-5 text-[var(--text-subtle)]" />
+                            </div>
+                            <p className="text-[14px] font-medium text-[var(--text-primary)] mb-1">
+                                No documents match your search
+                            </p>
+                            <p className="text-[13px] text-[var(--text-muted)] mb-5">
+                                Try different keywords or widen your filters.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={clearFilters}
+                                className="
+                                    inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md
+                                    border border-[var(--border-default)]
+                                    bg-[var(--bg-surface)]
+                                    text-[13px] font-medium text-[var(--text-primary)]
+                                    hover:bg-[var(--bg-hover)] hover:border-[var(--border-emphasis)]
+                                    transition-colors duration-150 cursor-pointer
+                                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]
+                                "
+                            >
+                                Clear filters
+                            </button>
                         </div>
                     )}
                 </div>

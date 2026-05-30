@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import {
+    FiAlertTriangle,
     FiBriefcase,
     FiCpu,
     FiMessageCircle,
@@ -439,8 +440,9 @@ function ChatBubble({ turn }: { turn: ChatTurn }) {
                         leading-relaxed
                     "
                 >
-                    <span className="font-mono text-[10.5px] uppercase tracking-wider opacity-70 mr-1.5">
-                        ⚠ Out of scope
+                    <span className="font-mono text-[10.5px] uppercase tracking-wider opacity-70 mr-1.5 inline-flex items-center gap-1">
+                        <FiAlertTriangle className="w-3 h-3" />
+                        Out of scope
                     </span>
                     {turn.content}
                 </div>
