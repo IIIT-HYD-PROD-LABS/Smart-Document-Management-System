@@ -1,9 +1,24 @@
 "use client";
 
-const footerLinks = {
-    Product: ["Document Intelligence", "Compliance Tracking", "Search", "API"],
-    Resources: ["Documentation", "Compliance Guide", "Case Studies"],
-    Legal: ["Privacy Policy", "Terms of Service", "Security"],
+type FooterLink = { label: string; href?: string };
+
+// Only items that resolve to a real destination get an href and become
+// interactive; the rest render as plain (non-clickable) labels until built.
+const footerLinks: Record<string, FooterLink[]> = {
+    Product: [
+        { label: "Document Intelligence", href: "#solution" },
+        { label: "Compliance Tracking", href: "#solution" },
+        { label: "Demo", href: "#demo" },
+    ],
+    Resources: [
+        { label: "The Problem", href: "#problem" },
+        { label: "Sign in", href: "/login" },
+    ],
+    Legal: [
+        { label: "Privacy Policy" },
+        { label: "Terms of Service" },
+        { label: "Security" },
+    ],
 };
 
 export default function Footer() {
@@ -16,7 +31,7 @@ export default function Footer() {
                         <span className="text-sm font-semibold text-white tracking-tight">
                             TaxSync
                         </span>
-                        <p className="text-xs text-[#52525b] mt-2 leading-relaxed max-w-[200px]">
+                        <p className="text-xs text-[#a1a1aa] mt-2 leading-relaxed max-w-[200px]">
                             AI-powered document classification and compliance
                             automation for Indian businesses.
                         </p>
@@ -30,10 +45,19 @@ export default function Footer() {
                             </h4>
                             <ul className="space-y-2">
                                 {links.map((link) => (
-                                    <li key={link}>
-                                        <span className="text-xs text-[#52525b] hover:text-[#a1a1aa] transition-colors cursor-pointer">
-                                            {link}
-                                        </span>
+                                    <li key={link.label}>
+                                        {link.href ? (
+                                            <a
+                                                href={link.href}
+                                                className="text-xs text-[#a1a1aa] hover:text-white transition-colors rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
+                                            >
+                                                {link.label}
+                                            </a>
+                                        ) : (
+                                            <span className="text-xs text-[#a1a1aa]">
+                                                {link.label}
+                                            </span>
+                                        )}
                                     </li>
                                 ))}
                             </ul>
@@ -43,7 +67,7 @@ export default function Footer() {
 
                 {/* Bottom bar */}
                 <div className="border-t border-[#27272a] pt-6">
-                    <span className="text-xs text-[#52525b]">
+                    <span className="text-xs text-[#a1a1aa]">
                         &copy; 2026 TaxSync. IIIT Hyderabad Prod Labs.
                     </span>
                 </div>

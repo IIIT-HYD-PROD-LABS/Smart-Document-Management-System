@@ -7,7 +7,7 @@ export default function Hero({ onRequestAccess }: { onRequestAccess: () => void 
     return (
         <section className="relative pt-32 pb-24 px-6 overflow-hidden">
             {/* Subtle radial glow behind hero */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-[#10b981]/5 rounded-full blur-[120px] pointer-events-none" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[440px] h-[300px] bg-[#10b981]/5 rounded-full blur-[90px] pointer-events-none" />
 
             <div className="max-w-2xl mx-auto text-center relative z-10">
                 <AnimatedSection>
@@ -33,7 +33,7 @@ export default function Hero({ onRequestAccess }: { onRequestAccess: () => void 
                 </AnimatedSection>
 
                 <AnimatedSection delay={0.2}>
-                    <p className="text-base text-[#71717a] max-w-lg mx-auto mb-10 leading-relaxed">
+                    <p className="text-base text-[#a1a1aa] max-w-lg mx-auto mb-10 leading-relaxed">
                         Upload invoices, contracts, or regulatory notices. TaxSync classifies them in seconds,
                         extracts the data that matters, and makes sure no GST, Income Tax, or MCA deadline gets missed.
                     </p>
@@ -43,14 +43,14 @@ export default function Hero({ onRequestAccess }: { onRequestAccess: () => void 
                     <div className="flex items-center justify-center gap-4 mb-12">
                         <button
                             onClick={onRequestAccess}
-                            className="group px-7 py-2.5 text-sm font-medium bg-white text-[#09090b] rounded-lg hover:bg-[#e4e4e7] transition-all duration-200 flex items-center gap-2 cursor-pointer"
+                            className="group px-7 py-2.5 text-sm font-medium bg-white text-[#09090b] rounded-lg hover:bg-[#e4e4e7] transition-all duration-200 flex items-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
                         >
                             Join Early Access
                             <FiArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
                         </button>
                         <a
                             href="#solution"
-                            className="px-7 py-2.5 text-sm text-[#a1a1aa] hover:text-white border border-[#27272a] rounded-lg hover:border-[#3f3f46] transition-all duration-200 cursor-pointer"
+                            className="px-7 py-2.5 text-sm text-[#a1a1aa] hover:text-white border border-[#27272a] rounded-lg hover:border-[#3f3f46] transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
                         >
                             See how it works
                         </a>
@@ -58,18 +58,18 @@ export default function Hero({ onRequestAccess }: { onRequestAccess: () => void 
                 </AnimatedSection>
 
                 <AnimatedSection delay={0.4}>
-                    <div className="flex items-center justify-center gap-4 text-[11px] text-[#52525b]">
+                    <div className="flex items-center justify-center gap-4 text-[11px] text-[#a1a1aa]">
                         <span className="flex items-center gap-1.5">
                             <span className="w-1 h-1 rounded-full bg-[#3f3f46]" />
                             No integration required
                         </span>
                         <span className="flex items-center gap-1.5">
                             <span className="w-1 h-1 rounded-full bg-[#3f3f46]" />
-                            SOC 2 compliant
+                            Free during beta
                         </span>
                         <span className="flex items-center gap-1.5">
                             <span className="w-1 h-1 rounded-full bg-[#3f3f46]" />
-                            GDPR ready
+                            Client-scoped access
                         </span>
                     </div>
                 </AnimatedSection>

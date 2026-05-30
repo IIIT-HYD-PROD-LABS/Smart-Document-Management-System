@@ -33,7 +33,7 @@ export default function BetaCTA({ onRequestAccess }: BetaCTAProps) {
                 </AnimatedSection>
 
                 <AnimatedSection delay={0.1}>
-                    <p className="text-sm text-[#71717a] max-w-md mx-auto leading-relaxed mb-8">
+                    <p className="text-sm text-[#a1a1aa] max-w-md mx-auto leading-relaxed mb-8">
                         Get early access to AI-powered document classification and
                         compliance tracking. Free during beta, no credit card required.
                     </p>
@@ -42,9 +42,9 @@ export default function BetaCTA({ onRequestAccess }: BetaCTAProps) {
                 <AnimatedSection delay={0.2}>
                     <button
                         onClick={onRequestAccess}
-                        className="group px-8 py-3 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors inline-flex items-center gap-2 cursor-pointer"
+                        className="group px-8 py-3 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors inline-flex items-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f0f12]"
                     >
-                        Request Beta Access
+                        Join Early Access
                         <FiArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
                     </button>
                 </AnimatedSection>

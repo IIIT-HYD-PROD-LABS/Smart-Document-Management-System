@@ -15,6 +15,7 @@ export default function EarlyAccessModal({ open, onClose }: Props) {
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const closeRef = useRef<HTMLButtonElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
 
     const handleClose = () => {
         setSubmitted(false);
@@ -25,11 +26,35 @@ export default function EarlyAccessModal({ open, onClose }: Props) {
     useEffect(() => {
         if (!open) return;
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape" && !submitting) handleClose();
+            if (e.key === "Escape" && !submitting) {
+                handleClose();
+                return;
+            }
+            if (e.key !== "Tab") return;
+            const panel = panelRef.current;
+            if (!panel) return;
+            const focusable = panel.querySelectorAll<HTMLElement>(
+                'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
         };
         document.addEventListener("keydown", onKey);
         requestAnimationFrame(() => closeRef.current?.focus());
-        return () => document.removeEventListener("keydown", onKey);
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => {
+            document.removeEventListener("keydown", onKey);
+            document.body.style.overflow = prevOverflow;
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, submitting]);
 
@@ -60,7 +85,7 @@ export default function EarlyAccessModal({ open, onClose }: Props) {
         <div className="fixed inset-0 z-[60] flex items-center justify-center px-4" role="dialog" aria-modal="true">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} aria-hidden />
 
-            <div className="relative w-full max-w-md bg-[#111113] border border-[#27272a] rounded-lg shadow-2xl">
+            <div ref={panelRef} className="relative w-full max-w-md bg-[#111113] border border-[#27272a] rounded-lg shadow-2xl">
                 <div className="flex items-center justify-between px-6 pt-5 pb-0">
                     <h2 className="text-base font-semibold text-white">
                         {submitted ? "Request Submitted" : "Join Early Access"}
@@ -97,7 +122,7 @@ export default function EarlyAccessModal({ open, onClose }: Props) {
                                 id="ea-name" name="full_name" type="text" required minLength={2}
                                 value={form.full_name} onChange={handleChange}
                                 placeholder="John Doe"
-                                className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors"
+                                className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111113] transition-colors"
                             />
                         </div>
                         <div>
@@ -108,7 +133,7 @@ export default function EarlyAccessModal({ open, onClose }: Props) {
                                     id="ea-email" name="email" type="email" required
                                     value={form.email} onChange={handleChange}
                                     placeholder="you@company.com"
-                                    className="w-full pl-9 pr-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors"
+                                    className="w-full pl-9 pr-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111113] transition-colors"
                                 />
                             </div>
                         </div>
@@ -118,7 +143,7 @@ export default function EarlyAccessModal({ open, onClose }: Props) {
                                 id="ea-company" name="company" type="text"
                                 value={form.company} onChange={handleChange}
                                 placeholder="Acme Corp"
-                                className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors"
+                                className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111113] transition-colors"
                             />
                         </div>
                         <div>
@@ -128,13 +153,13 @@ export default function EarlyAccessModal({ open, onClose }: Props) {
                                 value={form.reason} onChange={handleChange}
                                 placeholder="Tell us about your compliance challenges..."
                                 rows={3}
-                                className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] transition-colors resize-none"
+                                className="w-full px-3 py-2 bg-[#09090b] border border-[#27272a] rounded-md text-sm text-white placeholder:text-[#52525b] focus:outline-none focus:border-[#3f3f46] focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111113] transition-colors resize-none"
                             />
                         </div>
                         <button
                             type="submit"
                             disabled={submitting}
-                            className="w-full py-2.5 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors disabled:opacity-50 cursor-pointer"
+                            className="w-full py-2.5 text-sm font-medium bg-white text-black rounded-md hover:bg-[#e4e4e7] transition-colors disabled:opacity-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111113]"
                         >
                             {submitting ? "Submitting..." : "Request Early Access"}
                         </button>

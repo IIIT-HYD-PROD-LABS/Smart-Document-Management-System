@@ -62,7 +62,7 @@ export default function ProblemSection() {
                                 <h3 className="text-base font-medium text-white mb-3">
                                     {point.title}
                                 </h3>
-                                <p className="text-sm text-[#71717a] leading-relaxed">
+                                <p className="text-sm text-[#a1a1aa] leading-relaxed">
                                     {point.description}
                                 </p>
                             </div>
@@ -70,25 +70,15 @@ export default function ProblemSection() {
                     ))}
                 </div>
 
-                {/* Testimonial */}
+                {/* Why we built this (illustrative, not a customer quote) */}
                 <AnimatedSection delay={0.35}>
                     <div className="bg-[#0f0f12] border border-[#27272a] rounded-xl p-8 md:p-10 max-w-3xl mx-auto">
-                        <p className="text-sm md:text-base text-[#a1a1aa] leading-relaxed italic mb-6">
-                            &quot;{testimonial.quote}&quot;
+                        <p className="text-xs uppercase tracking-widest text-[#a1a1aa] mb-4">
+                            {testimonial.label}
                         </p>
-                        <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-[#10b981]/10 flex items-center justify-center text-xs font-medium text-[#10b981]">
-                                {testimonial.initials}
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-white">
-                                    {testimonial.author}
-                                </p>
-                                <p className="text-xs text-[#52525b]">
-                                    {testimonial.role}
-                                </p>
-                            </div>
-                        </div>
+                        <p className="text-sm md:text-base text-[#a1a1aa] leading-relaxed">
+                            {testimonial.quote}
+                        </p>
                     </div>
                 </AnimatedSection>
             </div>

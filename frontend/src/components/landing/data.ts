@@ -228,11 +228,12 @@ export const authorityColors: Record<string, { bg: string; text: string }> = {
     SEBI: { bg: "bg-pink-500/10", text: "text-pink-400" },
 };
 
-export const riskColors: Record<string, { bg: string; text: string }> = {
-    Critical: { bg: "bg-red-500/10", text: "text-red-400" },
-    High: { bg: "bg-orange-500/10", text: "text-orange-400" },
-    Medium: { bg: "bg-yellow-500/10", text: "text-yellow-400" },
-    Low: { bg: "bg-emerald-500/10", text: "text-emerald-400" },
+// level encodes severity as filled bars (1-4) so it is not conveyed by hue alone (LAND-09)
+export const riskColors: Record<string, { bg: string; text: string; dot: string; level: number }> = {
+    Critical: { bg: "bg-red-500/10", text: "text-red-400", dot: "bg-red-400", level: 4 },
+    High: { bg: "bg-orange-500/10", text: "text-orange-400", dot: "bg-orange-400", level: 3 },
+    Medium: { bg: "bg-yellow-500/10", text: "text-yellow-400", dot: "bg-yellow-400", level: 2 },
+    Low: { bg: "bg-emerald-500/10", text: "text-emerald-400", dot: "bg-emerald-400", level: 1 },
 };
 
 export const statusColors: Record<string, { bg: string; text: string }> = {
@@ -258,9 +259,8 @@ export function getConfidenceColor(score: number): { bg: string; text: string } 
 // Testimonial
 // ---------------------------------------------------------------------------
 
+// Why-we-built-this note (illustrative, not a customer quote)
 export const testimonial = {
-    quote: "We were tracking compliance in spreadsheets and praying nothing slipped through. Last year we missed an MCA filing and the penalty wiped out an entire month of margins. Never again.",
-    author: "Priya Sharma",
-    role: "CFO, Mid-size Manufacturing Firm",
-    initials: "PS",
+    quote: "Most finance teams we talk to are tracking compliance in spreadsheets and hoping nothing slips through. One missed MCA filing can wipe out a month of margins. TaxSync exists to close that gap.",
+    label: "Why we built TaxSync",
 } as const;

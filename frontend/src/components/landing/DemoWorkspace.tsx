@@ -40,7 +40,7 @@ export default function DemoWorkspace() {
                         >
                             The workspace
                         </h2>
-                        <p className="text-sm text-[#71717a] max-w-lg mx-auto leading-relaxed">
+                        <p className="text-sm text-[#a1a1aa] max-w-lg mx-auto leading-relaxed">
                             Full visibility for your team. Every document classified,
                             every notice tracked.
                         </p>
@@ -83,15 +83,13 @@ export default function DemoWorkspace() {
                             <div>
                                 {activeTab === "documents" ? (
                                     <span className="text-xs text-[#a1a1aa]">
-                                        Showing{" "}
                                         <span className="text-white font-medium">5</span>{" "}
-                                        of 2,384 documents
+                                        sample documents
                                     </span>
                                 ) : (
                                     <span className="text-xs text-[#a1a1aa]">
-                                        Showing{" "}
                                         <span className="text-white font-medium">5</span>{" "}
-                                        of 1,247 notices
+                                        sample notices
                                     </span>
                                 )}
                             </div>
@@ -238,11 +236,22 @@ export default function DemoWorkspace() {
                                                     <td className="px-5 py-3.5">
                                                         <div className="flex items-center gap-2">
                                                             <span
-                                                                className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${risk.bg} ${risk.text}`}
+                                                                className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-md ${risk.bg} ${risk.text}`}
                                                             >
+                                                                <span className="flex items-end gap-[2px]" aria-hidden>
+                                                                    {[1, 2, 3, 4].map((bar) => (
+                                                                        <span
+                                                                            key={bar}
+                                                                            className={`w-[2px] rounded-sm ${
+                                                                                bar <= risk.level ? risk.dot : "bg-current opacity-25"
+                                                                            }`}
+                                                                            style={{ height: `${3 + bar * 2}px` }}
+                                                                        />
+                                                                    ))}
+                                                                </span>
                                                                 {n.risk}
                                                             </span>
-                                                            <span className="text-[11px] text-[#52525b] font-mono tabular-nums">
+                                                            <span className="text-[11px] text-[#a1a1aa] font-mono tabular-nums">
                                                                 {n.riskScore}
                                                             </span>
                                                         </div>
@@ -269,7 +278,7 @@ export default function DemoWorkspace() {
                         <div className="flex items-center justify-between px-5 py-3 border-t border-[#1f1f23]">
                             {activeTab === "documents" ? (
                                 <>
-                                    <span className="text-[11px] text-[#52525b]">
+                                    <span className="text-[11px] text-[#a1a1aa]">
                                         5 categories across 3 entities
                                     </span>
                                     <span className="text-[11px] text-[#10b981]">
@@ -278,7 +287,7 @@ export default function DemoWorkspace() {
                                 </>
                             ) : (
                                 <>
-                                    <span className="text-[11px] text-[#52525b]">
+                                    <span className="text-[11px] text-[#a1a1aa]">
                                         3 entities across 5 authorities
                                     </span>
                                     <span className="text-[11px] text-[#10b981]">

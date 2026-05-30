@@ -60,9 +60,9 @@ export default function Navbar({ onRequestAccess }: { onRequestAccess: () => voi
                     </Link>
                     <button
                         onClick={onRequestAccess}
-                        className="px-4 py-1.5 text-sm font-medium text-[#a1a1aa] hover:text-white border border-[#27272a] hover:border-[#3f3f46] rounded-lg transition-colors duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
+                        className="px-4 py-1.5 text-sm font-medium bg-white text-[#09090b] hover:bg-[#e4e4e7] rounded-lg transition-colors duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
                     >
-                        Start Beta Trial
+                        Join Early Access
                     </button>
                 </div>
 
@@ -102,9 +102,9 @@ export default function Navbar({ onRequestAccess }: { onRequestAccess: () => voi
                             </Link>
                             <button
                                 onClick={handleMobileCTA}
-                                className="w-full px-4 py-2 text-sm font-medium text-[#a1a1aa] hover:text-white border border-[#27272a] hover:border-[#3f3f46] rounded-lg transition-colors duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
+                                className="w-full px-4 py-2 text-sm font-medium bg-white text-[#09090b] hover:bg-[#e4e4e7] rounded-lg transition-colors duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
                             >
-                                Start Beta Trial
+                                Join Early Access
                             </button>
                         </div>
                     </div>

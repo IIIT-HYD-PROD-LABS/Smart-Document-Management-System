@@ -29,7 +29,7 @@ export default function ProcessFlow() {
                         >
                             Built for document reality
                         </h2>
-                        <p className="text-sm text-[#71717a] max-w-xl mx-auto leading-relaxed">
+                        <p className="text-sm text-[#a1a1aa] max-w-xl mx-auto leading-relaxed">
                             Two engines, one platform. Upload anything and let AI handle the rest.
                         </p>
                     </div>
@@ -40,12 +40,6 @@ export default function ProcessFlow() {
                     {/* Document Intelligence */}
                     <AnimatedSection delay={0.1}>
                         <div className="group relative bg-[#111113] border border-[#27272a] border-l-2 border-l-[#10b981] rounded-xl p-8 h-full hover:border-[#3f3f46] hover:border-l-[#10b981] transition-all duration-300">
-                            {/* Corner decorators */}
-                            <div className="absolute top-0 right-0 w-4 h-[2px] bg-[#10b981] rounded-tr-xl" />
-                            <div className="absolute top-0 right-0 w-[2px] h-4 bg-[#10b981] rounded-tr-xl" />
-                            <div className="absolute bottom-0 left-0 w-4 h-[2px] bg-[#10b981] rounded-bl-xl" />
-                            <div className="absolute bottom-0 left-0 w-[2px] h-4 bg-[#10b981] rounded-bl-xl" />
-
                             <h3 className="text-base font-medium text-white mb-6">
                                 Document Intelligence
                             </h3>
@@ -57,7 +51,7 @@ export default function ProcessFlow() {
                                             <p className="text-sm font-medium text-white mb-0.5">
                                                 {feature.title}
                                             </p>
-                                            <p className="text-sm text-[#52525b] leading-relaxed">
+                                            <p className="text-sm text-[#a1a1aa] leading-relaxed">
                                                 {feature.description}
                                             </p>
                                         </div>
@@ -70,12 +64,6 @@ export default function ProcessFlow() {
                     {/* Compliance Automation */}
                     <AnimatedSection delay={0.2}>
                         <div className="group relative bg-[#111113] border border-[#27272a] border-l-2 border-l-[#10b981] rounded-xl p-8 h-full hover:border-[#3f3f46] hover:border-l-[#10b981] transition-all duration-300">
-                            {/* Corner decorators */}
-                            <div className="absolute top-0 right-0 w-4 h-[2px] bg-[#10b981] rounded-tr-xl" />
-                            <div className="absolute top-0 right-0 w-[2px] h-4 bg-[#10b981] rounded-tr-xl" />
-                            <div className="absolute bottom-0 left-0 w-4 h-[2px] bg-[#10b981] rounded-bl-xl" />
-                            <div className="absolute bottom-0 left-0 w-[2px] h-4 bg-[#10b981] rounded-bl-xl" />
-
                             <h3 className="text-base font-medium text-white mb-6">
                                 Compliance Automation
                             </h3>
@@ -87,7 +75,7 @@ export default function ProcessFlow() {
                                             <p className="text-sm font-medium text-white mb-0.5">
                                                 {feature.title}
                                             </p>
-                                            <p className="text-sm text-[#52525b] leading-relaxed">
+                                            <p className="text-sm text-[#a1a1aa] leading-relaxed">
                                                 {feature.description}
                                             </p>
                                         </div>
@@ -116,7 +104,7 @@ export default function ProcessFlow() {
                                     <h3 className="text-sm font-medium text-white mb-2">
                                         {step.title}
                                     </h3>
-                                    <p className="text-xs text-[#52525b] leading-relaxed">
+                                    <p className="text-xs text-[#a1a1aa] leading-relaxed">
                                         {step.description}
                                     </p>
 
