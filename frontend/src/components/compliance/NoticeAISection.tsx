@@ -211,6 +211,7 @@ function AIButton({
                 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md
                 text-[12.5px] font-medium transition-colors duration-150
                 cursor-pointer
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)]
                 disabled:opacity-50 disabled:cursor-not-allowed
                 ${
                     primary

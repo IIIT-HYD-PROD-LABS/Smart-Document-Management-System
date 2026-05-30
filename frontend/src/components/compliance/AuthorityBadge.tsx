@@ -22,16 +22,19 @@ import type { Authority } from "@/types/compliance";
 const AUTHORITY_CONFIG: Record<
     Authority,
     {
+        /** Bright hue for the decorative icon / dot fill (theme-agnostic). */
         color: string;
-        icon: React.ComponentType<{ className?: string }>;
+        /** AA-passing foreground text color (token or dark brand hue). */
+        text: string;
+        icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
         label: string;
     }
 > = {
-    GST: { color: "#06b6d4", icon: FiPieChart, label: "GST" },
-    IT: { color: "#3b82f6", icon: FiDollarSign, label: "Income Tax" },
-    MCA: { color: "#8b5cf6", icon: FiBriefcase, label: "MCA" },
-    RBI: { color: "#ec4899", icon: FiCreditCard, label: "RBI" },
-    SEBI: { color: "#f97316", icon: FiTrendingUp, label: "SEBI" },
+    GST: { color: "#06b6d4", text: "var(--info)", icon: FiPieChart, label: "GST" },
+    IT: { color: "#3b82f6", text: "var(--accent)", icon: FiDollarSign, label: "Income Tax" },
+    MCA: { color: "#8b5cf6", text: "#6d28d9", icon: FiBriefcase, label: "MCA" },
+    RBI: { color: "#ec4899", text: "#be185d", icon: FiCreditCard, label: "RBI" },
+    SEBI: { color: "#f97316", text: "#c2410c", icon: FiTrendingUp, label: "SEBI" },
 };
 
 interface AuthorityBadgeProps {
@@ -49,12 +52,12 @@ export function AuthorityBadge({ authority, size = "sm" }: AuthorityBadgeProps) 
         <span
             className={`inline-flex items-center gap-1 ${padding} ${text} rounded font-medium`}
             style={{
-                backgroundColor: `${cfg.color}1a`,
-                color: cfg.color,
+                backgroundColor: `color-mix(in srgb, ${cfg.text} 10%, transparent)`,
+                color: cfg.text,
             }}
             aria-label={`Authority: ${cfg.label}`}
         >
-            <Icon className="w-3 h-3" />
+            <Icon className="w-3 h-3" style={{ color: cfg.color }} />
             {cfg.label}
         </span>
     );

@@ -32,10 +32,9 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function confidenceTone(c: number): string {
-    if (c >= 0.85) return "text-emerald-700 dark:text-emerald-300";
-    if (c >= 0.75) return "text-emerald-700 dark:text-emerald-300";
-    if (c >= 0.55) return "text-amber-700 dark:text-amber-300";
-    return "text-rose-700 dark:text-rose-300";
+    if (c >= 0.75) return "text-[var(--success)]";
+    if (c >= 0.55) return "text-[var(--warning)]";
+    return "text-[var(--danger)]";
 }
 
 export function ExtractionProvenanceDisclosure({ noticeId, hasExtraction }: Props) {
@@ -81,7 +80,7 @@ export function ExtractionProvenanceDisclosure({ noticeId, hasExtraction }: Prop
                     {query.isPending ? (
                         <div className="text-[var(--text-muted)]">Loading provenance…</div>
                     ) : query.isError ? (
-                        <div className="text-rose-600 dark:text-rose-400">
+                        <div className="text-[var(--danger)]">
                             Could not load extraction provenance.
                         </div>
                     ) : query.data ? (
@@ -142,7 +141,7 @@ function ProvenanceBody({ data }: { data: ExtractionResponseDto }) {
                                     </span>
                                     {payload.validation_failure ? (
                                         <FiInfo
-                                            className="w-3 h-3 text-amber-600 dark:text-amber-400"
+                                            className="w-3 h-3 text-[var(--warning)]"
                                             title={payload.validation_failure}
                                             aria-label={payload.validation_failure}
                                         />

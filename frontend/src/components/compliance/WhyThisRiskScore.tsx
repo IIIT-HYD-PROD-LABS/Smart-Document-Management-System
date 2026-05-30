@@ -54,7 +54,7 @@ export function WhyThisRiskScore({
         );
     }
 
-    const tierColor = TIER_CONFIG[tier]?.color ?? "#71717a";
+    const tierColor = TIER_CONFIG[tier]?.textColor ?? "var(--text-muted)";
     const tierLabel = TIER_CONFIG[tier]?.label ?? tier;
     const safeFactors = factors ?? [];
 

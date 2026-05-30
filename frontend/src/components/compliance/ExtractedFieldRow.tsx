@@ -27,23 +27,23 @@ const TONE: Record<
 > = {
     high: {
         label: "Confident",
-        chipBg: "bg-emerald-500/10",
-        chipText: "text-emerald-700 dark:text-emerald-300",
-        chipBorder: "border-emerald-500/30",
+        chipBg: "bg-[var(--success-soft)]",
+        chipText: "text-[var(--success)]",
+        chipBorder: "border-[color:color-mix(in_srgb,var(--success)_30%,transparent)]",
         icon: FiCheck,
     },
     medium: {
         label: "Review",
-        chipBg: "bg-amber-500/10",
-        chipText: "text-amber-700 dark:text-amber-300",
-        chipBorder: "border-amber-500/30",
+        chipBg: "bg-[var(--warning-soft)]",
+        chipText: "text-[var(--warning)]",
+        chipBorder: "border-[color:color-mix(in_srgb,var(--warning)_30%,transparent)]",
         icon: FiInfo,
     },
     low: {
         label: "Needs review",
-        chipBg: "bg-rose-500/10",
-        chipText: "text-rose-700 dark:text-rose-300",
-        chipBorder: "border-rose-500/30",
+        chipBg: "bg-[var(--danger-soft)]",
+        chipText: "text-[var(--danger)]",
+        chipBorder: "border-[color:color-mix(in_srgb,var(--danger)_30%,transparent)]",
         icon: FiAlertTriangle,
     },
     edited: {
@@ -143,7 +143,7 @@ export function ExtractedFieldRow({
                     ) : null}
                     {extracted?.validation_failure && !discarded ? (
                         <span
-                            className="inline-flex items-center text-rose-600 dark:text-rose-400"
+                            className="inline-flex items-center text-[var(--danger)]"
                             title={extracted.validation_failure}
                             aria-label={`Validation: ${extracted.validation_failure}`}
                         >
@@ -154,7 +154,7 @@ export function ExtractedFieldRow({
                         <button
                             type="button"
                             onClick={onDiscard}
-                            className="inline-flex items-center justify-center w-5 h-5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)] cursor-pointer transition-colors"
+                            className="inline-flex items-center justify-center w-6 h-6 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)] cursor-pointer transition-colors"
                             title="Discard extracted value"
                             aria-label="Discard extracted value"
                         >

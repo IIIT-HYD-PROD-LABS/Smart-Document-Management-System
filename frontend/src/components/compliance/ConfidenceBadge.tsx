@@ -23,15 +23,19 @@ type ConfidenceBucket = "manual" | "high" | "medium" | "low";
 const BUCKET_CONFIG: Record<
     ConfidenceBucket,
     {
+        /** Bright hue for the decorative icon (theme-agnostic). */
         color: string;
-        icon: React.ComponentType<{ className?: string }>;
+        /** AA-passing token for foreground text + matching soft tint. */
+        text: string;
+        soft: string;
+        icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
         defaultLabel: string;
     }
 > = {
-    manual: { color: "#71717a", icon: FiUser, defaultLabel: "Manual entry" },
-    high: { color: "#10b981", icon: FiCheckCircle, defaultLabel: "Confident" },
-    medium: { color: "#f59e0b", icon: FiAlertCircle, defaultLabel: "Review" },
-    low: { color: "#ef4444", icon: FiAlertTriangle, defaultLabel: "Needs review" },
+    manual: { color: "#71717a", text: "var(--text-muted)", soft: "var(--bg-muted)", icon: FiUser, defaultLabel: "Manual entry" },
+    high: { color: "#10b981", text: "var(--success)", soft: "var(--success-soft)", icon: FiCheckCircle, defaultLabel: "Confident" },
+    medium: { color: "#f59e0b", text: "var(--warning)", soft: "var(--warning-soft)", icon: FiAlertCircle, defaultLabel: "Review" },
+    low: { color: "#ef4444", text: "var(--danger)", soft: "var(--danger-soft)", icon: FiAlertTriangle, defaultLabel: "Needs review" },
 };
 
 function bucketFor(authConf: number | null, typeConf: number | null): ConfidenceBucket {
@@ -81,11 +85,11 @@ export function ConfidenceBadge({
     return (
         <span
             className={`inline-flex items-center gap-1 ${padding} ${text} rounded font-medium`}
-            style={{ backgroundColor: `${cfg.color}1a`, color: cfg.color }}
+            style={{ backgroundColor: cfg.soft, color: cfg.text }}
             aria-label={`Classification confidence: ${label}`}
             title={tooltip}
         >
-            <Icon className="w-3 h-3" />
+            <Icon className="w-3 h-3" style={{ color: cfg.color }} />
             {label}
         </span>
     );

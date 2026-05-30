@@ -17,11 +17,16 @@ import type { RiskTier } from "@/types/compliance";
  *   low      → #10b981  (emerald)
  *   null/undefined → unscored stub (preserves Phase 9 behaviour)
  */
-const TIER_CONFIG: Record<RiskTier, { color: string; label: string }> = {
-    critical: { color: "#ef4444", label: "Critical" },
-    high: { color: "#f97316", label: "High" },
-    medium: { color: "#f59e0b", label: "Medium" },
-    low: { color: "#10b981", label: "Low" },
+/**
+ * `color` = bright hue for the filled dot / left stripe (theme-agnostic).
+ * `textColor` = AA-passing color for tier labels rendered as text on a light
+ * surface (token where one exists; dark brand orange for `high`).
+ */
+const TIER_CONFIG: Record<RiskTier, { color: string; textColor: string; label: string }> = {
+    critical: { color: "#ef4444", textColor: "var(--danger)", label: "Critical" },
+    high: { color: "#f97316", textColor: "#c2410c", label: "High" },
+    medium: { color: "#f59e0b", textColor: "var(--warning)", label: "Medium" },
+    low: { color: "#10b981", textColor: "var(--success)", label: "Low" },
 };
 
 interface RiskTierDotProps {
@@ -60,7 +65,7 @@ export function RiskTierDot({ tier, showLabel = false }: RiskTierDotProps) {
             {showLabel ? (
                 <span
                     className="text-xs font-medium"
-                    style={{ color: cfg.color }}
+                    style={{ color: cfg.textColor }}
                 >
                     {cfg.label}
                 </span>

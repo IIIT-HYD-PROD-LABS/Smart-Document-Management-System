@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FiX, FiChevronDown, FiUserPlus, FiDownload, FiMoreHorizontal } from "react-icons/fi";
+import { FiX, FiChevronDown } from "react-icons/fi";
 import toast from "react-hot-toast";
 import { complianceApi } from "@/lib/api/compliance";
 import type { NoticeStatus } from "@/types/compliance";
@@ -16,10 +16,7 @@ import { STATUS_CONFIG } from "@/components/compliance/StatusPill";
  * Slots:
  *  1. Selection count badge ("N selected")
  *  2. Update status dropdown (5 forward statuses)
- *  3. Assign (disabled in Phase 9)
- *  4. Export (disabled in Phase 9)
- *  5. "•••" overflow menu (placeholder)
- *  6. Clear selection
+ *  3. Clear selection
  *
  * Bulk update calls complianceApi.bulkUpdate which returns
  * { results: [{id, success, error}], summary: {ok, failed} } per RESEARCH
@@ -151,6 +148,8 @@ export function BulkActionBar({ selectedIds, onClear, onUpdated }: Props) {
                                 className="
                                     w-full text-left px-3 py-1.5 text-[13px] text-[var(--text-primary)]
                                     hover:bg-[var(--bg-hover)] flex items-center gap-2
+                                    focus-visible:outline-none focus-visible:bg-[var(--bg-hover)]
+                                    focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] focus-visible:ring-inset
                                 "
                             >
                                 <span
@@ -163,47 +162,6 @@ export function BulkActionBar({ selectedIds, onClear, onUpdated }: Props) {
                     </div>
                 )}
             </div>
-
-            <button
-                type="button"
-                disabled
-                className="
-                    inline-flex items-center gap-1 px-3 py-1.5 rounded
-                    text-[12px] text-[var(--text-disabled)] bg-[var(--bg-muted)] border border-[var(--border-default)]
-                    cursor-not-allowed
-                "
-                title="Coming after Phase 9"
-            >
-                <FiUserPlus className="w-3.5 h-3.5" />
-                Assign
-            </button>
-
-            <button
-                type="button"
-                disabled
-                className="
-                    inline-flex items-center gap-1 px-3 py-1.5 rounded
-                    text-[12px] text-[var(--text-disabled)] bg-[var(--bg-muted)] border border-[var(--border-default)]
-                    cursor-not-allowed
-                "
-                title="Coming after Phase 9"
-            >
-                <FiDownload className="w-3.5 h-3.5" />
-                Export
-            </button>
-
-            <button
-                type="button"
-                disabled
-                className="
-                    p-1.5 rounded text-[var(--text-disabled)] bg-[var(--bg-muted)] border border-[var(--border-default)]
-                    cursor-not-allowed
-                "
-                title="More — coming after Phase 9"
-                aria-label="More actions"
-            >
-                <FiMoreHorizontal className="w-3.5 h-3.5" />
-            </button>
 
             <button
                 type="button"

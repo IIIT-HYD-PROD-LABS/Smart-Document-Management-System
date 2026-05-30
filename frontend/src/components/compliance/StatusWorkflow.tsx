@@ -80,13 +80,13 @@ function PillNode({
             <span
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded font-medium"
                 style={{
-                    backgroundColor: `color-mix(in srgb, ${c.color} 12%, transparent)`,
-                    color: c.color,
-                    border: `1px solid color-mix(in srgb, ${c.color} 30%, transparent)`,
+                    backgroundColor: c.soft,
+                    color: c.text,
+                    border: `1px solid color-mix(in srgb, ${c.text} 30%, transparent)`,
                 }}
                 aria-current="step"
             >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-3.5 h-3.5" style={{ color: c.color }} />
                 {c.label}
             </span>
         );

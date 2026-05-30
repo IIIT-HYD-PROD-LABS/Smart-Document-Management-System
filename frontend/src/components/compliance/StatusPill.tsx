@@ -28,21 +28,27 @@ import type { NoticeStatus } from "@/types/compliance";
 const STATUS_CONFIG: Record<
     NoticeStatus,
     {
+        /** Bright hue for the decorative icon / dot fill (theme-agnostic). */
         color: string;
-        icon: React.ComponentType<{ className?: string }>;
+        /** AA-passing token for foreground text + matching soft tint. */
+        text: string;
+        soft: string;
+        icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
         label: string;
     }
 > = {
-    received: { color: "#3b82f6", icon: FiInbox, label: "Received" },
-    under_review: { color: "#f59e0b", icon: FiEye, label: "Under Review" },
+    received: { color: "#3b82f6", text: "var(--accent)", soft: "var(--accent-soft)", icon: FiInbox, label: "Received" },
+    under_review: { color: "#f59e0b", text: "var(--warning)", soft: "var(--warning-soft)", icon: FiEye, label: "Under Review" },
     response_drafted: {
         color: "#8b5cf6",
+        text: "var(--text-secondary)",
+        soft: "var(--bg-muted)",
         icon: FiEdit3,
         label: "Response Drafted",
     },
-    submitted: { color: "#06b6d4", icon: FiSend, label: "Submitted" },
-    resolved: { color: "#10b981", icon: FiCheckCircle, label: "Resolved" },
-    dismissed: { color: "#ef4444", icon: FiXCircle, label: "Dismissed" },
+    submitted: { color: "#06b6d4", text: "var(--info)", soft: "var(--info-soft)", icon: FiSend, label: "Submitted" },
+    resolved: { color: "#10b981", text: "var(--success)", soft: "var(--success-soft)", icon: FiCheckCircle, label: "Resolved" },
+    dismissed: { color: "#ef4444", text: "var(--danger)", soft: "var(--danger-soft)", icon: FiXCircle, label: "Dismissed" },
 };
 
 interface StatusPillProps {
@@ -73,12 +79,12 @@ export function StatusPill({
             <span
                 className={`inline-flex items-center gap-1 ${padding} ${text} rounded font-medium`}
                 style={{
-                    backgroundColor: `${cfg.color}1a`,
-                    color: cfg.color,
+                    backgroundColor: cfg.soft,
+                    color: cfg.text,
                 }}
                 aria-label={`Status: ${cfg.label}`}
             >
-                <Icon className="w-3 h-3" />
+                <Icon className="w-3 h-3" style={{ color: cfg.color }} />
                 {cfg.label}
             </span>
         </span>

@@ -440,7 +440,11 @@ export default function ComplianceDashboardPage() {
                         />
 
                         <div className="flex-1 min-w-0">
-                            {!noticesQ.isLoading &&
+                            {noticesQ.isError ? (
+                                <NoticesErrorState
+                                    onRetry={() => noticesQ.refetch()}
+                                />
+                            ) : !noticesQ.isLoading &&
                             rows.length === 0 &&
                             !isFiltersDirty(filters) ? (
                                 <EmptyNoticesState />
@@ -451,6 +455,14 @@ export default function ComplianceDashboardPage() {
                                         isLoading={noticesQ.isLoading}
                                         rowSelection={rowSelection}
                                         onRowSelectionChange={setRowSelection}
+                                        onResetFilters={
+                                            isFiltersDirty(filters)
+                                                ? () => {
+                                                      setFilters(EMPTY_FILTERS);
+                                                      setPage(1);
+                                                  }
+                                                : undefined
+                                        }
                                     />
                                     {total > PAGE_SIZE && (
                                         <div className="mt-4 flex items-center justify-between text-[13px] text-[var(--text-muted)]">
@@ -699,6 +711,41 @@ function EmptyNoticesState() {
                     Upload first notice
                 </Link>
             </div>
+        </div>
+    );
+}
+
+function NoticesErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="surface-card p-10 text-center" role="alert">
+            <div className="relative w-20 h-20 mx-auto mb-5">
+                <div className="absolute inset-0 rounded-full bg-[var(--danger-soft)] blur-xl opacity-60" />
+                <div className="relative w-full h-full rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-default)] flex items-center justify-center shadow-[var(--shadow-md)]">
+                    <FiAlertTriangle className="w-8 h-8 text-[var(--danger)]" />
+                </div>
+            </div>
+            <h2 className="text-[18px] font-semibold text-[var(--text-primary)] mb-1.5">
+                Couldn&apos;t load notices
+            </h2>
+            <p className="text-[13.5px] text-[var(--text-muted)] mb-6 max-w-md mx-auto">
+                Something went wrong fetching your notices. Your data is safe,
+                this is likely a temporary connection issue.
+            </p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="
+                    inline-flex items-center gap-2 h-10 px-4 rounded-md
+                    border border-[var(--border-default)]
+                    bg-[var(--bg-elevated)]
+                    text-[14px] font-medium text-[var(--text-primary)]
+                    hover:bg-[var(--bg-hover)] hover:border-[var(--border-emphasis)]
+                    focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
+                    transition-colors duration-150 cursor-pointer
+                "
+            >
+                Retry
+            </button>
         </div>
     );
 }

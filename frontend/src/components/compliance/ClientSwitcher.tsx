@@ -280,6 +280,8 @@ export function ClientSwitcher() {
                                         className={`
                                             w-full flex items-center gap-2 px-3 py-2 text-[13.5px]
                                             text-left hover:bg-[var(--bg-hover)] transition-colors
+                                            focus-visible:outline-none focus-visible:bg-[var(--bg-hover)]
+                                            focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] focus-visible:ring-inset
                                             ${
                                                 isActive
                                                     ? "border-l-[3px] border-[var(--accent)] pl-[9px] bg-[var(--accent-soft)]"
@@ -319,6 +321,8 @@ export function ClientSwitcher() {
                                 className={`
                                     w-full flex items-center gap-2 px-3 py-2 text-[13.5px]
                                     transition-colors hover:bg-[var(--bg-hover)]
+                                    focus-visible:outline-none focus-visible:bg-[var(--bg-hover)]
+                                    focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] focus-visible:ring-inset
                                     ${
                                         crossClientMode
                                             ? "bg-[var(--accent-soft)] text-[var(--accent)]"
@@ -345,6 +349,8 @@ export function ClientSwitcher() {
                         className="
                             w-full flex items-center gap-2 px-3 py-2 text-[13.5px]
                             text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors
+                            focus-visible:outline-none focus-visible:bg-[var(--bg-hover)]
+                            focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] focus-visible:ring-inset
                         "
                     >
                         <FiPlus className="w-3.5 h-3.5" />

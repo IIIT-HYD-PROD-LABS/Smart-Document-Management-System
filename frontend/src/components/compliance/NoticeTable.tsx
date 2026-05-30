@@ -10,6 +10,7 @@ import {
     type ColumnDef,
     type RowSelectionState,
 } from "@tanstack/react-table";
+import { FiInbox } from "react-icons/fi";
 import type { ComplianceNotice } from "@/types/compliance";
 import { StatusPill } from "@/components/compliance/StatusPill";
 import { AuthorityBadge } from "@/components/compliance/AuthorityBadge";
@@ -36,6 +37,8 @@ interface Props {
             | RowSelectionState
             | ((old: RowSelectionState) => RowSelectionState)
     ) => void;
+    /** Clears all active filters from the filtered-empty state. */
+    onResetFilters?: () => void;
 }
 
 /** Compute overdue from response_deadline + current date. */
@@ -69,6 +72,7 @@ export function NoticeTable({
     isLoading,
     rowSelection,
     onRowSelectionChange,
+    onResetFilters,
 }: Props) {
     const columns = useMemo<ColumnDef<NoticeRow>[]>(
         () => [
@@ -80,7 +84,7 @@ export function NoticeTable({
                     return (
                         <input
                             type="checkbox"
-                            className="accent-[#3b82f6] w-3.5 h-3.5"
+                            className="accent-[var(--accent)] w-3.5 h-3.5"
                             checked={allSelected}
                             ref={(el) => {
                                 if (el) el.indeterminate = !allSelected && someSelected;
@@ -95,7 +99,7 @@ export function NoticeTable({
                 cell: ({ row }) => (
                     <input
                         type="checkbox"
-                        className="accent-[#3b82f6] w-3.5 h-3.5"
+                        className="accent-[var(--accent)] w-3.5 h-3.5"
                         checked={row.getIsSelected()}
                         onChange={(e) => row.toggleSelected(e.target.checked)}
                         aria-label={`Select notice ${row.original.notice_number}`}
@@ -220,13 +224,23 @@ export function NoticeTable({
 
     if (rows.length === 0) {
         return (
-            <div className="surface-card p-10 text-center">
+            <div className="surface-card p-10 flex flex-col items-center text-center">
+                <FiInbox className="w-8 h-8 text-[var(--text-disabled)] mb-3" aria-hidden="true" />
                 <h3 className="text-[15px] font-semibold text-[var(--text-primary)] mb-1.5">
                     No notices match these filters
                 </h3>
                 <p className="text-[13px] text-[var(--text-muted)]">
                     Try clearing one or more filters, or reset all filters.
                 </p>
+                {onResetFilters ? (
+                    <button
+                        type="button"
+                        onClick={onResetFilters}
+                        className="mt-4 inline-flex items-center px-3 py-1.5 rounded text-[12px] font-medium border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] cursor-pointer transition-colors"
+                    >
+                        Reset filters
+                    </button>
+                ) : null}
             </div>
         );
     }

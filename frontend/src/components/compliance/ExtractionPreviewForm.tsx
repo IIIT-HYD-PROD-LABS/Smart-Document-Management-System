@@ -421,7 +421,7 @@ export function ExtractionPreviewForm({
             ) : null}
 
             {credentialMissing ? (
-                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[12px] text-amber-800 dark:text-amber-200 flex items-start gap-2">
+                <div className="rounded-md border border-[color:color-mix(in_srgb,var(--warning)_30%,transparent)] bg-[var(--warning-soft)] px-3 py-2.5 text-[12px] text-[var(--warning)] flex items-start gap-2">
                     <FiAlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
                     <div>
                         Connect an AI provider in{" "}
