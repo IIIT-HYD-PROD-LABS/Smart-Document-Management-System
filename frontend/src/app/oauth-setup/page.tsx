@@ -282,7 +282,7 @@ function CopyRow({ value }: { value: string }) {
                 type="button"
                 onClick={copy}
                 className="
-                    shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded
+                    shrink-0 inline-flex items-center justify-center gap-1 px-2.5 h-8 rounded
                     text-[11.5px] font-medium cursor-pointer
                     bg-[var(--bg-elevated)] border border-[var(--border-default)]
                     text-[var(--text-secondary)]

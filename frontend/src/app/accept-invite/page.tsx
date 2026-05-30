@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import Cookies from "js-cookie";
 import { authApi, extractErrorMessage } from "@/lib/api";
@@ -29,6 +30,11 @@ function AcceptInviteInner() {
     const [password, setPassword] = useState("");
     const [confirm, setConfirm] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [lengthError, setLengthError] = useState("");
+    const [mismatchError, setMismatchError] = useState("");
+
+    const focusRing = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]";
+    const inputClass = "w-full px-3 h-10 bg-[var(--bg-page)] border border-[var(--border-emphasis)] rounded-md text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] transition-colors focus:outline-none focus:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-elevated)]";
 
     if (!token) {
         return (
@@ -42,18 +48,26 @@ function AcceptInviteInner() {
                         was sent. If you no longer have it, ask the person who
                         invited you to send a new invitation.
                     </p>
+                    <Link
+                        href="/login"
+                        className={`inline-block px-3 h-10 leading-10 rounded-md bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-strong)] transition-colors ${focusRing}`}
+                    >
+                        Go to sign in
+                    </Link>
                 </div>
             </div>
         );
     }
 
     const submit = async () => {
+        setLengthError("");
+        setMismatchError("");
         if (password.length < 12) {
-            toast.error("Password must be at least 12 characters");
+            setLengthError("Password must be at least 12 characters");
             return;
         }
         if (password !== confirm) {
-            toast.error("Passwords do not match");
+            setMismatchError("Passwords do not match");
             return;
         }
         setSubmitting(true);
@@ -92,7 +106,14 @@ function AcceptInviteInner() {
 
     return (
         <div className="min-h-screen flex items-center justify-center p-6 bg-[var(--bg-page)]">
-            <div className="max-w-sm w-full space-y-5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md p-6 shadow-[var(--shadow-md)]">
+            <form
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    submit();
+                }}
+                aria-busy={submitting}
+                className="surface-card max-w-sm w-full space-y-5 p-6"
+            >
                 <div className="space-y-1">
                     <h1 className="text-lg font-semibold text-[var(--text-primary)]">
                         Set your password
@@ -105,7 +126,7 @@ function AcceptInviteInner() {
                 <div>
                     <label
                         htmlFor="accept-invite-password"
-                        className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1"
+                        className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block"
                     >
                         Password
                     </label>
@@ -114,24 +135,29 @@ function AcceptInviteInner() {
                         type="password"
                         autoComplete="new-password"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={(e) => {
+                            setPassword(e.target.value);
+                            if (lengthError) setLengthError("");
+                        }}
                         minLength={12}
-                        className="
-                            w-full px-3 py-2 rounded bg-[var(--bg-elevated)]
-                            border border-[var(--border-default)]
-                            text-[var(--text-primary)] text-sm
-                            focus:outline-none focus:border-[var(--accent)]
-                            focus:ring-2 focus:ring-[var(--accent-edge)]
-                        "
+                        aria-invalid={lengthError ? true : undefined}
+                        aria-describedby="accept-invite-password-help"
+                        className={inputClass}
                     />
-                    <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                        Minimum 12 characters.
-                    </p>
+                    {lengthError ? (
+                        <p id="accept-invite-password-help" role="alert" className="text-[12px] text-[var(--danger)] mt-1">
+                            {lengthError}
+                        </p>
+                    ) : (
+                        <p id="accept-invite-password-help" className="text-[11px] text-[var(--text-muted)] mt-1">
+                            Minimum 12 characters.
+                        </p>
+                    )}
                 </div>
                 <div>
                     <label
                         htmlFor="accept-invite-confirm"
-                        className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1"
+                        className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block"
                     >
                         Confirm password
                     </label>
@@ -140,31 +166,29 @@ function AcceptInviteInner() {
                         type="password"
                         autoComplete="new-password"
                         value={confirm}
-                        onChange={(e) => setConfirm(e.target.value)}
+                        onChange={(e) => {
+                            setConfirm(e.target.value);
+                            if (mismatchError) setMismatchError("");
+                        }}
                         minLength={12}
-                        className="
-                            w-full px-3 py-2 rounded bg-[var(--bg-elevated)]
-                            border border-[var(--border-default)]
-                            text-[var(--text-primary)] text-sm
-                            focus:outline-none focus:border-[var(--accent)]
-                            focus:ring-2 focus:ring-[var(--accent-edge)]
-                        "
+                        aria-invalid={mismatchError ? true : undefined}
+                        aria-describedby={mismatchError ? "accept-invite-confirm-error" : undefined}
+                        className={inputClass}
                     />
+                    {mismatchError && (
+                        <p id="accept-invite-confirm-error" role="alert" className="text-[12px] text-[var(--danger)] mt-1">
+                            {mismatchError}
+                        </p>
+                    )}
                 </div>
                 <button
-                    type="button"
-                    onClick={submit}
+                    type="submit"
                     disabled={submitting}
-                    className="
-                        w-full px-3 py-2 rounded bg-[var(--accent)] text-white text-sm font-medium
-                        hover:bg-[var(--accent-strong)] transition-colors
-                        focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
-                        disabled:opacity-60 disabled:cursor-not-allowed
-                    "
+                    className={`w-full h-10 rounded-md bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-strong)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${focusRing}`}
                 >
                     {submitting ? "Setting password…" : "Set password and sign in"}
                 </button>
-            </div>
+            </form>
         </div>
     );
 }

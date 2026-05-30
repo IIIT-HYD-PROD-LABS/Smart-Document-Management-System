@@ -49,12 +49,12 @@ function OAuthCallbackInner() {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-[#09090b] flex items-center justify-center px-6">
+            <div className="min-h-screen bg-[var(--bg-page)] flex items-center justify-center px-6">
                 <div className="text-center">
-                    <p className="text-sm text-[#ef4444] mb-4">{error}</p>
+                    <p className="text-sm text-[var(--danger)] mb-4">{error}</p>
                     <button
                         onClick={() => router.push("/login")}
-                        className="text-sm text-[#a1a1aa] hover:text-white transition-colors cursor-pointer"
+                        className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]"
                     >
                         Back to login
                     </button>
@@ -64,10 +64,10 @@ function OAuthCallbackInner() {
     }
 
     return (
-        <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+        <div className="min-h-screen bg-[var(--bg-page)] flex items-center justify-center">
             <div className="text-center">
                 <LoadingSpinner className="mx-auto mb-4" />
-                <p className="text-sm text-[#71717a]">Completing sign-in...</p>
+                <p className="text-sm text-[var(--text-subtle)]">Completing sign-in...</p>
             </div>
         </div>
     );
@@ -77,7 +77,7 @@ export default function OAuthCallbackPage() {
     return (
         <Suspense
             fallback={
-                <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+                <div className="min-h-screen bg-[var(--bg-page)] flex items-center justify-center">
                     <LoadingSpinner />
                 </div>
             }

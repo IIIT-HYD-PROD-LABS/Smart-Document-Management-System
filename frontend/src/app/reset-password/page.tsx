@@ -25,6 +25,11 @@ function ResetPasswordInner() {
     const [password, setPassword] = useState("");
     const [confirm, setConfirm] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [complexityError, setComplexityError] = useState("");
+    const [mismatchError, setMismatchError] = useState("");
+
+    const focusRing = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]";
+    const inputClass = "w-full px-3 h-10 bg-[var(--bg-page)] border border-[var(--border-emphasis)] rounded-md text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] transition-colors focus:outline-none focus:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-elevated)]";
 
     if (!token) {
         return (
@@ -39,7 +44,7 @@ function ResetPasswordInner() {
                     </p>
                     <Link
                         href="/forgot-password"
-                        className="inline-block px-3 py-2 rounded bg-[var(--accent)] text-white text-sm"
+                        className="inline-block px-3 h-10 leading-10 rounded-md bg-[var(--accent)] text-white text-sm"
                     >
                         Request new link
                     </Link>
@@ -56,14 +61,16 @@ function ResetPasswordInner() {
         /[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\/~`]/.test(pw);
 
     const submit = async () => {
+        setComplexityError("");
+        setMismatchError("");
         if (!passesComplexity(password)) {
-            toast.error(
+            setComplexityError(
                 "Password must be 8+ chars with upper, lower, digit, and special.",
             );
             return;
         }
         if (password !== confirm) {
-            toast.error("Passwords do not match");
+            setMismatchError("Passwords do not match");
             return;
         }
         setSubmitting(true);
@@ -103,7 +110,14 @@ function ResetPasswordInner() {
 
     return (
         <div className="min-h-screen flex items-center justify-center p-6 bg-[var(--bg-page)]">
-            <div className="max-w-sm w-full space-y-5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md p-6 shadow-[var(--shadow-md)]">
+            <form
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    submit();
+                }}
+                aria-busy={submitting}
+                className="surface-card max-w-sm w-full space-y-5 p-6"
+            >
                 <div className="space-y-1">
                     <h1 className="text-lg font-semibold text-[var(--text-primary)]">
                         Set a new password
@@ -117,7 +131,7 @@ function ResetPasswordInner() {
                 <div>
                     <label
                         htmlFor="reset-password-input"
-                        className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1"
+                        className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block"
                     >
                         New password
                     </label>
@@ -126,24 +140,29 @@ function ResetPasswordInner() {
                         type="password"
                         autoComplete="new-password"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={(e) => {
+                            setPassword(e.target.value);
+                            if (complexityError) setComplexityError("");
+                        }}
                         minLength={8}
-                        className="
-                            w-full px-3 py-2 rounded bg-[var(--bg-elevated)]
-                            border border-[var(--border-default)]
-                            text-[var(--text-primary)] text-sm
-                            focus:outline-none focus:border-[var(--accent)]
-                            focus:ring-2 focus:ring-[var(--accent-edge)]
-                        "
+                        aria-invalid={complexityError ? true : undefined}
+                        aria-describedby="reset-password-help"
+                        className={inputClass}
                     />
-                    <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                        Minimum 8 characters with upper, lower, digit, and special.
-                    </p>
+                    {complexityError ? (
+                        <p id="reset-password-help" role="alert" className="text-[12px] text-[var(--danger)] mt-1">
+                            {complexityError}
+                        </p>
+                    ) : (
+                        <p id="reset-password-help" className="text-[11px] text-[var(--text-muted)] mt-1">
+                            Minimum 8 characters with upper, lower, digit, and special.
+                        </p>
+                    )}
                 </div>
                 <div>
                     <label
                         htmlFor="reset-confirm-input"
-                        className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1"
+                        className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block"
                     >
                         Confirm password
                     </label>
@@ -152,34 +171,29 @@ function ResetPasswordInner() {
                         type="password"
                         autoComplete="new-password"
                         value={confirm}
-                        onChange={(e) => setConfirm(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") submit();
+                        onChange={(e) => {
+                            setConfirm(e.target.value);
+                            if (mismatchError) setMismatchError("");
                         }}
                         minLength={8}
-                        className="
-                            w-full px-3 py-2 rounded bg-[var(--bg-elevated)]
-                            border border-[var(--border-default)]
-                            text-[var(--text-primary)] text-sm
-                            focus:outline-none focus:border-[var(--accent)]
-                            focus:ring-2 focus:ring-[var(--accent-edge)]
-                        "
+                        aria-invalid={mismatchError ? true : undefined}
+                        aria-describedby={mismatchError ? "reset-confirm-error" : undefined}
+                        className={inputClass}
                     />
+                    {mismatchError && (
+                        <p id="reset-confirm-error" role="alert" className="text-[12px] text-[var(--danger)] mt-1">
+                            {mismatchError}
+                        </p>
+                    )}
                 </div>
                 <button
-                    type="button"
-                    onClick={submit}
+                    type="submit"
                     disabled={submitting}
-                    className="
-                        w-full px-3 py-2 rounded bg-[var(--accent)] text-white text-sm font-medium
-                        hover:bg-[var(--accent-strong)] transition-colors
-                        focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
-                        disabled:opacity-60 disabled:cursor-not-allowed
-                    "
+                    className={`w-full h-10 rounded-md bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-strong)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${focusRing}`}
                 >
                     {submitting ? "Updating..." : "Update password and sign in"}
                 </button>
-            </div>
+            </form>
         </div>
     );
 }

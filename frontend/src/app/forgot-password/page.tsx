@@ -46,9 +46,12 @@ export default function ForgotPasswordPage() {
         }
     };
 
+    const inputClass = "w-full px-3 h-10 bg-[var(--bg-page)] border border-[var(--border-emphasis)] rounded-md text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] transition-colors focus:outline-none focus:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-elevated)]";
+    const focusRing = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]";
+
     return (
         <div className="min-h-screen flex items-center justify-center p-6 bg-[var(--bg-page)]">
-            <div className="max-w-sm w-full space-y-5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md p-6 shadow-[var(--shadow-md)]">
+            <div className="surface-card max-w-sm w-full space-y-5 p-6">
                 <div className="space-y-1">
                     <h1 className="text-lg font-semibold text-[var(--text-primary)]">
                         Forgot your password?
@@ -62,7 +65,7 @@ export default function ForgotPasswordPage() {
 
                 {submitted ? (
                     <div className="space-y-3">
-                        <div className="rounded border border-[var(--success-soft)] bg-[var(--success-soft)]/30 px-3 py-2 text-[12.5px] text-[var(--text-primary)]">
+                        <div className="rounded border border-[var(--success)]/25 bg-[var(--success-soft)] px-3 py-2 text-[12.5px] text-[var(--success)]">
                             If an account exists for that email, a reset link
                             has been sent. Check your inbox (and spam folder).
                             The link expires in 15 minutes.
@@ -75,17 +78,24 @@ export default function ForgotPasswordPage() {
                         </p>
                         <Link
                             href="/login"
-                            className="block w-full text-center px-3 py-2 rounded bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-strong)] transition-colors"
+                            className={`block w-full text-center px-3 h-10 leading-10 rounded-md bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-strong)] transition-colors ${focusRing}`}
                         >
                             Back to sign in
                         </Link>
                     </div>
                 ) : (
-                    <>
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            submit();
+                        }}
+                        aria-busy={submitting}
+                        className="space-y-5"
+                    >
                         <div>
                             <label
                                 htmlFor="forgot-email"
-                                className="block text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1"
+                                className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block"
                             >
                                 Email
                             </label>
@@ -96,29 +106,14 @@ export default function ForgotPasswordPage() {
                                 inputMode="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") submit();
-                                }}
                                 placeholder="you@example.com"
-                                className="
-                                    w-full px-3 py-2 rounded bg-[var(--bg-elevated)]
-                                    border border-[var(--border-default)]
-                                    text-[var(--text-primary)] text-sm
-                                    focus:outline-none focus:border-[var(--accent)]
-                                    focus:ring-2 focus:ring-[var(--accent-edge)]
-                                "
+                                className={inputClass}
                             />
                         </div>
                         <button
-                            type="button"
-                            onClick={submit}
+                            type="submit"
                             disabled={submitting}
-                            className="
-                                w-full px-3 py-2 rounded bg-[var(--accent)] text-white text-sm font-medium
-                                hover:bg-[var(--accent-strong)] transition-colors
-                                focus:outline-none focus:ring-2 focus:ring-[var(--accent-edge)]
-                                disabled:opacity-60 disabled:cursor-not-allowed
-                            "
+                            className={`w-full h-10 rounded-md bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-strong)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${focusRing}`}
                         >
                             {submitting ? "Sending..." : "Send reset link"}
                         </button>
@@ -127,7 +122,7 @@ export default function ForgotPasswordPage() {
                                 Back to sign in
                             </Link>
                         </div>
-                    </>
+                    </form>
                 )}
             </div>
         </div>
