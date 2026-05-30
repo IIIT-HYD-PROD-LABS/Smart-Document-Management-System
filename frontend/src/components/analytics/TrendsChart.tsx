@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
     AreaChart,
     Area,
@@ -14,15 +15,62 @@ import {
 } from "recharts";
 
 // Light-theme calibrated category palette, deeper saturations for AA on white.
-const CATEGORY_COLORS: Record<string, string> = {
-    bills:    "#047857",
-    upi:      "#6d28d9",
-    tickets:  "#b45309",
-    tax:      "#1d4ed8",
-    bank:     "#0e7490",
-    invoices: "#be185d",
-    unknown:  "#71717a",
+// Each key maps to [light, dark] so the donut tracks the active theme.
+const CATEGORY_COLORS: Record<string, [string, string]> = {
+    bills:    ["#047857", "#10b981"],
+    upi:      ["#6d28d9", "#a78bfa"],
+    tickets:  ["#b45309", "#f59e0b"],
+    tax:      ["#1d4ed8", "#60a5fa"],
+    bank:     ["#0e7490", "#06b6d4"],
+    invoices: ["#be185d", "#f472b6"],
+    unknown:  ["#71717a", "#a1a1aa"],
 };
+
+// recharts needs concrete color strings (not var()), so resolve the design
+// tokens off the document root and re-resolve when the theme attribute flips.
+function useChartTokens() {
+    const [tokens, setTokens] = useState({
+        grid: "#e4e4e7",
+        tick: "#71717a",
+        cursor: "#d4d4d8",
+        accent: "#2563eb",
+        cellStroke: "#ffffff",
+        tooltipLabel: "#52525b",
+        dark: false,
+    });
+
+    useEffect(() => {
+        const read = () => {
+            const cs = getComputedStyle(document.documentElement);
+            const v = (name: string, fallback: string) =>
+                cs.getPropertyValue(name).trim() || fallback;
+            setTokens({
+                grid: v("--border-default", "#e4e4e7"),
+                tick: v("--text-subtle", "#71717a"),
+                cursor: v("--border-emphasis", "#d4d4d8"),
+                accent: v("--accent", "#2563eb"),
+                cellStroke: v("--bg-elevated", "#ffffff"),
+                tooltipLabel: v("--text-muted", "#52525b"),
+                dark: document.documentElement.getAttribute("data-theme") === "dark",
+            });
+        };
+        read();
+        const observer = new MutationObserver(read);
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["data-theme"],
+        });
+        return () => observer.disconnect();
+    }, []);
+
+    return tokens;
+}
+
+function categoryColor(name: string, dark: boolean): string {
+    const pair = CATEGORY_COLORS[name];
+    if (!pair) return dark ? "#a1a1aa" : "#71717a";
+    return dark ? pair[1] : pair[0];
+}
 
 const tooltipStyle = {
     backgroundColor: "var(--bg-elevated)",
@@ -48,6 +96,8 @@ interface TrendsChartProps {
 }
 
 export default function TrendsChart({ data }: TrendsChartProps) {
+    const t = useChartTokens();
+
     if (data.length === 0) {
         return (
             <p className="text-xs text-center py-8" style={{ color: "var(--text-muted)" }}>
@@ -61,32 +111,32 @@ export default function TrendsChart({ data }: TrendsChartProps) {
             <AreaChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <defs>
                     <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#2563eb" stopOpacity={0.18} />
-                        <stop offset="100%" stopColor="#2563eb" stopOpacity={0} />
+                        <stop offset="0%" stopColor={t.accent} stopOpacity={0.18} />
+                        <stop offset="100%" stopColor={t.accent} stopOpacity={0} />
                     </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+                <CartesianGrid strokeDasharray="3 3" stroke={t.grid} />
                 <XAxis
                     dataKey="month"
-                    tick={{ fill: "#71717a", fontSize: 12 }}
-                    axisLine={{ stroke: "#e4e4e7" }}
+                    tick={{ fill: t.tick, fontSize: 12 }}
+                    axisLine={{ stroke: t.grid }}
                     tickLine={false}
                 />
                 <YAxis
                     allowDecimals={false}
-                    tick={{ fill: "#71717a", fontSize: 12 }}
-                    axisLine={{ stroke: "#e4e4e7" }}
+                    tick={{ fill: t.tick, fontSize: 12 }}
+                    axisLine={{ stroke: t.grid }}
                     tickLine={false}
                 />
                 <Tooltip
                     contentStyle={tooltipStyle}
-                    labelStyle={{ color: "#52525b" }}
-                    cursor={{ stroke: "#d4d4d8", strokeDasharray: "3 3" }}
+                    labelStyle={{ color: t.tooltipLabel }}
+                    cursor={{ stroke: t.cursor, strokeDasharray: "3 3" }}
                 />
                 <Area
                     type="monotone"
                     dataKey="count"
-                    stroke="#2563eb"
+                    stroke={t.accent}
                     strokeWidth={2}
                     fill="url(#trendGradient)"
                     name="Uploads"
@@ -97,6 +147,8 @@ export default function TrendsChart({ data }: TrendsChartProps) {
 }
 
 export function CategoryDonut({ data }: { data: CategoryDatum[] }) {
+    const t = useChartTokens();
+
     if (data.length === 0) {
         return <p className="text-xs text-center py-8" style={{ color: "var(--text-muted)" }}>No data</p>;
     }
@@ -117,8 +169,8 @@ export function CategoryDonut({ data }: { data: CategoryDatum[] }) {
                         {data.map((entry) => (
                             <Cell
                                 key={entry.name}
-                                fill={CATEGORY_COLORS[entry.name] ?? "#71717a"}
-                                stroke="#ffffff"
+                                fill={categoryColor(entry.name, t.dark)}
+                                stroke={t.cellStroke}
                                 strokeWidth={2}
                             />
                         ))}
@@ -134,7 +186,7 @@ export function CategoryDonut({ data }: { data: CategoryDatum[] }) {
                     <div key={entry.name} className="flex items-center gap-1.5">
                         <div
                             className="w-2 h-2 rounded-full"
-                            style={{ backgroundColor: CATEGORY_COLORS[entry.name] ?? "#71717a" }}
+                            style={{ backgroundColor: categoryColor(entry.name, t.dark) }}
                         />
                         <span className="text-xs capitalize" style={{ color: "var(--text-secondary)" }}>{entry.name}</span>
                         <span className="text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>{entry.value}</span>

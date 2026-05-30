@@ -66,10 +66,10 @@ function StatCard({
     hint?: string;
 }) {
     return (
-        <div className="surface-card p-5">
-            <div className="flex items-center gap-3 mb-2">
-                <Icon className="w-4 h-4 text-[var(--text-muted)]" />
-                <p className="microtype text-[var(--text-muted)]">{label}</p>
+        <div className="surface-card p-5 min-w-0">
+            <div className="flex items-center gap-3 mb-2 min-w-0">
+                <Icon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+                <p className="microtype text-[var(--text-muted)] truncate">{label}</p>
             </div>
             <p className="text-2xl font-semibold text-[var(--text-primary)] tabular-nums">
                 {value}
@@ -191,7 +191,7 @@ export default function AdminOverviewPage() {
                     <LoadingSpinner />
                 </div>
             ) : (
-                <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <section className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3">
                     <StatCard
                         label="Total users"
                         value={stats?.total_users ?? 0}
@@ -229,7 +229,7 @@ export default function AdminOverviewPage() {
                         Quick actions
                     </h2>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
                     {QUICK_ACTIONS.map(({ href, label, description, icon: Icon }) => (
                         <Link
                             key={href}

@@ -42,12 +42,41 @@ function accuracyBgColor(value: number): string {
     return "bg-[var(--danger-soft)] text-[var(--danger)]";
 }
 
+// Resolve the --danger token to an "r, g, b" channel string so the
+// confusion-matrix heat tint can vary alpha while still tracking the theme.
+// (recharts-style inline rgba() needs concrete channels, not var().)
+function useDangerChannel(): string {
+    const [channel, setChannel] = useState("185, 28, 28");
+    useEffect(() => {
+        const read = () => {
+            const hex = getComputedStyle(document.documentElement)
+                .getPropertyValue("--danger")
+                .trim();
+            const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+            if (m) {
+                setChannel(
+                    `${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}`,
+                );
+            }
+        };
+        read();
+        const observer = new MutationObserver(read);
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["data-theme"],
+        });
+        return () => observer.disconnect();
+    }, []);
+    return channel;
+}
+
 export default function ModelEvaluationPage() {
     const { user, isLoading: authLoading } = useAuth();
     const router = useRouter();
     const [report, setReport] = useState<EvaluationReport | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const dangerChannel = useDangerChannel();
 
     // Admin-only route. Backend require_admin gate already returns 403,
     // but the page should not render at all for non-admins (matches the
@@ -295,7 +324,7 @@ export default function ModelEvaluationPage() {
                                                 }`}
                                                 style={
                                                     !isCorrect && val > 0
-                                                        ? { backgroundColor: `rgba(185, 28, 28, ${intensity * 0.12})` }
+                                                        ? { backgroundColor: `rgba(${dangerChannel}, ${intensity * 0.12})` }
                                                         : undefined
                                                 }
                                             >

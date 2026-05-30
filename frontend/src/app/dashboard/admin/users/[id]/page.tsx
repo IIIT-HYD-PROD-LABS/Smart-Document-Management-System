@@ -312,11 +312,7 @@ export default function AdminUserDetailPage() {
                     <MetaRow
                         icon={FiClock}
                         label="Last login"
-                        value={
-                            <span className="text-[var(--text-muted)] italic">
-                                Not tracked
-                            </span>
-                        }
+                        value={formatDate(u.last_login)}
                     />
                 </div>
 

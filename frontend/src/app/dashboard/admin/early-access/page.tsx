@@ -197,7 +197,7 @@ export default function EarlyAccessPage() {
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search by name, email, company..."
                         aria-label="Search early access requests"
-                        className="w-full pl-9 pr-3 py-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md text-sm text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+                        className="w-full pl-9 pr-3 py-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-md text-sm text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-edge)] transition-colors"
                     />
                 </div>
             </div>
@@ -286,14 +286,18 @@ export default function EarlyAccessPage() {
                                             <p className="text-[11.5px] text-[var(--text-muted)]">{item.email}</p>
                                         </td>
                                         <td className="px-4 py-3 text-[12px] text-[var(--text-muted)]">
-                                            {item.company || "."}
+                                            {item.company || (
+                                                <span className="text-[var(--text-disabled)]">None</span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 max-w-[220px]">
                                             <p
                                                 className="text-[12px] text-[var(--text-muted)] truncate"
                                                 title={item.reason || ""}
                                             >
-                                                {item.reason || "."}
+                                                {item.reason || (
+                                                    <span className="text-[var(--text-disabled)]">None</span>
+                                                )}
                                             </p>
                                         </td>
                                         <td className="px-4 py-3">
@@ -361,7 +365,7 @@ export default function EarlyAccessPage() {
                                                 )
                                             ) : (
                                                 <span className="text-[11.5px] text-[var(--text-disabled)]">
-                                                    {item.admin_note || "."}
+                                                    {item.admin_note || "None"}
                                                 </span>
                                             )}
                                         </td>

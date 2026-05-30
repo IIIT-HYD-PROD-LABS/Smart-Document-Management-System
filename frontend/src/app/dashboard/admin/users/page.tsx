@@ -240,7 +240,7 @@ export default function AdminUsersPage() {
                                         value={u.role}
                                         onChange={(e) => handleRoleChange(u, e.target.value)}
                                         disabled={u.id === user?.id}
-                                        className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                        className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] focus:border-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                     >
                                         <option value="admin">Admin</option>
                                         <option value="editor">Editor</option>
@@ -251,7 +251,7 @@ export default function AdminUsersPage() {
                                     <button
                                         onClick={() => handleStatusToggle(u)}
                                         disabled={u.id === user?.id}
-                                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] disabled:opacity-50 disabled:cursor-not-allowed ${
                                             u.is_active
                                                 ? "bg-[var(--success-soft)] text-[var(--success)]"
                                                 : "bg-[var(--danger-soft)] text-[var(--danger)]"

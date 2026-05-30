@@ -147,12 +147,12 @@ export default function AnalyticsPage() {
         .filter(([, count]) => count > 0)
         .map(([name, value]) => ({ name, value }));
 
-    // Light-theme semantic colors for status segments
+    // Semantic tokens for status segments — track the active theme.
     const statusSegments = [
-        { label: "Completed",  value: completed,  color: "#047857" },
-        { label: "Processing", value: processing, color: "#b45309" },
-        { label: "Pending",    value: pending,    color: "#71717a" },
-        { label: "Failed",     value: failed,     color: "#b91c1c" },
+        { label: "Completed",  value: completed,  color: "var(--success)" },
+        { label: "Processing", value: processing, color: "var(--warning)" },
+        { label: "Pending",    value: pending,    color: "var(--text-subtle)" },
+        { label: "Failed",     value: failed,     color: "var(--danger)" },
     ];
 
     const statCards = [

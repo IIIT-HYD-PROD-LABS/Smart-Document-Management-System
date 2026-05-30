@@ -69,6 +69,7 @@ export default function AdminAuditPage() {
     const [dateFrom, setDateFrom] = useState(searchParams.get("date_from") || "");
     const [dateTo, setDateTo] = useState(searchParams.get("date_to") || "");
     const [page, setPage] = useState(1);
+    const [expandedId, setExpandedId] = useState<number | null>(null);
 
     // Keep the URL in sync with filters so an admin can share a link.
     useEffect(() => {
@@ -309,14 +310,35 @@ export default function AdminAuditPage() {
                                                 )}
                                             </span>
                                         </td>
-                                        <td
-                                            className="px-4 py-3 align-top max-w-[420px]"
-                                            title={detailsStr}
-                                        >
+                                        <td className="px-4 py-3 align-top max-w-[420px]">
                                             {detailsStr ? (
-                                                <p className="text-[11.5px] text-[var(--text-muted)] font-mono truncate">
-                                                    {truncate(detailsStr, 220)}
-                                                </p>
+                                                (() => {
+                                                    const isExpanded = expandedId === item.id;
+                                                    const isLong = detailsStr.length > 220;
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setExpandedId(
+                                                                    isExpanded ? null : item.id,
+                                                                )
+                                                            }
+                                                            aria-expanded={isExpanded}
+                                                            disabled={!isLong}
+                                                            className="block w-full text-left cursor-pointer disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] rounded"
+                                                        >
+                                                            {isExpanded ? (
+                                                                <pre className="text-[11.5px] text-[var(--text-muted)] font-mono whitespace-pre-wrap break-words border border-[var(--border-subtle)] rounded bg-[var(--bg-page)] p-2">
+                                                                    {detailsStr}
+                                                                </pre>
+                                                            ) : (
+                                                                <p className="text-[11.5px] text-[var(--text-muted)] font-mono truncate">
+                                                                    {truncate(detailsStr, 220)}
+                                                                </p>
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })()
                                             ) : (
                                                 <span className="text-[12px] text-[var(--text-disabled)]">
                                                     none
