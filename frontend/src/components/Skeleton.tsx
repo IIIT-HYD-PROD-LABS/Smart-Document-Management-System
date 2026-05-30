@@ -10,7 +10,7 @@
 export function Skeleton({ className = "" }: { className?: string }) {
     return (
         <div
-            className={`motion-safe:animate-pulse rounded-md bg-[var(--bg-hover)] ${className}`}
+            className={`motion-safe:animate-pulse rounded-md bg-[var(--border-default)] ${className}`}
             aria-hidden
         />
     );

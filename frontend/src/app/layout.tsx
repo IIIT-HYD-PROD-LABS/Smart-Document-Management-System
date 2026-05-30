@@ -56,7 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                                     color: "var(--text-primary)",
                                     border: "1px solid var(--border-default)",
                                     borderRadius: "8px",
-                                    fontSize: "13px",
+                                    fontSize: "14px",
                                     boxShadow: "var(--shadow-lg)",
                                 },
                                 success: { iconTheme: { primary: "var(--success)", secondary: "var(--bg-elevated)" } },

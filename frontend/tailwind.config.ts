@@ -9,7 +9,8 @@ const config: Config = {
     theme: {
         extend: {
             fontFamily: {
-                sans: ["Inter", "system-ui", "-apple-system", "sans-serif"],
+                sans: ["var(--font-plex-sans)", "IBM Plex Sans", "system-ui", "-apple-system", "sans-serif"],
+                mono: ["var(--font-plex-mono)", "IBM Plex Mono", "ui-monospace", "monospace"],
             },
         },
     },
