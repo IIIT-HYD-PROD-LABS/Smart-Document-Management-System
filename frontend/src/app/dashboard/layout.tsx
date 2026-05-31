@@ -268,7 +268,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         <Skeleton className="h-10 w-full rounded-md" />
                     </div>
                 </aside>
-                <main className="flex-1 md:ml-60 mt-14 md:mt-0">
+                <main className="flex-1 min-w-0 md:ml-60 mt-14 md:mt-0">
                     <div className="hidden md:flex h-14 px-6 lg:px-10 items-center justify-end border-b border-[var(--border-default)]">
                         <Skeleton className="h-8 w-20 rounded-md" />
                     </div>
@@ -509,7 +509,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 </div>
             </aside>
 
-            <main className="flex-1 md:ml-60 ml-0 mt-14 md:mt-0">
+            <main className="flex-1 min-w-0 md:ml-60 ml-0 mt-14 md:mt-0">
                 {/* Desktop topbar — theme toggle lives here */}
                 <div className="hidden md:flex sticky top-0 z-30 h-14 px-6 lg:px-10 items-center justify-end gap-3 border-b border-[var(--border-default)] bg-[var(--bg-page)]/85 backdrop-blur">
                     <ThemeToggle />
