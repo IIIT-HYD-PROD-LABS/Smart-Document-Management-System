@@ -94,13 +94,25 @@ def should_skip_extraction(notice) -> bool:
     return status in _FROZEN_STATUSES
 
 
-def apply_extraction_to_notice(db, notice, envelope: dict, decision: dict) -> None:
-    """Persist the extraction envelope onto the notice and enqueue review if needed.
+def apply_extraction_to_notice(
+    db, notice, envelope: dict, decision: dict, *, fill_columns: bool = True
+) -> None:
+    """Persist the extraction envelope onto the notice and back-populate columns.
 
-    Always writes the envelope, confidence, provider, timestamp, and
-    extraction_status='completed' (D-23 + D-11). When the routing decision
-    is 'review_queue', also enqueues a review-queue row so reviewers see
-    the notice in the queue (D-06 + Phase 10 review queue reuse).
+    Always writes the envelope, confidence, provider, timestamp (D-23 + D-11).
+    When the routing decision is 'apply' (the D-06 confidence gate passed) and
+    ``fill_columns`` is True, the model-owned fields are coerced and written
+    onto any canonical column that is still empty (fill-don't-clobber: a
+    confident extraction never overwrites a value a human already entered), and
+    extraction_status becomes 'accepted' so the upload-fills-the-fields
+    workflow completes without a second step. When the decision is
+    'review_queue', the envelope is parked (status 'completed', label "awaiting
+    acceptance") and a review-queue row is enqueued so reviewers see the notice
+    in the queue (D-06 + Phase 10 reuse).
+
+    ``fill_columns=False`` is used by the accept-extraction replay path, where
+    the user's reviewed ``items`` are the sole authority on which columns get
+    written — auto-filling there would resurrect fields the user discarded.
     """
     from datetime import datetime, timezone
 
@@ -108,11 +120,50 @@ def apply_extraction_to_notice(db, notice, envelope: dict, decision: dict) -> No
     notice.extraction_confidence = envelope.get("average_confidence")
     notice.extracted_by_provider = envelope.get("model")
     notice.extracted_at = datetime.now(timezone.utc)
-    notice.extraction_status = "completed"
+
+    if decision.get("action") == "apply":
+        if fill_columns:
+            _apply_fields_to_columns(notice, envelope)
+            notice.extraction_status = "accepted"
+        else:
+            notice.extraction_status = "completed"
+    else:
+        notice.extraction_status = "completed"
     db.flush()
 
     if decision.get("action") == "review_queue":
         _enqueue_for_review(db, notice, envelope, decision)
+
+
+def _apply_fields_to_columns(notice, envelope: dict) -> None:
+    """Coerce the model-owned fields onto empty canonical columns.
+
+    Fill-don't-clobber: a column that already holds a value (e.g. the
+    notice_number/authority a human entered at creation, or the default
+    received_date) is left untouched. Per-field coercion failures are
+    swallowed so one unparseable value never aborts the whole apply — which,
+    in the Celery worker, would otherwise mark the extraction failed and
+    discard every good field with it.
+    """
+    from app.compliance.services.extraction_coercion import (
+        CoercionError,
+        FIELD_COERCERS,
+    )
+
+    fields = envelope.get("fields") or {}
+    for field_name, (column, coerce) in FIELD_COERCERS.items():
+        if getattr(notice, column, None) is not None:
+            continue
+        payload = fields.get(field_name)
+        if not isinstance(payload, dict):
+            continue
+        try:
+            value = coerce(payload.get("value"))
+        except CoercionError:
+            continue
+        if value is None:
+            continue
+        setattr(notice, column, value)
 
 
 def _enqueue_for_review(db, notice, envelope: dict, decision: dict) -> None:
