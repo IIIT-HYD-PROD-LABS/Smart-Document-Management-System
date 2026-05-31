@@ -1,9 +1,32 @@
 # RLS Activation Runbook, 2026-06-01
 
-Postgres Row Level Security is now wired to be enforced at runtime as a second,
-independent tenant-isolation layer behind the explicit per-endpoint client_id
-filters. It is shipped GATED OFF (`DB_ENFORCE_RLS=false`), so nothing changes
-until you flip the gate. This runbook is the cutover.
+Postgres Row Level Security enforces tenant isolation at runtime as a second,
+independent layer behind the explicit per-endpoint client_id filters.
+
+## STATUS: ACTIVATED 2026-06-01
+
+RLS is LIVE. Migrations 0037 to 0039 are applied to Supabase (head 0039), and
+`DB_ENFORCE_RLS=true` in the gitignored `docker-compose.override.yml` shared_env
+anchor, so the backend and both workers connect as `app_runtime`. Verified end
+to end: login, the client switcher, notice list/detail/activity, the calendar,
+and extraction all return correct data; cross-tenant access is denied.
+
+The gate flag makes this reversible with no database change. To roll back:
+set `DB_ENFORCE_RLS=false` and `docker compose up -d backend celery_worker
+compliance_worker`.
+
+### Cutover note: the request-path propagation fix (commit e54f356)
+
+The first cutover attempt fail-closed: `/clients/me` returned no clients and
+`/notices` 500'd with `invalid input syntax for type integer: ""`. Cause:
+`app.current_client_id` is set by the middleware in the async request context
+(which propagates to the threadpool DB query), but `app.user_id` was set by
+`get_current_user`, a sync threadpool dependency whose ContextVar mutation does
+not reach the route's query. So `app.user_id` arrived empty and the user-scoped
+policies fail-closed / errored on `app.user_id::int`. Fix: the middleware now
+decodes the JWT and sets `app.user_id` in the async dispatch. Lesson: verify
+request-path RLS with a TestClient through the real middleware, not just SQL
+`set_config`.
 
 ## What changed (all gated behind DB_ENFORCE_RLS, default false)
 
