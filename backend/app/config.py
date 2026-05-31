@@ -137,10 +137,23 @@ class Settings(BaseSettings):
     APP_MIGRATOR_PASSWORD: str = ""
 
     # Connection strings for the two roles. Migrations use DATABASE_URL_MIGRATOR
-    # (or DATABASE_URL fallback); FastAPI process uses DATABASE_URL_RUNTIME so
-    # RLS policies apply.
+    # (or DATABASE_URL fallback); the FastAPI process uses DATABASE_URL_RUNTIME
+    # so RLS policies apply — but ONLY when DB_ENFORCE_RLS is true (see below).
     DATABASE_URL_RUNTIME: str = ""
     DATABASE_URL_MIGRATOR: str = ""
+
+    # RLS activation gate. When False (default) the app engine connects via
+    # DATABASE_URL (the owner role, BYPASSRLS) and tenant isolation rests on the
+    # explicit per-endpoint client_id filters. When True the app engine connects
+    # via DATABASE_URL_RUNTIME (the non-owner app_runtime role) so the RLS
+    # policies are ENFORCED as a second, independent isolation layer.
+    #
+    # This is an EXPLICIT gate, deliberately NOT keyed on "is DATABASE_URL_RUNTIME
+    # set", because the runtime DSN may be provisioned long before the database is
+    # ready (comprehensive app_runtime grants applied). Flip to true only after
+    # the grant migration has run against the target database, or every query
+    # fail-closes to zero rows / permission-denied.
+    DB_ENFORCE_RLS: bool = False
 
     @field_validator("FERNET_KEY")
     @classmethod
