@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -660,6 +660,24 @@ function ReclassifyDialog({
         row.predicted_type_id !== null ? String(row.predicted_type_id) : "",
     );
     const [busy, setBusy] = useState(false);
+    const dialogRef = useRef<HTMLDivElement>(null);
+
+    // Move focus into the dialog on open, restore it to the trigger on close.
+    useEffect(() => {
+        const previouslyFocused = document.activeElement as HTMLElement | null;
+        dialogRef.current?.focus();
+        return () => previouslyFocused?.focus?.();
+    }, []);
+
+    // Escape closes the dialog (parity with ClientSwitcher), unless a save is
+    // in flight — a keyboard user must be able to dismiss the modal.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape" && !busy) onClose();
+        };
+        document.addEventListener("keydown", onKey);
+        return () => document.removeEventListener("keydown", onKey);
+    }, [busy, onClose]);
 
     const submit = async () => {
         const payload: { authority?: Authority; notice_type_id?: number } = {};
@@ -699,9 +717,12 @@ function ReclassifyDialog({
             }}
         >
             <div
+                ref={dialogRef}
+                tabIndex={-1}
                 className="
                     bg-[var(--bg-surface)] border border-[var(--border-emphasis)]
                     rounded-[10px] p-5 w-full max-w-md shadow-[var(--shadow-lg)]
+                    outline-none
                 "
             >
                 <h2

@@ -128,7 +128,7 @@ export function ExtractedFieldRow({
                 <div className="flex items-center gap-1.5">
                     {cfg && Icon ? (
                         <span
-                            className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-[1px] text-[10px] ${cfg.chipBg} ${cfg.chipText} ${cfg.chipBorder}`}
+                            className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-[1px] text-[11px] ${cfg.chipBg} ${cfg.chipText} ${cfg.chipBorder}`}
                             title={tooltip || cfg.label}
                             aria-label={`${cfg.label}${confidenceText ? ` ${confidenceText}` : ""}`}
                         >
@@ -173,6 +173,15 @@ export function ExtractedFieldRow({
                 </div>
             </div>
             {children}
+            {extracted?.validation_failure && !discarded ? (
+                <p className="mt-1 flex items-start gap-1 text-[11px] text-[var(--danger)]">
+                    <FiAlertTriangle
+                        className="w-3 h-3 mt-[1px] shrink-0"
+                        aria-hidden="true"
+                    />
+                    <span>{extracted.validation_failure}</span>
+                </p>
+            ) : null}
         </div>
     );
 }

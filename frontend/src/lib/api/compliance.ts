@@ -337,6 +337,11 @@ export const complianceApi = {
             fd,
             withTenant({
                 headers: { "Content-Type": "multipart/form-data" },
+                // OCR + a full LLM round-trip on a multi-page PDF routinely
+                // exceeds the shared 30s axios timeout; without this override a
+                // still-succeeding extraction aborts client-side and silently
+                // drops the user to manual entry with a misleading "timeout".
+                timeout: 120000,
             }),
         );
     },

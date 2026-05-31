@@ -82,28 +82,32 @@ export function NoticeTable({
                     const allSelected = table.getIsAllPageRowsSelected();
                     const someSelected = table.getIsSomePageRowsSelected();
                     return (
-                        <input
-                            type="checkbox"
-                            className="accent-[var(--accent)] w-3.5 h-3.5"
-                            checked={allSelected}
-                            ref={(el) => {
-                                if (el) el.indeterminate = !allSelected && someSelected;
-                            }}
-                            onChange={(e) =>
-                                table.toggleAllPageRowsSelected(e.target.checked)
-                            }
-                            aria-label="Select all rows"
-                        />
+                        <label className="touch-target inline-flex items-center justify-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="accent-[var(--accent)] w-4 h-4"
+                                checked={allSelected}
+                                ref={(el) => {
+                                    if (el) el.indeterminate = !allSelected && someSelected;
+                                }}
+                                onChange={(e) =>
+                                    table.toggleAllPageRowsSelected(e.target.checked)
+                                }
+                                aria-label="Select all rows"
+                            />
+                        </label>
                     );
                 },
                 cell: ({ row }) => (
-                    <input
-                        type="checkbox"
-                        className="accent-[var(--accent)] w-3.5 h-3.5"
-                        checked={row.getIsSelected()}
-                        onChange={(e) => row.toggleSelected(e.target.checked)}
-                        aria-label={`Select notice ${row.original.notice_number}`}
-                    />
+                    <label className="touch-target inline-flex items-center justify-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            className="accent-[var(--accent)] w-4 h-4"
+                            checked={row.getIsSelected()}
+                            onChange={(e) => row.toggleSelected(e.target.checked)}
+                            aria-label={`Select notice ${row.original.notice_number}`}
+                        />
+                    </label>
                 ),
                 size: 32,
             },

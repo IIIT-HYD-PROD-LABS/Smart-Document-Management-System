@@ -412,6 +412,12 @@ function DayEntry({ entry }: { entry: CalendarItem }) {
     }
     const auth = entry.authority as Authority | null;
     const color = auth ? AUTHORITY_CONFIG[auth]?.color ?? "#2563eb" : "#2563eb";
+    // Bright `color` tints the background + border; the AA-calibrated `text`
+    // token drives the 10px label so it passes WCAG-AA on the near-white day
+    // cell (the bright hue used as text fails contrast — 2.1:1 to 3.7:1).
+    const textColor = auth
+        ? AUTHORITY_CONFIG[auth]?.text ?? "var(--accent)"
+        : "var(--accent)";
 
     // Notice deadlines render as a clickable Link so the calendar acts
     // as a navigation surface, not a static reference. Statutory rows
@@ -423,7 +429,7 @@ function DayEntry({ entry }: { entry: CalendarItem }) {
                 className="block text-[10px] px-1.5 py-0.5 rounded truncate font-medium hover:brightness-95"
                 style={{
                     backgroundColor: `color-mix(in srgb, ${color} 18%, transparent)`,
-                    color,
+                    color: textColor,
                     border: `1px dashed color-mix(in srgb, ${color} 40%, transparent)`,
                 }}
                 title={entry.label}
@@ -438,7 +444,7 @@ function DayEntry({ entry }: { entry: CalendarItem }) {
             className="text-[10px] px-1.5 py-0.5 rounded truncate font-medium"
             style={{
                 backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
-                color,
+                color: textColor,
                 border: `1px solid color-mix(in srgb, ${color} 25%, transparent)`,
             }}
             title={entry.label}
