@@ -277,7 +277,28 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
 
         client_token = None
         cross_token = None
+        user_token = None
         try:
+            # Set app.user_id from the JWT HERE, in the async request context,
+            # so it propagates to the SQLAlchemy listener at query time (exactly
+            # like app.current_client_id below). get_current_user also sets it,
+            # but that runs in a sync threadpool dependency whose ContextVar
+            # mutation does NOT reach the route handler's query — under RLS that
+            # left app.user_id empty, fail-closing the user-scoped policies
+            # (self_membership_view) and erroring on user_has_client_membership's
+            # ''::int cast. This is best-effort for the GUC only; the route's
+            # get_current_user still performs full token validation + 401.
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                try:
+                    from app.utils.security import decode_access_token
+
+                    sub = decode_access_token(auth_header[7:]).get("sub")
+                    if sub is not None:
+                        user_token = current_user_id_var.set(int(sub))
+                except Exception:
+                    user_token = None
+
             if client_header == "*":
                 cross_token = cross_client_mode_var.set(True)
                 client_token = current_client_id_var.set(None)
@@ -309,6 +330,11 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             if cross_token is not None:
                 try:
                     cross_client_mode_var.reset(cross_token)
+                except Exception:
+                    pass
+            if user_token is not None:
+                try:
+                    current_user_id_var.reset(user_token)
                 except Exception:
                     pass
 
