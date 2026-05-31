@@ -382,6 +382,27 @@ def apply_approval(
             "(segregation of duties)."
         )
 
+    # R1.1b — a user who AUTHORED any version of this response's draft cannot
+    # approve it. response.created_by_user_id only records the response-shell
+    # creator; the substantive reply text is authored on NoticeResponseVersion
+    # (update_draft / rollback). Without this guard a second drafter who wrote
+    # the body — but never created the shell and never approved a prior stage —
+    # could approve their own content (maker == checker bypass).
+    if user_id is not None:
+        authored_version = (
+            db.query(NoticeResponseVersion.id)
+            .filter(
+                NoticeResponseVersion.response_id == response.id,
+                NoticeResponseVersion.created_by_user_id == user_id,
+            )
+            .first()
+        )
+        if authored_version is not None:
+            raise SegregationOfDutiesError(
+                "A user who authored any version of this response draft "
+                "cannot approve or reject it (segregation of duties)."
+            )
+
     current = ResponseStatus(response.status)
     expected_stage = PENDING_STAGE_FOR_STATUS.get(current)
     if expected_stage is None:
