@@ -163,3 +163,59 @@ def test_accept_extraction_rejects_when_status_is_pending():
     )
     assert isinstance(exc, HTTPException)
     assert exc.status_code == 409
+
+
+def test_accept_extraction_coerces_currency_formatted_amount():
+    """Regression: a currency-formatted amount must coerce to Decimal, not 500.
+
+    Before the coercion fix, '₹1,45,000' reached the Numeric(18,2) column as a
+    raw string and raised an uncaught StatementError/DataError -> HTTP 500.
+    """
+    from decimal import Decimal
+
+    notice = _stub_notice()
+    _result, _captured, exc = _patched_call(
+        [{"field": "tax_demand", "value": "₹1,45,000", "accept_as_is": False}],
+        notice=notice,
+    )
+    assert exc is None
+    assert notice.tax_demand == Decimal("145000.00")
+
+
+def test_accept_extraction_coerces_non_iso_indian_date():
+    """Regression: a DD-MM-YYYY date must coerce to a date, not 500."""
+    from datetime import date
+
+    notice = _stub_notice()
+    _result, _captured, exc = _patched_call(
+        [{"field": "issued_date", "value": "31-03-2025", "accept_as_is": False}],
+        notice=notice,
+    )
+    assert exc is None
+    assert notice.received_date == date(2025, 3, 31)
+
+
+def test_accept_extraction_rejects_unparseable_amount_with_422():
+    """An amount that cannot be coerced yields a clean 422, never an uncaught 500."""
+    from fastapi import HTTPException
+
+    notice = _stub_notice()
+    _result, _captured, exc = _patched_call(
+        [{"field": "tax_demand", "value": "see annexure", "accept_as_is": False}],
+        notice=notice,
+    )
+    assert isinstance(exc, HTTPException)
+    assert exc.status_code == 422
+
+
+def test_accept_extraction_rejects_invalid_authority_with_422():
+    """An authority outside the allowed set is rejected before the CHECK constraint."""
+    from fastapi import HTTPException
+
+    notice = _stub_notice()
+    _result, _captured, exc = _patched_call(
+        [{"field": "authority", "value": "CUSTOMS", "accept_as_is": False}],
+        notice=notice,
+    )
+    assert isinstance(exc, HTTPException)
+    assert exc.status_code == 422

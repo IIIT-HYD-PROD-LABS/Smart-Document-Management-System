@@ -37,7 +37,12 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import (
+    DataError,
+    IntegrityError,
+    OperationalError,
+    StatementError,
+)
 from sqlalchemy.orm import Session
 
 from app.compliance.dependencies import (
@@ -83,11 +88,16 @@ from app.compliance.schemas.extraction import (
     ExtractPreviewResponse,
     ExtractionResponse,
 )
+from app.compliance.services.extraction_coercion import (
+    CoercionError,
+    FIELD_COERCERS,
+)
 from app.database import get_db
 from app.models.document import Document, DocumentStatus
 from app.models.user import User
 from app.services.audit_service import log_audit_event
-from app.services.storage_service import save_file
+from app.config import settings
+from app.services.storage_service import save_file, validate_magic_bytes
 from app.utils.rate_limiter import limiter
 from app.utils.security import get_current_user
 
@@ -96,8 +106,9 @@ router = APIRouter(prefix="/notices", tags=["compliance-notices"])
 
 
 # Allowed upload content types for notice attachments. Matches D-10:
-# reuse the v1.0 Document model + storage pipeline. Magic-byte validation
-# happens inside save_file via the v1.0 helper.
+# reuse the v1.0 Document model + storage pipeline. content_type is
+# client-spoofable, so `_read_validated_upload` ALSO magic-byte validates the
+# bytes against the declared type (save_file itself does not).
 _ALLOWED_UPLOAD_CONTENT_TYPES = (
     "application/pdf",
     "image/jpeg",
@@ -110,6 +121,47 @@ _CONTENT_TYPE_TO_EXT = {
     "image/jpg": "jpg",
     "image/png": "png",
 }
+
+
+def _read_validated_upload(file: UploadFile) -> tuple[bytes, str]:
+    """Validate, size-cap, and magic-byte-check a notice upload.
+
+    Returns (contents, ext). Raises:
+      400 — content_type not allowed, or bytes do not match the declared type.
+      413 — body exceeds settings.MAX_FILE_SIZE_MB.
+
+    The size cap streams in 1 MB chunks BEFORE buffering the whole file, so an
+    oversized upload cannot exhaust process memory (the global body-size
+    middleware exempts multipart/form-data). These handlers are sync `def`, so
+    we read the SpooledTemporaryFile directly rather than `await file.read()`.
+    """
+    if file.content_type not in _ALLOWED_UPLOAD_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF, JPG, PNG accepted for notice uploads",
+        )
+    max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = file.file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File too large. Max size: {settings.MAX_FILE_SIZE_MB}MB",
+            )
+        chunks.append(chunk)
+    contents = b"".join(chunks)
+    ext = _CONTENT_TYPE_TO_EXT.get(file.content_type or "", "pdf")
+    if not validate_magic_bytes(contents, ext):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content does not match its declared type",
+        )
+    return contents, ext
 
 
 def _permissions_for_target_status(target: NoticeStatus) -> tuple[CompliancePermission, ...]:
@@ -755,17 +807,11 @@ def upload_notice_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notice not found",
         )
-    if file.content_type not in _ALLOWED_UPLOAD_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only PDF, JPG, PNG accepted for notice uploads",
-        )
-    contents = file.file.read()
+    contents, ext = _read_validated_upload(file)
     file_path, s3_url = save_file(
         file_bytes=contents,
         original_filename=file.filename or "notice",
     )
-    ext = _CONTENT_TYPE_TO_EXT.get(file.content_type or "", "pdf")
     d = Document(
         user_id=current_user.id,
         filename=file_path.split("/")[-1] if file_path else (file.filename or "notice"),
@@ -966,14 +1012,7 @@ def extract_preview(
     )
     from app.compliance.services import ai_service
 
-    if file.content_type not in _ALLOWED_UPLOAD_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only PDF, JPG, PNG accepted for extract-preview",
-        )
-
-    contents = file.file.read()
-    ext = _CONTENT_TYPE_TO_EXT.get(file.content_type or "", "pdf")
+    contents, ext = _read_validated_upload(file)
 
     try:
         text = _ocr_extract_text(contents, ext)
@@ -1166,8 +1205,15 @@ def accept_extraction(
             apply_extraction_to_notice,
         )
 
+        # Persist the replayed envelope for provenance only; the reviewed
+        # `items` below are the sole authority on which columns get written,
+        # so do NOT auto-fill (it would resurrect fields the user discarded).
         apply_extraction_to_notice(
-            db, notice, payload.envelope.model_dump(), {"action": "apply"}
+            db,
+            notice,
+            payload.envelope.model_dump(),
+            {"action": "apply"},
+            fill_columns=False,
         )
 
     if notice.extraction_status not in ("completed", "accepted"):
@@ -1182,32 +1228,31 @@ def accept_extraction(
     envelope = notice.extracted_fields or {}
     extracted_fields = envelope.get("fields") or {}
 
-    # Map of canonical schema field -> ComplianceNotice column name.
-    # Subset of FIELD_SCHEMA: only fields the model owns get accepted onto
-    # canonical columns. The rest live on extracted_fields for reference
-    # but do not back-populate any column.
-    _ACCEPT_TO_COLUMN = {
-        "notice_number": "notice_number",
-        "authority": "authority",
-        "issued_date": "received_date",
-        "response_deadline": "response_deadline",
-        "tax_demand": "tax_demand",
-        "interest": "interest",
-        "penalty": "penalty",
-        "total_liability": "total_liability",
-    }
-
+    # FIELD_COERCERS maps each model-owned schema field to its canonical
+    # column AND a coercer. Only fields in this map back-populate a column;
+    # the rest live on extracted_fields for reference. Coercing here (rather
+    # than writing item.value raw via setattr) keeps a currency-formatted
+    # amount or DD-MM-YYYY date from reaching the Numeric/Date column as a
+    # raw string — which would surface as an uncaught StatementError/DataError
+    # 500 instead of a user-actionable 422.
     accepted_count = 0
     for item in payload.items:
-        if item.field not in _ACCEPT_TO_COLUMN:
+        if item.field not in FIELD_COERCERS:
             continue
-        column = _ACCEPT_TO_COLUMN[item.field]
+        column, coerce = FIELD_COERCERS[item.field]
         original_payload = extracted_fields.get(item.field) or {}
         original_value = original_payload.get("value")
-        accepted_value = item.value
-        was_edited = (str(original_value) != str(accepted_value))
+        raw_accepted = item.value
+        try:
+            coerced_value = coerce(raw_accepted)
+        except CoercionError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Field '{item.field}' has an invalid value: {exc}",
+            )
+        was_edited = (str(original_value) != str(raw_accepted))
 
-        setattr(notice, column, accepted_value)
+        setattr(notice, column, coerced_value)
         accepted_count += 1
 
         log_audit_event(
@@ -1221,7 +1266,7 @@ def accept_extraction(
                     str(original_value or "").encode("utf-8", errors="ignore")
                 ).hexdigest(),
                 "accepted_value_sha256": hashlib.sha256(
-                    str(accepted_value or "").encode("utf-8", errors="ignore")
+                    str(raw_accepted or "").encode("utf-8", errors="ignore")
                 ).hexdigest(),
                 "was_edited": was_edited,
             },
@@ -1230,7 +1275,10 @@ def accept_extraction(
     notice.extraction_status = "accepted"
     try:
         db.commit()
-    except (IntegrityError, OperationalError):
+    except (IntegrityError, OperationalError, DataError, StatementError):
+        # DataError/StatementError are the defense-in-depth backstop: coercion
+        # above should already have rejected bad values with a 422, so a DB
+        # type error here means an unforeseen edge — fail clean, never 500.
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
