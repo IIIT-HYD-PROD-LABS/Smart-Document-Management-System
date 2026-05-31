@@ -53,7 +53,7 @@ from app.compliance.services.client_service import (
     onboard_client,
 )
 from app.compliance.services.permission_registry import CompliancePermission
-from app.database import get_db
+from app.database import get_bootstrap_db, get_db
 from app.models.user import User
 from app.services.audit_service import log_audit_event
 from app.utils.security import get_current_user
@@ -123,7 +123,12 @@ def list_my_memberships(
 def onboard(
     payload: ClientOnboardRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    # Onboarding inserts Client + Registrations + Memberships for a brand-new
+    # client_id that no membership references yet, so under app_runtime the RLS
+    # WITH CHECK on those tables is unsatisfiable. Run it under the owner
+    # bootstrap session (RLS-bypassing); the require_client_create_or_first_onboard
+    # gate above already authorizes the actor.
+    db: Session = Depends(get_bootstrap_db),
     # CLIENT_CREATE gate with bootstrap exemption: a user with zero
     # memberships may self-service create their first client (the team
     # payload self-grants their role). After that, only ca_consultant

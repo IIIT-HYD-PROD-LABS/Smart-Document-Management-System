@@ -24,6 +24,7 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.orm import Session
 
 from app.compliance.middleware.auditor_expiry import is_membership_active
+from app.compliance.middleware.tenant_context import current_user_id_var
 from app.compliance.models.membership import ClientMembership
 from app.compliance.websocket.manager import get_manager
 from app.database import SessionLocal
@@ -53,6 +54,12 @@ def _validate_session(token: str, client_id: int) -> Optional[tuple[int, ClientM
         except Exception:
             return None
 
+        # WebSocket scope does not run TenantContextMiddleware, so under
+        # app_runtime the membership lookup below would fail-closed (zero rows).
+        # Set app.user_id so the self_membership_view RLS policy authorizes the
+        # user to read their own membership row.
+        current_user_id_var.set(user_id)
+
         user = db.get(User, user_id)
         if user is None:
             return None
@@ -81,6 +88,10 @@ def _membership_still_active(user_id: int, client_id: int) -> bool:
     """Re-check on a fresh DB session; True iff membership still active."""
     db: Session = SessionLocal()
     try:
+        # See _validate_session: set app.user_id so the self_membership_view
+        # RLS policy authorizes this lookup under app_runtime (WS has no
+        # middleware-set tenant context).
+        current_user_id_var.set(user_id)
         m = (
             db.query(ClientMembership)
             .filter(
