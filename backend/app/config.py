@@ -107,6 +107,15 @@ class Settings(BaseSettings):
     LLM_MODEL: str = ""  # e.g. "llama3.2", "claude-sonnet-4-20250514", "gpt-4o-mini"
     LLM_TIMEOUT_SECONDS: int = 60
 
+    # Notice-extraction auto-apply gates (Phase 17 D-06). A notice auto-applies
+    # (skips the review queue) only when the average AND the critical-field
+    # (notice_number, authority) confidences clear these bars. Default 0.85 suits
+    # frontier models that self-report calibrated confidence; lower them (e.g.
+    # 0.6) for local models like Ollama that do not emit confidence (the
+    # extractor then defaults it, so the gate is the only lever).
+    EXTRACTION_AVG_GATE: float = 0.85
+    EXTRACTION_CRITICAL_GATE: float = 0.85
+
     # OAuth (Phase 6 - optional)
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""

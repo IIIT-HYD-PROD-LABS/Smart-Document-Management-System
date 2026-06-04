@@ -22,7 +22,12 @@ from __future__ import annotations
 
 from typing import Final
 
+from app.config import settings
 
+
+# Defaults; the live gates are read from settings at call time so they can be
+# tuned per deployment (lower for local models that do not self-report
+# confidence). See settings.EXTRACTION_AVG_GATE / EXTRACTION_CRITICAL_GATE.
 AVG_GATE: Final[float] = 0.85
 CRITICAL_GATE: Final[float] = 0.85
 CRITICAL_FIELDS: Final[tuple[str, ...]] = ("notice_number", "authority")
@@ -52,12 +57,15 @@ def route_or_apply(envelope: dict) -> dict:
     average = float(envelope.get("average_confidence") or 0.0)
     critical = _critical_field_map(envelope)
 
+    avg_gate = float(settings.EXTRACTION_AVG_GATE)
+    critical_gate = float(settings.EXTRACTION_CRITICAL_GATE)
+
     failing: list[str] = []
-    if average < AVG_GATE:
-        failing.append(f"average confidence {average:.2f} < {AVG_GATE}")
+    if average < avg_gate:
+        failing.append(f"average confidence {average:.2f} < {avg_gate}")
     for name, conf in critical.items():
-        if conf < CRITICAL_GATE:
-            failing.append(f"{name} confidence {conf:.2f} < {CRITICAL_GATE}")
+        if conf < critical_gate:
+            failing.append(f"{name} confidence {conf:.2f} < {critical_gate}")
 
     if not failing:
         return {
