@@ -42,7 +42,9 @@ export default function UploadPage() {
 
     const pollProcessingStatus = useCallback((file: File, documentId: number) => {
         let attempts = 0;
+        let consecutiveErrors = 0;
         const MAX_ATTEMPTS = 120;
+        const MAX_CONSECUTIVE_ERRORS = 6;
         const poll = async () => {
             attempts++;
             if (attempts > MAX_ATTEMPTS) {
@@ -52,15 +54,34 @@ export default function UploadPage() {
             }
             try {
                 const { data } = await documentsApi.getStatus(documentId);
+                consecutiveErrors = 0;
                 if (data.status === "completed") {
                     updateItem(file, { status: "completed", result: { category: data.category, confidence_score: data.confidence_score } });
+                    pollTimers.current.delete(file.name);
                     return;
                 }
-                if (data.status === "failed") { updateItem(file, { status: "failed", error: "Processing failed" }); return; }
+                if (data.status === "failed") {
+                    updateItem(file, { status: "failed", error: "Processing failed" });
+                    pollTimers.current.delete(file.name);
+                    return;
+                }
                 updateItem(file, { status: "processing", processingProgress: data.progress });
-                const timer = setTimeout(poll, 2500);
+                const timer = setTimeout(poll, 3000);
                 pollTimers.current.set(file.name, timer);
-            } catch { updateItem(file, { status: "failed", error: "Status check failed" }); }
+            } catch {
+                // A single poll failure is usually transient (rate-limit while a
+                // slow doc is still OCRing, or a network blip). Keep the item in
+                // "processing" and retry with backoff; only give up after several
+                // consecutive failures so the result is not lost.
+                consecutiveErrors++;
+                if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                    updateItem(file, { status: "failed", error: "Status check failed" });
+                    pollTimers.current.delete(file.name);
+                    return;
+                }
+                const timer = setTimeout(poll, 5000);
+                pollTimers.current.set(file.name, timer);
+            }
         };
         poll();
     }, [updateItem]);
@@ -83,9 +104,12 @@ export default function UploadPage() {
             "image/png": [".png"],
             "image/jpeg": [".jpg", ".jpeg"],
             "image/tiff": [".tiff", ".tif"],
+            "image/bmp": [".bmp"],
+            "image/webp": [".webp"],
+            "image/gif": [".gif"],
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
         },
-        maxSize: 16 * 1024 * 1024,
+        maxSize: 50 * 1024 * 1024,
     });
 
     const handleUploadAll = async () => {

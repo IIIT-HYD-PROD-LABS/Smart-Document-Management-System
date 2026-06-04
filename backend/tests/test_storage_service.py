@@ -7,10 +7,56 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from app.services.storage_service import (
+    detect_file_type,
     generate_filename,
     validate_magic_bytes,
     _validate_path_inside_upload_dir,
 )
+
+
+# ---------------------------------------------------------------------------
+# detect_file_type — sniff TRUE type from magic bytes (extension-independent)
+# ---------------------------------------------------------------------------
+
+_PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 8
+_JPG = b"\xff\xd8\xff\xe0" + b"\x00" * 8
+_GIF = b"GIF89a" + b"\x00" * 8
+_WEBP = b"RIFF\x00\x00\x00\x00WEBP" + b"\x00" * 4
+_TIFF = b"II\x2a\x00" + b"\x00" * 8
+_BMP = b"BM" + b"\x00" * 10
+_PDF = b"%PDF-1.7\n" + b"\x00" * 4
+_ZIP = b"PK\x03\x04" + b"\x00" * 8
+
+
+class TestDetectFileType:
+    """The uploader trusts content, not the (often-wrong) filename extension."""
+
+    def test_png_content_named_jpg_is_detected_as_png(self):
+        # The exact real-world bug: a PNG saved as .jpg must be ACCEPTED as png.
+        assert detect_file_type(_PNG, "jpg") == "png"
+
+    def test_webp_content_named_jpg_is_detected_as_webp(self):
+        assert detect_file_type(_WEBP, "jpg") == "webp"
+
+    def test_gif_content_named_jpg_is_detected_as_gif(self):
+        assert detect_file_type(_GIF, "jpg") == "gif"
+
+    def test_jpeg_detected(self):
+        assert detect_file_type(_JPG, "jpg") == "jpg"
+
+    def test_pdf_tiff_bmp_detected(self):
+        assert detect_file_type(_PDF, "pdf") == "pdf"
+        assert detect_file_type(_TIFF, "tiff") == "tiff"
+        assert detect_file_type(_BMP, "bmp") == "bmp"
+
+    def test_zip_only_docx_when_declared_docx(self):
+        # PK zip backs docx/xlsx/pptx alike — only treat as docx when declared.
+        assert detect_file_type(_ZIP, "docx") == "docx"
+        assert detect_file_type(_ZIP, "jpg") is None  # unknown zip is rejected
+
+    def test_garbage_and_empty_rejected(self):
+        assert detect_file_type(b"not a real file", "jpg") is None
+        assert detect_file_type(b"", "pdf") is None
 
 
 # ---------------------------------------------------------------------------

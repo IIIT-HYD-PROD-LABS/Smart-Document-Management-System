@@ -113,13 +113,23 @@ async def upload_document(
     file_bytes = b"".join(chunks)
     file_size = total_read
 
-    # Validate file content matches declared type (magic bytes)
-    from app.services.storage_service import validate_magic_bytes
-    if not validate_magic_bytes(file_bytes, ext):
+    # Determine the file's TRUE type from its content (magic bytes), not its
+    # (often-wrong) filename extension. A PNG/WebP/GIF saved as ".jpg" is still
+    # a valid, supported image, so accept it and process it as what it actually
+    # is. Only genuinely corrupt/unsupported binaries are rejected.
+    from app.services.storage_service import detect_file_type
+    detected_type = detect_file_type(file_bytes, ext)
+    if detected_type is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File content does not match declared type '.{ext}'",
+            detail=(
+                "Unsupported or corrupt file. Allowed: PDF, Word (.docx), and "
+                "images (PNG, JPG, GIF, WebP, TIFF, BMP)."
+            ),
         )
+    # Process and store under the detected type so OCR/classification routes
+    # correctly regardless of what the filename claimed.
+    ext = detected_type
 
     # Check for existing document with same original_filename for this user (version control).
     # Use with_for_update() to acquire a row-level lock, preventing race conditions
@@ -851,7 +861,7 @@ def download_document_version(
 
 
 @router.get("/{document_id}/status")
-@limiter.limit("30/minute")
+@limiter.limit("120/minute")
 def get_document_status(
     request: Request,
     response: Response,

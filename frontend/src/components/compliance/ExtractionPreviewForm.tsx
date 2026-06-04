@@ -226,6 +226,8 @@ export function ExtractionPreviewForm({
             "image/jpeg": [".jpg", ".jpeg"],
             "image/tiff": [".tif", ".tiff"],
             "image/bmp": [".bmp"],
+            "image/webp": [".webp"],
+            "image/gif": [".gif"],
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
                 [".docx"],
         },

@@ -110,7 +110,16 @@ def extract_text_from_image(image_bytes: bytes) -> str:
         del nparr  # free compressed buffer
 
         if image is None:
-            return ""
+            # cv2 cannot decode every valid image (notably GIF, and some
+            # animated/odd WebP). Fall back to PIL, which can, then hand a BGR
+            # array to the cv2 preprocessing path below. Only a genuinely
+            # undecodable blob falls through to "".
+            try:
+                pil = Image.open(io.BytesIO(image_bytes))
+                pil.seek(0)  # first frame for animated GIF/WebP
+                image = cv2.cvtColor(np.array(pil.convert("RGB")), cv2.COLOR_RGB2BGR)
+            except Exception:
+                return ""
 
         # Guard against extremely large images that would blow up memory
         h, w = image.shape[:2]

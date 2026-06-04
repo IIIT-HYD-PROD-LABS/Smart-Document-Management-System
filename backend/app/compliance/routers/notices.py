@@ -97,7 +97,7 @@ from app.models.document import Document, DocumentStatus
 from app.models.user import User
 from app.services.audit_service import log_audit_event
 from app.config import settings
-from app.services.storage_service import save_file, validate_magic_bytes
+from app.services.storage_service import detect_file_type, save_file
 from app.utils.rate_limiter import limiter
 from app.utils.security import get_current_user
 
@@ -173,12 +173,19 @@ def _read_validated_upload(file: UploadFile) -> tuple[bytes, str]:
             )
         chunks.append(chunk)
     contents = b"".join(chunks)
-    if not validate_magic_bytes(contents, ext):
+    # Trust the bytes, not the (often-wrong) filename: detect the true type and
+    # process by it, so a PNG/WebP/GIF saved as ".jpg" is accepted as the image
+    # it actually is. Only genuinely corrupt/unsupported content is rejected.
+    detected = detect_file_type(contents, ext)
+    if detected is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File content does not match its declared type",
+            detail=(
+                "Unsupported or corrupt file. Allowed: PDF, Word (.docx), and "
+                "images (PNG, JPG, GIF, WebP, TIFF, BMP)."
+            ),
         )
-    return contents, ext
+    return contents, detected
 
 
 def _permissions_for_target_status(target: NoticeStatus) -> tuple[CompliancePermission, ...]:

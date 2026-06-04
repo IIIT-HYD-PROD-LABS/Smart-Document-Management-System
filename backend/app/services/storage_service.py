@@ -35,6 +35,45 @@ def validate_magic_bytes(file_bytes: bytes, declared_extension: str) -> bool:
     return any(file_bytes[:len(sig)] == sig for sig in signatures)
 
 
+def detect_file_type(file_bytes: bytes, declared_ext: str = "") -> str | None:
+    """Sniff the ACTUAL file type from magic bytes, independent of the
+    (user-supplied, often-wrong) filename extension.
+
+    Real-world images are frequently mislabeled (a PNG/WebP/GIF saved as
+    ``.jpg``). Validating content against the declared extension rejects all of
+    those even though they are perfectly good, supported images. This returns
+    the canonical type the byte content actually is, so callers can accept the
+    file and process it by its TRUE type. Returns ``None`` when the content is
+    not a recognized/supported type (genuinely corrupt or unsupported).
+
+    Returns one of: pdf, png, jpg, gif, webp, tiff, bmp, docx, or None.
+
+    The zip container (``PK\\x03\\x04``) backs docx/xlsx/pptx alike, so it is
+    only reported as ``docx`` when the declared extension says so; an unknown
+    zip is rejected rather than misprocessed as a Word document.
+    """
+    if not file_bytes:
+        return None
+    b = file_bytes
+    if b[:4] == b"%PDF":
+        return "pdf"
+    if b[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if b[:3] == b"\xff\xd8\xff":
+        return "jpg"
+    if b[:6] in (b"GIF87a", b"GIF89a"):
+        return "gif"
+    if b[:4] == b"RIFF" and b[8:12] == b"WEBP":
+        return "webp"
+    if b[:4] in (b"II\x2a\x00", b"MM\x00\x2a"):
+        return "tiff"
+    if b[:2] == b"BM":
+        return "bmp"
+    if b[:4] == b"PK\x03\x04":
+        return "docx" if declared_ext.lower().lstrip(".") == "docx" else None
+    return None
+
+
 def _validate_path_inside_upload_dir(file_path: str) -> str:
     """Resolve the path and ensure it is inside UPLOAD_DIR. Returns the resolved path."""
     real_path = os.path.realpath(file_path)
