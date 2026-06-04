@@ -2,20 +2,33 @@
 
 from __future__ import annotations
 
+import io
+
 import cv2
 import numpy as np
 import pytesseract
 import structlog
 from pytesseract import TesseractNotFoundError
-from PIL import Image
+from PIL import Image, ImageSequence
 
 from app.config import settings
+from app.ml.errors import ExtractionEngineError
 
 logger = structlog.stdlib.get_logger()
 
 # Configure Tesseract path if provided
 if settings.TESSERACT_CMD:
     pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
+
+
+def _tesseract_available() -> bool:
+    """Best-effort check that the tesseract binary is resolvable."""
+    try:
+        pytesseract.get_tesseract_version()
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.critical("tesseract_unresolvable_at_startup", error=str(exc))
+        return False
 
 
 def _upscale_if_small(image: np.ndarray, min_height: int = 800, max_height: int = 4000) -> np.ndarray:
@@ -136,10 +149,44 @@ def extract_text_from_image(image_bytes: bytes) -> str:
         return best_text
 
     except TesseractNotFoundError as e:
+        # Engine-unavailable = operational/retryable. Surfacing this as an
+        # empty string would silently mark the document COMPLETED with no
+        # content; raise so the task layer retries / marks FAILED.
         logger.critical("tesseract_not_found", error=str(e))
-        return ""
+        raise ExtractionEngineError("tesseract_not_found") from e
     except Exception as e:
         logger.error("ocr_extraction_failed", error=str(e))
+        return ""
+
+
+# Cap multi-frame TIFF OCR to bound memory/time, mirroring the PDF page cap.
+MAX_TIFF_FRAMES = 200
+
+
+def extract_text_from_tiff(image_bytes: bytes) -> str:
+    """Extract text from a (possibly multi-page) TIFF.
+
+    cv2.imdecode only decodes the first frame, silently dropping pages 2+.
+    Iterate frames via PIL.ImageSequence and OCR each, joining results.
+    """
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            parts: list[str] = []
+            for frame_no, frame in enumerate(ImageSequence.Iterator(img)):
+                if frame_no >= MAX_TIFF_FRAMES:
+                    logger.warning(
+                        "tiff_frame_limit_reached",
+                        frame_limit=MAX_TIFF_FRAMES,
+                    )
+                    break
+                frame_text = extract_text_from_pil_image(frame.convert("RGB"))
+                if frame_text:
+                    parts.append(frame_text)
+        return "\n\n".join(parts)
+    except ExtractionEngineError:
+        raise
+    except Exception as e:
+        logger.error("tiff_extraction_failed", error=str(e))
         return ""
 
 
@@ -153,6 +200,9 @@ def extract_text_from_pil_image(pil_image: Image.Image) -> str:
         processed = preprocess_image(image)
         text = pytesseract.image_to_string(processed, config="--oem 3 --psm 6")
         return text.strip()
+    except TesseractNotFoundError as e:
+        logger.critical("tesseract_not_found", error=str(e))
+        raise ExtractionEngineError("tesseract_not_found") from e
     except Exception as e:
         logger.error("ocr_pil_extraction_failed", error=str(e))
         return ""

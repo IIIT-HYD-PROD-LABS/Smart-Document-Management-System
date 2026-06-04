@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { FiCpu, FiSettings } from "react-icons/fi";
 
 import { aiApi } from "@/lib/api/ai";
+import { useCurrentClient } from "@/stores/currentClientStore";
 import type {
     AIActionItem,
     NoticeActionsResponse,
@@ -31,10 +32,12 @@ const URGENCY_TINT: Record<AIActionItem["urgency"], string> = {
  * provider yet — instead we render a quiet CTA pointing at /settings/ai.
  */
 export default function NoticeAISection({ noticeId }: Props) {
+    const activeClientId = useCurrentClient((s) => s.activeClientId);
     const { data: cred, isLoading: credLoading } = useQuery({
-        queryKey: ["ai-credential"],
+        queryKey: ["ai-credential", activeClientId],
         queryFn: () => aiApi.getCredential().then((r) => r.data),
         staleTime: 30_000,
+        enabled: activeClientId !== null,
     });
 
     const [summary, setSummary] = useState<NoticeSummaryResponse | null>(null);

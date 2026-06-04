@@ -50,8 +50,12 @@ def test_byok_missing_credential_returns_412():
     )
 
     file_mock = MagicMock()
+    file_mock.filename = "notice.pdf"
     file_mock.content_type = "application/pdf"
-    file_mock.file.read.return_value = b"%PDF-1.4 dummy"
+    # side_effect (not return_value) so the streaming-read loop in
+    # _read_validated_upload sees EOF after one chunk; a fixed return_value
+    # would loop until the 50MB size cap and balloon MagicMock's call history.
+    file_mock.file.read.side_effect = [b"%PDF-1.4 dummy", b""]
 
     handler = _unwrap(notices_router.extract_preview)
 

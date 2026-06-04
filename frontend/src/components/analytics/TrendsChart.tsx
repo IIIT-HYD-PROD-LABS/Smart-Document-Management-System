@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     AreaChart,
     Area,
@@ -55,12 +55,22 @@ function useChartTokens() {
             });
         };
         read();
-        const observer = new MutationObserver(read);
+        // A single theme toggle can fire several attribute mutations in a burst;
+        // debounce so we re-resolve tokens (and re-render the chart) once, after
+        // the CSS vars settle, instead of 10+ times.
+        let debounce: ReturnType<typeof setTimeout>;
+        const observer = new MutationObserver(() => {
+            clearTimeout(debounce);
+            debounce = setTimeout(read, 200);
+        });
         observer.observe(document.documentElement, {
             attributes: true,
             attributeFilter: ["data-theme"],
         });
-        return () => observer.disconnect();
+        return () => {
+            clearTimeout(debounce);
+            observer.disconnect();
+        };
     }, []);
 
     return tokens;
@@ -95,7 +105,7 @@ interface TrendsChartProps {
     data: TrendDatum[];
 }
 
-export default function TrendsChart({ data }: TrendsChartProps) {
+function TrendsChartImpl({ data }: TrendsChartProps) {
     const t = useChartTokens();
 
     if (data.length === 0) {
@@ -146,7 +156,12 @@ export default function TrendsChart({ data }: TrendsChartProps) {
     );
 }
 
-export function CategoryDonut({ data }: { data: CategoryDatum[] }) {
+// Memoized: the analytics page re-renders on theme toggles / query settles, but
+// these charts only need to re-render when their `data` reference changes.
+const TrendsChart = React.memo(TrendsChartImpl);
+export default TrendsChart;
+
+function CategoryDonutImpl({ data }: { data: CategoryDatum[] }) {
     const t = useChartTokens();
 
     if (data.length === 0) {
@@ -196,3 +211,5 @@ export function CategoryDonut({ data }: { data: CategoryDatum[] }) {
         </div>
     );
 }
+
+export const CategoryDonut = React.memo(CategoryDonutImpl);

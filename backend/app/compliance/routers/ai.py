@@ -122,13 +122,17 @@ def _map_ai_error(e: Exception) -> HTTPException:
 
 
 def _require_credential(db: Session, client_id: int):
-    cred = ai_service.get_credential(db, client_id)
+    """Resolve the AI credential for this tenant: per-tenant BYOK first, then
+    the server-default provider (settings.LLM_PROVIDER, e.g. Ollama). Only 412
+    when neither is available — with a server default configured this rarely
+    fires, so AI features work out of the box without a tenant key."""
+    cred = ai_service.resolve_credential(db, client_id)
     if not cred:
         raise HTTPException(
             status_code=status.HTTP_412_PRECONDITION_FAILED,
             detail=(
-                "No AI credential configured for this tenant. "
-                "Set one in Settings → AI."
+                "No AI provider is available. Configure a server LLM provider "
+                "(LLM_PROVIDER) or set a per-tenant key in Settings → AI."
             ),
         )
     return cred

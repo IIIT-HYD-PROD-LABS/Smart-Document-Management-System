@@ -26,9 +26,12 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from dataclasses import dataclass
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.compliance.models.ai_credential import AICredential
 from app.compliance.models.notice import ComplianceNotice
 from app.compliance.services.ai_providers import (
@@ -67,6 +70,7 @@ __all__ = [
     "get_credential",
     "recommend_invoice_actions",
     "recommend_notice_actions",
+    "resolve_credential",
     "set_credential",
     "summarize_invoice",
     "summarize_notice",
@@ -200,9 +204,104 @@ def delete_credential(db: Session, client_id: int) -> bool:
     return True
 
 
-def _build_active_provider(db: Session, cred: AICredential) -> AIProvider:
+# ─────────────────────────────────────────────────────────────────────
+# Server-default provider resolution
+#
+# BYOK (per-tenant AICredential) is the first choice. When a tenant has no
+# stored key, the whole AI surface falls back to a single server-wide default
+# provider driven by settings.LLM_PROVIDER — Ollama today (no key, local,
+# free), any of google / anthropic / openai once a key is set. This is the
+# "Ollama now, GPT later" switch: change LLM_PROVIDER (+ the relevant key) in
+# the environment and every notice/invoice/chat feature follows.
+# ─────────────────────────────────────────────────────────────────────
+
+
+# Per-provider model used when settings.LLM_MODEL is unset.
+_SERVER_DEFAULT_MODELS = {
+    "ollama": "llama3.2",
+    "google": "gemini-2.0-flash",
+    "anthropic": "claude-sonnet-4-20250514",
+    "openai": "gpt-4o-mini",
+}
+
+
+@dataclass
+class _ServerCredential:
+    """Synthetic, non-persisted credential for the server-default provider.
+
+    Quacks like an AICredential where the AI services touch it (`.provider`,
+    `.model`), but carries the plaintext key directly and is flagged so
+    `_build_active_provider` skips the decrypt + last_used_at write.
+    """
+
+    provider: str
+    model: str
+    api_key: str
+    client_id: int | None = None
+    is_server_default: bool = True
+
+
+def _server_default_config() -> tuple[str, str, str] | None:
+    """Resolve the server-default provider from settings.LLM_PROVIDER.
+
+    Returns (provider_name, model, api_key) or None when no server provider is
+    usable: LLM_PROVIDER=local/unknown, or a key-requiring provider has no key.
+    The provider_name is the compliance-side name (gemini -> 'google').
+    """
+    raw = (settings.LLM_PROVIDER or "").strip().lower()
+    # "ollama+gemini" is the generic-extraction combo; for the compliance AI
+    # surface we prefer the local Ollama (no key, no per-call cost).
+    if raw in ("ollama", "ollama+gemini"):
+        provider = "ollama"
+    elif raw == "gemini":
+        provider = "google"
+    elif raw in ("anthropic", "openai"):
+        provider = raw
+    else:  # "local" or unrecognized -> no server AI
+        return None
+
+    model = (settings.LLM_MODEL or "").strip() or _SERVER_DEFAULT_MODELS[provider]
+    if provider == "ollama":
+        return provider, model, ""  # no key needed
+    key = {
+        "google": settings.GEMINI_API_KEY,
+        "anthropic": settings.ANTHROPIC_API_KEY,
+        "openai": settings.OPENAI_API_KEY,
+    }[provider]
+    if not key:
+        return None
+    return provider, model, key
+
+
+def resolve_credential(db: Session, client_id: int):
+    """Return the credential the AI surface should use for this tenant.
+
+    Per-tenant BYOK wins; otherwise fall back to the server-default provider
+    (settings.LLM_PROVIDER). Returns None only when NEITHER a tenant key NOR a
+    usable server default exists — callers map that to HTTP 412.
+    """
+    cred = get_credential(db, client_id)
+    if cred is not None:
+        return cred
+    server = _server_default_config()
+    if server is None:
+        return None
+    provider, model, api_key = server
+    return _ServerCredential(
+        provider=provider, model=model, api_key=api_key, client_id=client_id
+    )
+
+
+def _build_active_provider(db: Session, cred) -> AIProvider:
     """Decrypt + materialise a provider client for this credential.
-    Marks `last_used_at` so admins can see which keys are stale."""
+
+    For the server-default (synthetic) credential there is no encrypted key to
+    decrypt and no row to stamp — build the provider straight from the
+    in-memory key. For a real BYOK row, decrypt and mark `last_used_at` so
+    admins can see which keys are stale.
+    """
+    if getattr(cred, "is_server_default", False):
+        return build_provider(cred.provider, cred.api_key, cred.model)
     plaintext = decrypt_field(cred.api_key_enc)
     if plaintext is None:
         raise AIAuthError("stored api key could not be decrypted")

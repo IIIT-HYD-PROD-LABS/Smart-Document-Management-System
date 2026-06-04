@@ -105,29 +105,43 @@ from app.utils.security import get_current_user
 router = APIRouter(prefix="/notices", tags=["compliance-notices"])
 
 
-# Allowed upload content types for notice attachments. Matches D-10:
-# reuse the v1.0 Document model + storage pipeline. content_type is
-# client-spoofable, so `_read_validated_upload` ALSO magic-byte validates the
-# bytes against the declared type (save_file itself does not).
-_ALLOWED_UPLOAD_CONTENT_TYPES = (
-    "application/pdf",
-    "image/jpeg",
-    "image/jpg",
-    "image/png",
-)
+# Notice attachments reuse the v1.0 Document model + storage pipeline (D-10),
+# so they accept the SAME set of document types as the generic uploader
+# (settings.ALLOWED_EXTENSIONS: pdf, png, jpg, jpeg, tiff, bmp, docx). The
+# extension is derived from the filename first, with the (client-spoofable)
+# content-type only as a fallback when the filename has no usable extension;
+# `_read_validated_upload` then magic-byte validates the bytes against that
+# extension so a spoofed type cannot slip through.
 _CONTENT_TYPE_TO_EXT = {
     "application/pdf": "pdf",
+    "image/png": "png",
     "image/jpeg": "jpg",
     "image/jpg": "jpg",
-    "image/png": "png",
+    "image/tiff": "tiff",
+    "image/bmp": "bmp",
+    "image/x-ms-bmp": "bmp",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
 }
+
+
+def _resolve_upload_ext(file: UploadFile) -> str:
+    """Pick the canonical extension for an upload: filename suffix first
+    (null-byte-stripped), then the content-type map. Returns "" if neither
+    yields an allowed extension."""
+    allowed = {e.lower() for e in settings.ALLOWED_EXTENSIONS}
+    name = (file.filename or "").replace("\x00", "")
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if ext in allowed:
+        return ext
+    mapped = _CONTENT_TYPE_TO_EXT.get((file.content_type or "").lower(), "")
+    return mapped if mapped in allowed else ""
 
 
 def _read_validated_upload(file: UploadFile) -> tuple[bytes, str]:
     """Validate, size-cap, and magic-byte-check a notice upload.
 
     Returns (contents, ext). Raises:
-      400 — content_type not allowed, or bytes do not match the declared type.
+      400 — extension not allowed, or bytes do not match the declared type.
       413 — body exceeds settings.MAX_FILE_SIZE_MB.
 
     The size cap streams in 1 MB chunks BEFORE buffering the whole file, so an
@@ -135,10 +149,14 @@ def _read_validated_upload(file: UploadFile) -> tuple[bytes, str]:
     middleware exempts multipart/form-data). These handlers are sync `def`, so
     we read the SpooledTemporaryFile directly rather than `await file.read()`.
     """
-    if file.content_type not in _ALLOWED_UPLOAD_CONTENT_TYPES:
+    ext = _resolve_upload_ext(file)
+    if not ext:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only PDF, JPG, PNG accepted for notice uploads",
+            detail=(
+                "Unsupported file type. Allowed: "
+                f"{', '.join(sorted(settings.ALLOWED_EXTENSIONS))}"
+            ),
         )
     max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
     chunks: list[bytes] = []
@@ -155,7 +173,6 @@ def _read_validated_upload(file: UploadFile) -> tuple[bytes, str]:
             )
         chunks.append(chunk)
     contents = b"".join(chunks)
-    ext = _CONTENT_TYPE_TO_EXT.get(file.content_type or "", "pdf")
     if not validate_magic_bytes(contents, ext):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -784,7 +801,11 @@ def upload_notice_file(
         require_compliance_permission(CompliancePermission.NOTICE_CREATE)
     ),
 ):
-    """Upload a notice PDF/JPG/PNG — LIFE-01, LIFE-02 (D-10 reuses Document).
+    """Upload a notice attachment — LIFE-01, LIFE-02 (D-10 reuses Document).
+
+    Accepts every type the generic uploader does (settings.ALLOWED_EXTENSIONS:
+    pdf, png, jpg, jpeg, tiff, bmp, docx); type is validated by extension +
+    magic bytes in `_read_validated_upload`.
 
     Uses the v1.0 storage_service.save_file helper which returns
     (file_path_or_filename, s3_url). The Document row gets a notice_id FK
@@ -995,7 +1016,9 @@ def extract_preview(
         require_compliance_permission(CompliancePermission.NOTICE_AI_EXTRACT)
     ),
 ):
-    """Phase 17 D-19 — upload PDF/JPG/PNG, return extraction envelope + routing decision.
+    """Phase 17 D-19 — upload a document, return extraction envelope + routing decision.
+
+    Accepts any allowed document type (pdf, png, jpg, jpeg, tiff, bmp, docx).
 
     No notice row or document row is persisted. The caller (frontend) shows
     the envelope alongside the manual create form so the user can review,

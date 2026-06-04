@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -41,6 +41,110 @@ interface AdminUserList {
 
 const PER_PAGE = 20;
 
+interface UserRowProps {
+    u: AdminUser;
+    currentUserId: number | undefined;
+    onRoleChange: (targetUser: AdminUser, newRole: string) => void;
+    onStatusToggle: (targetUser: AdminUser) => void;
+    onDelete: (targetUser: AdminUser) => void;
+}
+
+// Memoized so a keystroke in the search box (which updates immediate `search`
+// state and re-renders the page) doesn't re-reconcile all 20 rows. Effective
+// because every prop is referentially stable (callbacks via useCallback,
+// currentUserId is a primitive).
+const UserRow = React.memo(function UserRow({
+    u,
+    currentUserId,
+    onRoleChange,
+    onStatusToggle,
+    onDelete,
+}: UserRowProps) {
+    const isSelf = u.id === currentUserId;
+    return (
+        <tr
+            className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-[var(--bg-hover)] transition-colors"
+        >
+            <td className="px-4 py-3">
+                <Link
+                    href={`/dashboard/admin/users/${u.id}`}
+                    className="group inline-flex items-center gap-2 cursor-pointer"
+                    aria-label={`Open ${u.username} detail`}
+                >
+                    <div>
+                        <p className="text-sm text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
+                            {u.username}
+                        </p>
+                        <p className="text-xs text-[var(--text-muted)]">
+                            {u.email}
+                        </p>
+                    </div>
+                    <FiArrowRight className="w-3 h-3 text-[var(--text-subtle)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                </Link>
+            </td>
+            <td className="px-4 py-3">
+                <select
+                    value={u.role}
+                    onChange={(e) => onRoleChange(u, e.target.value)}
+                    disabled={isSelf}
+                    className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] focus:border-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                    <option value="admin">Admin</option>
+                    <option value="editor">Editor</option>
+                    <option value="viewer">Viewer</option>
+                </select>
+            </td>
+            <td className="px-4 py-3">
+                <button
+                    onClick={() => onStatusToggle(u)}
+                    disabled={isSelf}
+                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] disabled:opacity-50 disabled:cursor-not-allowed ${
+                        u.is_active
+                            ? "bg-[var(--success-soft)] text-[var(--success)]"
+                            : "bg-[var(--danger-soft)] text-[var(--danger)]"
+                    }`}
+                >
+                    {u.is_active ? "Active" : "Inactive"}
+                </button>
+            </td>
+            <td className="px-4 py-3">
+                <span className="text-xs text-[var(--text-muted)]">
+                    {u.auth_provider}
+                </span>
+            </td>
+            <td className="px-4 py-3">
+                <span className="text-sm text-[var(--text-primary)] tabular-nums">
+                    {u.document_count}
+                </span>
+            </td>
+            <td className="px-4 py-3">
+                <span className="text-xs text-[var(--text-muted)]">
+                    {new Date(u.created_at).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                    })}
+                </span>
+            </td>
+            <td className="px-4 py-3 text-right">
+                <button
+                    onClick={() => onDelete(u)}
+                    disabled={isSelf}
+                    title={
+                        isSelf
+                            ? "Cannot delete your own account"
+                            : "Delete user"
+                    }
+                    aria-label={`Delete ${u.username}`}
+                    className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--danger)]"
+                >
+                    <FiTrash2 className="w-4 h-4" />
+                </button>
+            </td>
+        </tr>
+    );
+});
+
 export default function AdminUsersPage() {
     const { user } = useAuth();
     const [search, setSearch] = useState("");
@@ -65,26 +169,31 @@ export default function AdminUsersPage() {
                 .then((r) => r.data),
     });
 
-    const handleRoleChange = async (targetUser: AdminUser, newRole: string) => {
+    // React Query keeps `refetch` referentially stable across renders, so the
+    // row callbacks below stay stable and the memoized rows actually skip
+    // re-rendering on every keystroke.
+    const { refetch } = usersQuery;
+
+    const handleRoleChange = useCallback(async (targetUser: AdminUser, newRole: string) => {
         if (newRole === targetUser.role) return;
         const confirmed = window.confirm(
             `Change ${targetUser.username}'s role from "${targetUser.role}" to "${newRole}"?`,
         );
         if (!confirmed) {
-            usersQuery.refetch();
+            refetch();
             return;
         }
         try {
             await adminApi.updateRole(targetUser.id, newRole);
             toast.success("Role updated");
-            usersQuery.refetch();
+            refetch();
         } catch (err: unknown) {
             toast.error(extractErrorMessage(err, "Failed to update role"));
-            usersQuery.refetch();
+            refetch();
         }
-    };
+    }, [refetch]);
 
-    const handleStatusToggle = async (targetUser: AdminUser) => {
+    const handleStatusToggle = useCallback(async (targetUser: AdminUser) => {
         const action = targetUser.is_active ? "deactivate" : "activate";
         const confirmed = window.confirm(
             `Are you sure you want to ${action} ${targetUser.username}?`,
@@ -93,11 +202,15 @@ export default function AdminUsersPage() {
         try {
             await adminApi.updateStatus(targetUser.id, !targetUser.is_active);
             toast.success(targetUser.is_active ? "User deactivated" : "User activated");
-            usersQuery.refetch();
+            refetch();
         } catch (err: unknown) {
             toast.error(extractErrorMessage(err, "Failed to update status"));
         }
-    };
+    }, [refetch]);
+
+    const handleDelete = useCallback((targetUser: AdminUser) => {
+        setPendingDelete(targetUser);
+    }, []);
 
     const data = usersQuery.data;
     const users = data?.users ?? [];
@@ -214,87 +327,14 @@ export default function AdminUsersPage() {
                     </thead>
                     <tbody>
                         {users.map((u) => (
-                            <tr
+                            <UserRow
                                 key={u.id}
-                                className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-[var(--bg-hover)] transition-colors"
-                            >
-                                <td className="px-4 py-3">
-                                    <Link
-                                        href={`/dashboard/admin/users/${u.id}`}
-                                        className="group inline-flex items-center gap-2 cursor-pointer"
-                                        aria-label={`Open ${u.username} detail`}
-                                    >
-                                        <div>
-                                            <p className="text-sm text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
-                                                {u.username}
-                                            </p>
-                                            <p className="text-xs text-[var(--text-muted)]">
-                                                {u.email}
-                                            </p>
-                                        </div>
-                                        <FiArrowRight className="w-3 h-3 text-[var(--text-subtle)] opacity-0 group-hover:opacity-100 transition-opacity" />
-                                    </Link>
-                                </td>
-                                <td className="px-4 py-3">
-                                    <select
-                                        value={u.role}
-                                        onChange={(e) => handleRoleChange(u, e.target.value)}
-                                        disabled={u.id === user?.id}
-                                        className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] focus:border-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                                    >
-                                        <option value="admin">Admin</option>
-                                        <option value="editor">Editor</option>
-                                        <option value="viewer">Viewer</option>
-                                    </select>
-                                </td>
-                                <td className="px-4 py-3">
-                                    <button
-                                        onClick={() => handleStatusToggle(u)}
-                                        disabled={u.id === user?.id}
-                                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] disabled:opacity-50 disabled:cursor-not-allowed ${
-                                            u.is_active
-                                                ? "bg-[var(--success-soft)] text-[var(--success)]"
-                                                : "bg-[var(--danger-soft)] text-[var(--danger)]"
-                                        }`}
-                                    >
-                                        {u.is_active ? "Active" : "Inactive"}
-                                    </button>
-                                </td>
-                                <td className="px-4 py-3">
-                                    <span className="text-xs text-[var(--text-muted)]">
-                                        {u.auth_provider}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                    <span className="text-sm text-[var(--text-primary)] tabular-nums">
-                                        {u.document_count}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                    <span className="text-xs text-[var(--text-muted)]">
-                                        {new Date(u.created_at).toLocaleDateString("en-IN", {
-                                            day: "numeric",
-                                            month: "short",
-                                            year: "numeric",
-                                        })}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-3 text-right">
-                                    <button
-                                        onClick={() => setPendingDelete(u)}
-                                        disabled={u.id === user?.id}
-                                        title={
-                                            u.id === user?.id
-                                                ? "Cannot delete your own account"
-                                                : "Delete user"
-                                        }
-                                        aria-label={`Delete ${u.username}`}
-                                        className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--danger)]"
-                                    >
-                                        <FiTrash2 className="w-4 h-4" />
-                                    </button>
-                                </td>
-                            </tr>
+                                u={u}
+                                currentUserId={user?.id}
+                                onRoleChange={handleRoleChange}
+                                onStatusToggle={handleStatusToggle}
+                                onDelete={handleDelete}
+                            />
                         ))}
                         {users.length === 0 && (
                             <tr>

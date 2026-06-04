@@ -128,7 +128,7 @@ def draft_response_for_notice(
     guidance = (user_guidance or "")[:MAX_GUIDANCE_CHARS]
     guidance_sha = _sha256_text(guidance)
 
-    cred = ai_service.get_credential(db, client_id=notice.client_id)
+    cred = ai_service.resolve_credential(db, client_id=notice.client_id)
     if cred is None:
         raise ResponseDraftCredentialMissingError(
             "No AI credential configured for this tenant"

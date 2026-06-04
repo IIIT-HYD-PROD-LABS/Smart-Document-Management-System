@@ -8,7 +8,9 @@ from app.database import SessionLocal
 from app.models.document import Document, DocumentStatus, DocumentCategory
 from app.config import settings
 from app.ml.classifier import extract_and_classify
+from app.ml.errors import ExtractionEngineError
 from app.ml.metadata_extractor import extract_metadata
+from app.ml.pdf_extractor import consume_scanned_pdf_truncated
 
 logger = structlog.stdlib.get_logger()
 
@@ -260,12 +262,55 @@ def process_document_task(self, document_id: int):
         self.update_state(state="PROGRESS", meta={"stage": "extracting_text", "progress": 30})
         logger.info("processing_document", document_id=document_id, file_type=doc.file_type)
 
-        result = extract_and_classify(file_bytes, doc.file_type)
+        try:
+            result = extract_and_classify(file_bytes, doc.file_type)
+        except ExtractionEngineError as eng_err:
+            # C1/H1/H2: an OPERATIONAL extraction failure (tesseract
+            # unavailable, model artifacts missing, corrupt container).
+            # Never commit COMPLETED-with-empty-content. Non-retryable
+            # failures (corrupt file) fail permanently; retryable ones
+            # (engine down) funnel into the retry machinery below.
+            logger.error(
+                "extraction_engine_error",
+                document_id=document_id,
+                reason=eng_err.reason,
+                retryable=eng_err.retryable,
+            )
+            if eng_err.retryable:
+                raise
+            doc.ai_extraction_status = "failed"
+            _safe_set_failed(
+                db, doc,
+                f"Text extraction failed ({eng_err.reason}). Please re-upload or contact support.",
+                document_id,
+            )
+            return {"error": eng_err.reason, "document_id": document_id, "status": "failed"}
         # Free raw bytes immediately to reduce memory pressure in the worker
         del file_bytes
         extracted_text: str = result[0]
         category: str = result[1]
         confidence: float = result[2]
+
+        # C1: a non-.txt source that yields no text is NOT a successful
+        # COMPLETED result -- it is either a blank/text-free file or a
+        # subtle extraction miss. Either way, do not commit empty content
+        # as COMPLETED; mark FAILED with a visible no_text status so the
+        # operator/UI sees it instead of silent data loss. (.txt bodies are
+        # legitimately allowed to be empty.)
+        if not (extracted_text or "").strip() and doc.file_type != "txt":
+            doc.ai_extraction_status = "no_text"
+            _safe_set_failed(
+                db, doc,
+                "No text could be extracted from this file.",
+                document_id,
+            )
+            logger.warning("extraction_yielded_no_text", document_id=document_id, file_type=doc.file_type)
+            return {"error": "no_text", "document_id": document_id, "status": "failed"}
+
+        # M4: did the scanned-PDF OCR fallback hit its page cap? Partial text
+        # is acceptable (the doc still COMPLETES) but the truncation must be
+        # visible via ai_extraction_status="incomplete_scanned_pdf".
+        scanned_pdf_truncated = consume_scanned_pdf_truncated()
 
         # Stage 3: Metadata extraction
         self.update_state(state="PROGRESS", meta={"stage": "extracting_metadata", "progress": 50})
@@ -320,6 +365,11 @@ def process_document_task(self, document_id: int):
                 doc.ai_extraction_status = "completed"
         else:
             doc.ai_extraction_status = "skipped"
+
+        # M4: a truncated scanned PDF outranks the AI substatus -- the operator
+        # needs to know pages were dropped regardless of how the LLM step went.
+        if scanned_pdf_truncated:
+            doc.ai_extraction_status = "incomplete_scanned_pdf"
 
         doc.status = DocumentStatus.COMPLETED
         db.commit()

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import Link from "next/link";
 import {
     FiSearch,
@@ -14,6 +14,7 @@ import { complianceApi } from "@/lib/api/compliance";
 import type { UnifiedSearchHit } from "@/types/compliance";
 import { AuthorityBadge } from "@/components/compliance/AuthorityBadge";
 import { RiskTierDot } from "@/components/compliance/RiskTierDot";
+import { useCurrentClient } from "@/stores/currentClientStore";
 
 /**
  * Phase 13 v2.0 unified search page — at /dashboard/compliance/search.
@@ -34,6 +35,7 @@ function stripHtml(s: string): string {
 }
 
 export default function UnifiedSearchPage() {
+    const activeClientId = useCurrentClient((s) => s.activeClientId);
     const [input, setInput] = useState("");
     const [query, setQuery] = useState("");
     const [filter, setFilter] = useState<EntityFilter>("all");
@@ -46,7 +48,7 @@ export default function UnifiedSearchPage() {
     const types = filter === "all" ? "notice,document" : filter;
 
     const searchQ = useQuery({
-        queryKey: ["unified-search", query, types],
+        queryKey: ["unified-search", query, types, activeClientId],
         queryFn: async () => {
             if (!query) return null;
             const { data } = await complianceApi.unifiedSearch({
@@ -57,7 +59,12 @@ export default function UnifiedSearchPage() {
             });
             return data;
         },
-        enabled: query.length > 0,
+        enabled: query.length > 0 && activeClientId !== null,
+        // Keep the previous tenant-scoped result list rendered while a new
+        // query/filter refetch is in flight, so submitting doesn't flash a
+        // blank gap before the next ~25 hits arrive. Scoped to this paginated
+        // query only (the global default deliberately omits keepPreviousData).
+        placeholderData: keepPreviousData,
     });
 
     const hits: UnifiedSearchHit[] = searchQ.data?.items ?? [];
@@ -102,6 +109,7 @@ export default function UnifiedSearchPage() {
 
             <ResultArea
                 isLoading={searchQ.isLoading}
+                isRefetching={searchQ.isPlaceholderData && searchQ.isFetching}
                 isError={searchQ.isError}
                 hasQuery={query.length > 0}
                 hits={hits}
@@ -145,12 +153,14 @@ function FilterTabs({
 
 function ResultArea({
     isLoading,
+    isRefetching,
     isError,
     hasQuery,
     hits,
     backend,
 }: {
     isLoading: boolean;
+    isRefetching: boolean;
     isError: boolean;
     hasQuery: boolean;
     hits: UnifiedSearchHit[];
@@ -193,14 +203,24 @@ function ResultArea({
         );
     }
     return (
-        <>
+        <div
+            // While a new query refetches, keep the prior results on screen but
+            // dimmed + non-interactive so the transition reads as "updating"
+            // instead of flashing a blank gap.
+            className={
+                isRefetching
+                    ? "opacity-60 pointer-events-none transition-opacity"
+                    : "transition-opacity"
+            }
+            aria-busy={isRefetching}
+        >
             <ul className="space-y-2 mb-3">
                 {hits.map((hit) => (
                     <SearchHitRow key={`${hit.entity_type}-${hit.entity_id}`} hit={hit} />
                 ))}
             </ul>
             <BackendNote backend={backend} count={hits.length} />
-        </>
+        </div>
     );
 }
 

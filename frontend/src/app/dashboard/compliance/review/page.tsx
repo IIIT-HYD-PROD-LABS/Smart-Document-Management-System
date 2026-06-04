@@ -15,6 +15,7 @@ import {
 import { complianceApi } from "@/lib/api/compliance";
 import type { Authority, ReviewQueueItem } from "@/types/compliance";
 import { extractErrorMessage } from "@/lib/api";
+import { useCurrentClient } from "@/stores/currentClientStore";
 
 /**
  * Review queue, triage workbench.
@@ -132,14 +133,16 @@ function ageLabel(created_at: string): string {
 
 export default function ReviewQueuePage() {
     const qc = useQueryClient();
+    const activeClientId = useCurrentClient((s) => s.activeClientId);
     const [filter, setFilter] = useState<ReasonBucket | null>(null);
 
     const queueQ = useQuery({
-        queryKey: ["compliance-review-pending"],
+        queryKey: ["compliance-review-pending", activeClientId],
         queryFn: async () => {
             const { data } = await complianceApi.listPendingReview(1, 200);
             return data;
         },
+        enabled: activeClientId !== null,
     });
 
     const items = queueQ.data?.items ?? [];
@@ -160,7 +163,10 @@ export default function ReviewQueuePage() {
         return items.filter((it) => bucketOf(it.reason) === filter);
     }, [items, filter]);
 
-    const refresh = () => qc.invalidateQueries({ queryKey: ["compliance-review-pending"] });
+    const refresh = () =>
+        qc.invalidateQueries({
+            queryKey: ["compliance-review-pending", activeClientId],
+        });
 
     return (
         <div className="px-6 py-8 max-w-6xl mx-auto">

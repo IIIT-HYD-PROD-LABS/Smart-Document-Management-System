@@ -436,10 +436,7 @@ export default function DocumentDetailPage() {
                 <p className="text-sm" style={{ color: "var(--danger)" }}>{error || "Document not found"}</p>
                 <button
                     onClick={() => router.back()}
-                    className="mt-4 text-sm transition-colors cursor-pointer"
-                    style={{ color: "var(--text-muted)" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                    className="mt-4 text-sm transition-colors cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 >
                     Go back
                 </button>
@@ -463,10 +460,7 @@ export default function DocumentDetailPage() {
             {/* Back button */}
             <button
                 onClick={() => router.back()}
-                className="flex items-center gap-2 text-sm transition-colors mb-6 cursor-pointer"
-                style={{ color: "var(--text-muted)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                className="flex items-center gap-2 text-sm transition-colors mb-6 cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             >
                 <FiArrowLeft className="w-4 h-4" />
                 Back
@@ -492,40 +486,14 @@ export default function DocumentDetailPage() {
                 <div className="flex items-center gap-3 flex-wrap shrink-0">
                     <Link
                         href={`/dashboard/documents/${doc.id}/preview`}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border transition-colors"
-                        style={{
-                            color: "var(--text-secondary)",
-                            borderColor: "var(--border-default)",
-                            background: "var(--bg-elevated)",
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = "var(--border-emphasis)";
-                            e.currentTarget.style.color = "var(--text-primary)";
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = "var(--border-default)";
-                            e.currentTarget.style.color = "var(--text-secondary)";
-                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border transition-colors bg-[var(--bg-elevated)] text-[var(--text-secondary)] border-[var(--border-default)] hover:text-[var(--text-primary)] hover:border-[var(--border-emphasis)]"
                     >
                         <FiEye className="w-3.5 h-3.5" /> Preview
                     </Link>
                     {canShare && (
                         <button
                             onClick={() => setShowShareModal(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border transition-colors cursor-pointer"
-                            style={{
-                                color: "var(--text-secondary)",
-                                borderColor: "var(--border-default)",
-                                background: "var(--bg-elevated)",
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = "var(--border-emphasis)";
-                                e.currentTarget.style.color = "var(--text-primary)";
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = "var(--border-default)";
-                                e.currentTarget.style.color = "var(--text-secondary)";
-                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border transition-colors cursor-pointer bg-[var(--bg-elevated)] text-[var(--text-secondary)] border-[var(--border-default)] hover:text-[var(--text-primary)] hover:border-[var(--border-emphasis)]"
                         >
                             <FiShare2 className="w-3.5 h-3.5" />
                             Share
@@ -586,10 +554,7 @@ export default function DocumentDetailPage() {
                         </div>
                         <button
                             onClick={() => setShowVersions(!showVersions)}
-                            className="text-xs transition-colors cursor-pointer"
-                            style={{ color: "var(--text-secondary)" }}
-                            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; }}
+                            className="text-xs transition-colors cursor-pointer text-[var(--text-secondary)] hover:text-[var(--accent)]"
                         >
                             {showVersions ? "Hide" : "Show"}
                         </button>
@@ -660,10 +625,7 @@ export default function DocumentDetailPage() {
                                                         <button
                                                             onClick={() => handleRollback(v.version_number)}
                                                             disabled={rollingBack}
-                                                            className="flex items-center gap-1 text-xs transition-colors cursor-pointer disabled:opacity-50"
-                                                            style={{ color: "var(--text-secondary)" }}
-                                                            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--warning)"; }}
-                                                            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; }}
+                                                            className="flex items-center gap-1 text-xs transition-colors cursor-pointer disabled:opacity-50 text-[var(--text-secondary)] hover:text-[var(--warning)]"
                                                             title={`Restore version ${v.version_number}`}
                                                         >
                                                             <FiRotateCcw className="w-3.5 h-3.5" />
@@ -810,10 +772,7 @@ export default function DocumentDetailPage() {
                         <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Highlighted Text ({highlights.length} selections)</h2>
                         <button
                             onClick={copyText}
-                            className="flex items-center gap-1.5 text-xs transition-colors cursor-pointer"
-                            style={{ color: "var(--text-secondary)" }}
-                            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; }}
+                            className="flex items-center gap-1.5 text-xs transition-colors cursor-pointer text-[var(--text-secondary)] hover:text-[var(--accent)]"
                         >
                             <FiCopy className="w-3.5 h-3.5" />
                             Copy highlights
@@ -868,18 +827,14 @@ export default function DocumentDetailPage() {
                             <>
                                 <button
                                     onClick={() => setHighlightMode(!highlightMode)}
-                                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded transition-colors cursor-pointer"
+                                    className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                                        highlightMode ? "" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                                    }`}
                                     style={
                                         highlightMode
                                             ? { background: "var(--warning-soft)", color: "var(--warning)" }
-                                            : { color: "var(--text-secondary)" }
+                                            : undefined
                                     }
-                                    onMouseEnter={(e) => {
-                                        if (!highlightMode) e.currentTarget.style.color = "var(--text-primary)";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        if (!highlightMode) e.currentTarget.style.color = "var(--text-secondary)";
-                                    }}
                                 >
                                     <FiEdit3 className="w-3.5 h-3.5" />
                                     {highlightMode ? "Done" : "Highlight"}
@@ -898,10 +853,7 @@ export default function DocumentDetailPage() {
                                 {!highlightMode && (
                                     <button
                                         onClick={copyText}
-                                        className="flex items-center gap-1.5 text-xs transition-colors cursor-pointer"
-                                        style={{ color: "var(--text-secondary)" }}
-                                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; }}
+                                        className="flex items-center gap-1.5 text-xs transition-colors cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                                     >
                                         {copied
                                             ? <FiCheck className="w-3.5 h-3.5" style={{ color: "var(--success)" }} />
@@ -929,9 +881,7 @@ export default function DocumentDetailPage() {
                                 {h.text.length > 30 ? h.text.slice(0, 30) + "..." : h.text}
                                 <button
                                     onClick={() => removeHighlight(i)}
-                                    className="cursor-pointer transition-colors"
-                                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--warning)"; }}
+                                    className="cursor-pointer transition-colors text-[var(--warning)] hover:text-[var(--text-primary)]"
                                 >
                                     <FiX className="w-3 h-3" />
                                 </button>
@@ -977,10 +927,7 @@ export default function DocumentDetailPage() {
                             <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Share document</h3>
                             <button
                                 onClick={() => setShowShareModal(false)}
-                                className="cursor-pointer transition-colors touch-target flex items-center justify-center"
-                                style={{ color: "var(--text-muted)" }}
-                                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                                className="cursor-pointer transition-colors touch-target flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                             >
                                 <FiX className="w-4 h-4" />
                             </button>
@@ -992,14 +939,7 @@ export default function DocumentDetailPage() {
                                 value={shareEmail}
                                 onChange={(e) => setShareEmail(e.target.value)}
                                 placeholder="Enter email address"
-                                className="flex-1 px-3 py-2 rounded-md text-sm focus:outline-none transition-colors border"
-                                style={{
-                                    background: "var(--bg-page)",
-                                    borderColor: "var(--border-default)",
-                                    color: "var(--text-primary)",
-                                }}
-                                onFocus={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
-                                onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}
+                                className="flex-1 px-3 py-2 rounded-md text-sm focus:outline-none transition-colors border bg-[var(--bg-page)] text-[var(--text-primary)] border-[var(--border-default)] focus:border-[var(--accent)]"
                             />
                             <select
                                 value={sharePermission}
@@ -1017,10 +957,7 @@ export default function DocumentDetailPage() {
                             <button
                                 onClick={handleShare}
                                 disabled={sharingLoading || !shareEmail}
-                                className="px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 cursor-pointer"
-                                style={{ background: "var(--accent)", color: "#ffffff" }}
-                                onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = "var(--accent-strong)"; }}
-                                onMouseLeave={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = "var(--accent)"; }}
+                                className="px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 cursor-pointer text-white bg-[var(--accent)] hover:bg-[var(--accent-strong)] disabled:hover:bg-[var(--accent)]"
                             >
                                 {sharingLoading ? "..." : "Share"}
                             </button>
@@ -1056,10 +993,7 @@ export default function DocumentDetailPage() {
                                                 </span>
                                                 <button
                                                     onClick={() => handleRevoke(p.id)}
-                                                    className="transition-colors cursor-pointer touch-target flex items-center justify-center"
-                                                    style={{ color: "var(--text-muted)" }}
-                                                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; }}
-                                                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                                                    className="transition-colors cursor-pointer touch-target flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--danger)]"
                                                 >
                                                     <FiTrash2 className="w-3.5 h-3.5" />
                                                 </button>

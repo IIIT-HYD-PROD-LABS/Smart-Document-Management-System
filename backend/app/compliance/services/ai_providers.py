@@ -269,16 +269,152 @@ class GoogleProvider(AIProvider):
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Ollama  (local, no API key)
+# ─────────────────────────────────────────────────────────────────────
+
+
+class OllamaProvider(AIProvider):
+    """Local Ollama instance reached over its `/api/chat` REST endpoint.
+
+    Needs no API key — this is the zero-cost server-default provider. The
+    base URL is taken from `settings.OLLAMA_BASE_URL` (SSRF-validated at
+    config load: loopback / RFC1918 / host.docker.internal only), so a tenant
+    can NOT point us at an arbitrary host. Ollama has no auth/rate-limit
+    surface, so every transport failure maps to `AIProviderError`; a 404 means
+    the model has not been pulled, which we surface as an actionable message.
+    """
+
+    def __init__(self, api_key: str, model: str, base_url: str | None = None):
+        from app.config import settings
+
+        resolved = (base_url or settings.OLLAMA_BASE_URL or "http://localhost:11434")
+        self._base_url = resolved.rstrip("/")
+        self._model = model
+        self._timeout = float(getattr(settings, "LLM_TIMEOUT_SECONDS", 60) or 60)
+
+    def _send(self, system: str, messages: list[dict], max_tokens: int) -> str:
+        payload = {
+            "model": self._model,
+            "messages": [{"role": "system", "content": system}, *messages],
+            "stream": False,
+            "options": {"temperature": 0.2, "num_predict": max_tokens},
+        }
+        try:
+            r = httpx.post(
+                f"{self._base_url}/api/chat", json=payload, timeout=self._timeout
+            )
+        except httpx.RequestError as e:
+            raise AIProviderError(f"ollama request failed: {e}") from e
+
+        if r.status_code == 404:
+            raise AIProviderError(
+                f"Ollama model '{self._model}' is not installed. Pull it on the "
+                f"Ollama host with `ollama pull {self._model}`."
+            )
+        if r.status_code >= 400:
+            raise AIProviderError(f"ollama http {r.status_code}: {r.text[:300]}")
+
+        try:
+            body = r.json()
+        except ValueError as e:
+            raise AIProviderError(f"ollama returned non-JSON: {e}") from e
+
+        content = (body.get("message") or {}).get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise AIProviderError(
+                f"ollama missing message content (keys: {list(body.keys())})"
+            )
+        return content
+
+    def complete(self, system: str, user: str, max_tokens: int = 1024) -> str:
+        return self._send(system, [{"role": "user", "content": user}], max_tokens)
+
+    def chat(
+        self, system: str, messages: list[dict], max_tokens: int = 1024
+    ) -> str:
+        return self._send(system, messages, max_tokens)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# OpenAI  (the "shift to GPT later" path)
+# ─────────────────────────────────────────────────────────────────────
+
+
+class OpenAIProvider(AIProvider):
+    """OpenAI Chat Completions via the official `openai` SDK (already a dep).
+
+    Mirrors the Anthropic adapter's exception mapping so the service layer
+    treats GPT exactly like the other key-bearing providers."""
+
+    def __init__(self, api_key: str, model: str):
+        from openai import OpenAI  # local import — keeps cold start fast
+
+        self._client = OpenAI(api_key=api_key, timeout=30.0)
+        self._model = model
+
+    def _send(self, system: str, messages: list[dict], max_tokens: int) -> str:
+        try:
+            from openai import (  # noqa: F401 — type imports only
+                APIStatusError,
+                AuthenticationError,
+                RateLimitError,
+            )
+        except ImportError:
+            APIStatusError = AuthenticationError = RateLimitError = Exception
+
+        try:
+            resp = self._client.chat.completions.create(
+                model=self._model,
+                max_tokens=max_tokens,
+                temperature=0.2,
+                messages=[{"role": "system", "content": system}, *messages],
+            )
+        except AuthenticationError as e:
+            raise AIAuthError(str(e)) from e
+        except RateLimitError as e:
+            raise AIRateLimitError(str(e)) from e
+        except APIStatusError as e:
+            raise AIProviderError(str(e)) from e
+        except Exception as e:  # noqa: BLE001 — surface as provider error
+            raise AIProviderError(f"openai call failed: {e}") from e
+
+        if not resp.choices:
+            raise AIProviderError("empty response from openai")
+        content = resp.choices[0].message.content
+        if not isinstance(content, str):
+            raise AIProviderError("openai returned no text content")
+        return content
+
+    def complete(self, system: str, user: str, max_tokens: int = 1024) -> str:
+        return self._send(system, [{"role": "user", "content": user}], max_tokens)
+
+    def chat(
+        self, system: str, messages: list[dict], max_tokens: int = 1024
+    ) -> str:
+        return self._send(system, messages, max_tokens)
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Factory
 # ─────────────────────────────────────────────────────────────────────
 
 
-def build_provider(provider: str, api_key: str, model: str) -> AIProvider:
-    """Return an adapter for the given provider name. Raises ValueError
-    for unknown providers — the DB CHECK constraint and Pydantic Literal
-    should make this unreachable in practice."""
+def build_provider(
+    provider: str, api_key: str, model: str, *, base_url: str | None = None
+) -> AIProvider:
+    """Return an adapter for the given provider name. Raises ValueError for
+    unknown providers.
+
+    `anthropic` / `google` are the BYOK (per-tenant) providers; `ollama` /
+    `openai` are reachable as server-default providers (Ollama needs no key,
+    OpenAI takes one from the environment). `base_url` only applies to Ollama.
+    """
     if provider == "anthropic":
         return AnthropicProvider(api_key=api_key, model=model)
     if provider == "google":
         return GoogleProvider(api_key=api_key, model=model)
+    if provider == "ollama":
+        return OllamaProvider(api_key=api_key, model=model, base_url=base_url)
+    if provider == "openai":
+        return OpenAIProvider(api_key=api_key, model=model)
     raise ValueError(f"unknown AI provider: {provider!r}")

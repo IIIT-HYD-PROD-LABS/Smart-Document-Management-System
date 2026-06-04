@@ -3,6 +3,9 @@ import io
 import zipfile
 import structlog
 from docx import Document as DocxDocument
+from docx.opc.exceptions import PackageNotFoundError
+
+from app.ml.errors import ExtractionEngineError
 
 MAX_TEXT_LENGTH = 500_000
 
@@ -43,9 +46,12 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
         else:
             logger.info("docx_text_extracted", chars=len(result))
         return result
-    except zipfile.BadZipFile as e:
+    except (zipfile.BadZipFile, PackageNotFoundError) as e:
+        # Corrupt / not-a-real-docx container. Surfacing "" would mark the
+        # document COMPLETED with no content; raise so the task layer marks
+        # it FAILED. Non-retryable: a corrupt file never decodes on retry.
         logger.error("docx_extraction_failed_bad_zip", error=str(e))
-        return ""
+        raise ExtractionEngineError("docx_corrupt", retryable=False) from e
     except ValueError as e:
         logger.error("docx_extraction_failed_value_error", error=str(e))
         return ""

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import toast from "react-hot-toast";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
@@ -64,6 +64,36 @@ export default function AnalyticsPage() {
         if (isError) toast.error("Failed to load analytics");
     }, [isError]);
 
+    // Memoized so the React.memo'd charts get a stable `data` reference and skip
+    // re-rendering when the page re-renders for unrelated reasons. Hoisted above
+    // the early returns to satisfy the rules of hooks. The query data objects are
+    // referentially stable across renders (React Query), so depending on them
+    // directly (fallback inside the callback) keeps the memo from invalidating.
+    const trendsData = trendsQ.data;
+    const categoryCounts = statsQ.data?.category_counts;
+    const trends = trendsData?.trends ?? [];
+
+    const trendData = useMemo(
+        () =>
+            (trendsData?.trends ?? []).map((t) => {
+                const [year, mon] = t.month.split("-");
+                const d = new Date(Number(year), Number(mon) - 1);
+                return {
+                    month: d.toLocaleString("default", { month: "short" }),
+                    count: t.count,
+                };
+            }),
+        [trendsData],
+    );
+
+    const pieData = useMemo(
+        () =>
+            Object.entries(categoryCounts ?? {})
+                .filter(([, count]) => count > 0)
+                .map(([name, value]) => ({ name, value })),
+        [categoryCounts],
+    );
+
     if (loading) {
         // Mirror the real layout (header + 4 stat cards + trends chart + the
         // two-up donut/status row) so the 2-3s cold fetch against the remote
@@ -90,14 +120,12 @@ export default function AnalyticsPage() {
     }
 
     const stats = statsQ.data ?? null;
-    const trends = trendsQ.data?.trends ?? [];
 
     const total = stats?.total_documents ?? 0;
     const processing = stats?.processing_count ?? 0;
     const completed = stats?.completed_count ?? 0;
     const failed = stats?.failed_count ?? 0;
     const pending = Math.max(total - completed - processing - failed, 0);
-    const catCounts = stats?.category_counts ?? {};
 
     if (total === 0 && trends.length === 0) {
         return (
@@ -133,19 +161,6 @@ export default function AnalyticsPage() {
             </div>
         );
     }
-
-    const trendData = trends.map((t) => {
-        const [year, mon] = t.month.split("-");
-        const d = new Date(Number(year), Number(mon) - 1);
-        return {
-            month: d.toLocaleString("default", { month: "short" }),
-            count: t.count,
-        };
-    });
-
-    const pieData = Object.entries(catCounts)
-        .filter(([, count]) => count > 0)
-        .map(([name, value]) => ({ name, value }));
 
     // Semantic tokens for status segments — track the active theme.
     const statusSegments = [

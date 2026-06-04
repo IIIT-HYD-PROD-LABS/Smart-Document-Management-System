@@ -149,7 +149,7 @@ def extract_notice_fields(
         AIProviderError:                        provider transport errors.
         NoticeExtractionParseError:             provider response unparseable.
     """
-    cred = ai_service.get_credential(db, client_id=client_id)
+    cred = ai_service.resolve_credential(db, client_id=client_id)
     if cred is None:
         raise NoticeExtractionCredentialMissingError(
             "No AI credential configured for this tenant"

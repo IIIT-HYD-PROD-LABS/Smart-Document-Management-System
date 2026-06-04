@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { documentsApi } from "@/lib/api";
 import { ConfidenceBadge, StatusBadge, CategoryBadge, Skeleton } from "@/components";
-import { FiFileText, FiTrash2, FiFilter, FiCheckSquare, FiSquare, FiX, FiMail, FiUpload, FiShare2, FiSearch } from "react-icons/fi";
+import { FiFileText, FiTrash2, FiFilter, FiCheckSquare, FiSquare, FiX, FiMail, FiUpload, FiShare2, FiSearch, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import Link from "next/link";
 import toast from "react-hot-toast";
+
+const PER_PAGE = 50;
 
 const categories = ["all", "bills", "upi", "tickets", "tax", "bank", "invoices", "unknown"];
 
@@ -25,20 +27,111 @@ interface DocumentListItem {
 
 const DOCS_QUERY_KEY = ["documents", "all"] as const;
 
+interface DocumentRowProps {
+    doc: DocumentListItem;
+    idx: number;
+    isSelected: boolean;
+    isSelectMode: boolean;
+    onOpen: (id: number) => void;
+    onToggleSelect: (id: number, e: React.MouseEvent) => void;
+    onDelete: (id: number) => void;
+}
+
+// Memoized so unrelated parent state (filter, search, pagination, the selection
+// of *other* rows) doesn't re-reconcile every row. Effective because all
+// callbacks are stable (useCallback in the parent) and the selection-driven
+// props (isSelected/isSelectMode) only change for the affected rows.
+const DocumentRow = React.memo(function DocumentRow({
+    doc,
+    idx,
+    isSelected,
+    isSelectMode,
+    onOpen,
+    onToggleSelect,
+    onDelete,
+}: DocumentRowProps) {
+    return (
+        <div
+            key={doc.id}
+            onClick={() => (isSelectMode ? onToggleSelect(doc.id, { stopPropagation: () => {} } as React.MouseEvent) : onOpen(doc.id))}
+            className={`flex items-center gap-4 px-5 py-4 transition-colors group cursor-pointer ${isSelected ? "" : "hover:bg-[var(--bg-hover)]"}`}
+            style={{
+                background: isSelected ? "var(--accent-soft)" : "transparent",
+                borderTop: idx === 0 ? "none" : "1px solid var(--border-subtle)",
+            }}
+        >
+            <div
+                onClick={(e) => onToggleSelect(doc.id, e)}
+                className="shrink-0 touch-target flex items-center justify-center"
+            >
+                {isSelected
+                    ? <FiCheckSquare className="w-4 h-4" style={{ color: "var(--accent)" }} />
+                    : <FiSquare
+                        className="w-4 h-4 transition-colors"
+                        style={{
+                            color: isSelectMode ? "var(--text-muted)" : "var(--border-emphasis)",
+                        }}
+                    />}
+            </div>
+
+            <FiFileText className="w-4 h-4 shrink-0" style={{ color: "var(--text-muted)" }} />
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                    {(doc.source === "gmail" || doc.source === "gmail_body") && (
+                        <FiMail
+                            className="w-3.5 h-3.5 shrink-0"
+                            style={{ color: "var(--accent)" }}
+                            title={doc.source === "gmail_body" ? "Ingested from Gmail body" : "Ingested from Gmail attachment"}
+                        />
+                    )}
+                    <p className="text-sm truncate" style={{ color: "var(--text-primary)" }}>{doc.original_filename}</p>
+                </div>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                    {doc.file_size != null ? `${(doc.file_size / 1024).toFixed(1)} KB` : "Unknown size"} &middot; {new Date(doc.created_at).toLocaleDateString()}
+                </p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+                <span className="hidden sm:inline-flex">
+                    {doc.category && (
+                        <CategoryBadge category={doc.category} />
+                    )}
+                </span>
+                <span className="hidden md:inline-flex">
+                    <ConfidenceBadge score={doc.confidence_score ?? 0} />
+                </span>
+                <StatusBadge status={doc.status} />
+                <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(doc.id); }}
+                    className="opacity-0 group-hover:opacity-100 transition-all cursor-pointer touch-target flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--danger)]"
+                >
+                    <FiTrash2 className="w-3.5 h-3.5" />
+                </button>
+            </div>
+        </div>
+    );
+});
+
 export default function DocumentsPage() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const [filter, setFilter] = useState("all");
     const [selected, setSelected] = useState<Set<number>>(new Set());
     const [deleting, setDeleting] = useState(false);
+    const [page, setPage] = useState(1);
 
     // React Query (was useState+useEffect): shares the dashboard cache so a
     // revisit inside staleTime is instant, and the sidebar's hover-prefetch
-    // (same key + queryFn) lands a warm cache here on arrival.
+    // (same key + queryFn) lands a warm cache here on arrival. Page 1 keeps the
+    // exact prefetch key/shape (array under DOCS_QUERY_KEY) so that warm cache
+    // still hits; later pages append the page number to the key.
     const { data: docs = [], isLoading: loading, isError } = useQuery<DocumentListItem[]>({
-        queryKey: DOCS_QUERY_KEY,
-        queryFn: () => documentsApi.getAll().then((r) => r.data.documents ?? []),
+        queryKey: page === 1 ? DOCS_QUERY_KEY : [...DOCS_QUERY_KEY, page],
+        queryFn: () => documentsApi.getAll(page, PER_PAGE).then((r) => r.data.documents ?? []),
+        placeholderData: keepPreviousData,
     });
+
+    // The list API caps a page at PER_PAGE rows; a full page implies more exist.
+    const hasNextPage = docs.length === PER_PAGE;
 
     useEffect(() => {
         if (isError) toast.error("Something went wrong");
@@ -56,19 +149,23 @@ export default function DocumentsPage() {
     }, [docs]);
 
     // Local mutations write through the cache so the list updates instantly
-    // without a refetch round-trip to the remote DB.
-    const removeFromCache = (ids: Set<number>) =>
-        queryClient.setQueryData<DocumentListItem[]>(DOCS_QUERY_KEY, (prev) =>
+    // without a refetch round-trip to the remote DB. Targets the active page's
+    // key so the row vanishes from whichever page it lives on.
+    const activeKey = page === 1 ? DOCS_QUERY_KEY : ([...DOCS_QUERY_KEY, page] as const);
+    const removeFromCache = useCallback((ids: Set<number>) =>
+        queryClient.setQueryData<DocumentListItem[]>(activeKey as unknown as readonly unknown[], (prev) =>
             (prev ?? []).filter((d) => !ids.has(d.id)),
-        );
+        ),
+        [queryClient, page], // eslint-disable-line react-hooks/exhaustive-deps
+    );
 
-    const handleDelete = async (id: number) => {
+    const handleDelete = useCallback(async (id: number) => {
         try {
             await documentsApi.delete(id);
             removeFromCache(new Set([id]));
             setSelected((prev) => { const next = new Set(prev); next.delete(id); return next; });
         } catch { toast.error("Something went wrong"); }
-    };
+    }, [removeFromCache]);
 
     const handleBatchDelete = async () => {
         if (selected.size === 0) return;
@@ -82,7 +179,7 @@ export default function DocumentsPage() {
         setDeleting(false);
     };
 
-    const toggleSelect = (id: number, e: React.MouseEvent) => {
+    const toggleSelect = useCallback((id: number, e: React.MouseEvent) => {
         e.stopPropagation();
         setSelected((prev) => {
             const next = new Set(prev);
@@ -90,7 +187,11 @@ export default function DocumentsPage() {
             else next.add(id);
             return next;
         });
-    };
+    }, []);
+
+    const openDoc = useCallback((id: number) => {
+        router.push(`/dashboard/documents/${id}`);
+    }, [router]);
 
     const filtered = filter === "all" ? docs : docs.filter((d) => d.category === filter);
 
@@ -261,77 +362,18 @@ export default function DocumentsPage() {
                         boxShadow: "var(--shadow-sm)",
                     }}
                 >
-                    {filtered.map((doc, idx) => {
-                        const isSelected = selected.has(doc.id);
-                        return (
-                            <div
-                                key={doc.id}
-                                onClick={() => isSelectMode ? toggleSelect(doc.id, { stopPropagation: () => {} } as React.MouseEvent) : router.push(`/dashboard/documents/${doc.id}`)}
-                                className="flex items-center gap-4 px-5 py-4 transition-colors group cursor-pointer"
-                                style={{
-                                    background: isSelected ? "var(--accent-soft)" : "transparent",
-                                    borderTop: idx === 0 ? "none" : "1px solid var(--border-subtle)",
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)";
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (!isSelected) e.currentTarget.style.background = "transparent";
-                                }}
-                            >
-                                <div
-                                    onClick={(e) => toggleSelect(doc.id, e)}
-                                    className="shrink-0 touch-target flex items-center justify-center"
-                                >
-                                    {isSelected
-                                        ? <FiCheckSquare className="w-4 h-4" style={{ color: "var(--accent)" }} />
-                                        : <FiSquare
-                                            className="w-4 h-4 transition-colors"
-                                            style={{
-                                                color: isSelectMode ? "var(--text-muted)" : "var(--border-emphasis)",
-                                            }}
-                                        />}
-                                </div>
-
-                                <FiFileText className="w-4 h-4 shrink-0" style={{ color: "var(--text-muted)" }} />
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                        {(doc.source === "gmail" || doc.source === "gmail_body") && (
-                                            <FiMail
-                                                className="w-3.5 h-3.5 shrink-0"
-                                                style={{ color: "var(--accent)" }}
-                                                title={doc.source === "gmail_body" ? "Ingested from Gmail body" : "Ingested from Gmail attachment"}
-                                            />
-                                        )}
-                                        <p className="text-sm truncate" style={{ color: "var(--text-primary)" }}>{doc.original_filename}</p>
-                                    </div>
-                                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                                        {doc.file_size != null ? `${(doc.file_size / 1024).toFixed(1)} KB` : "Unknown size"} &middot; {new Date(doc.created_at).toLocaleDateString()}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-3 shrink-0">
-                                    <span className="hidden sm:inline-flex">
-                                        {doc.category && (
-                                            <CategoryBadge category={doc.category} />
-                                        )}
-                                    </span>
-                                    <span className="hidden md:inline-flex">
-                                        <ConfidenceBadge score={doc.confidence_score ?? 0} />
-                                    </span>
-                                    <StatusBadge status={doc.status} />
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
-                                        className="opacity-0 group-hover:opacity-100 transition-all cursor-pointer touch-target flex items-center justify-center"
-                                        style={{ color: "var(--text-muted)" }}
-                                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-                                    >
-                                        <FiTrash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
+                    {filtered.map((doc, idx) => (
+                        <DocumentRow
+                            key={doc.id}
+                            doc={doc}
+                            idx={idx}
+                            isSelected={selected.has(doc.id)}
+                            isSelectMode={isSelectMode}
+                            onOpen={openDoc}
+                            onToggleSelect={toggleSelect}
+                            onDelete={handleDelete}
+                        />
+                    ))}
                 </div>
             ) : (
                 <div
@@ -344,6 +386,30 @@ export default function DocumentsPage() {
                     <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                         {filter === "all" ? "No documents yet" : `No ${filter} documents`}
                     </p>
+                </div>
+            )}
+
+            {(page > 1 || hasNextPage) && (
+                <div className="flex items-center justify-end gap-2 mt-4">
+                    <span className="text-xs mr-1 tabular-nums" style={{ color: "var(--text-muted)" }}>
+                        Page {page}
+                    </span>
+                    <button
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className="p-1.5 rounded border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-emphasis)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                        aria-label="Previous page"
+                    >
+                        <FiChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => setPage((p) => p + 1)}
+                        disabled={!hasNextPage}
+                        className="p-1.5 rounded border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-emphasis)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                        aria-label="Next page"
+                    >
+                        <FiChevronRight className="w-4 h-4" />
+                    </button>
                 </div>
             )}
         </div>

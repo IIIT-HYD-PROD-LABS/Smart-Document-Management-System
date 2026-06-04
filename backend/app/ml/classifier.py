@@ -7,6 +7,7 @@ import joblib
 import structlog
 
 from app.config import settings
+from app.ml.errors import ExtractionEngineError
 from app.ml.text_preprocessor import clean_text
 
 logger = structlog.stdlib.get_logger()
@@ -20,8 +21,13 @@ _vectorizer = None
 _model_lock = threading.Lock()
 
 
-def _load_model():
-    """Lazy-load the trained model and vectorizer."""
+def _load_model() -> bool:
+    """Lazy-load the trained model and vectorizer.
+
+    Returns True on success. Raises ExtractionEngineError when the artifact
+    FILES are missing (a deployment/operational fault the task layer should
+    retry), and returns False only on a non-file load failure already logged.
+    """
     global _model, _vectorizer
     if _model is not None and _vectorizer is not None:
         return True
@@ -39,7 +45,7 @@ def _load_model():
                 return False
         else:
             logger.warning("model_files_not_found", model_dir=settings.MODEL_DIR)
-            return False
+            raise ExtractionEngineError("model_artifacts_missing")
     return True
 
 
@@ -88,7 +94,7 @@ def extract_and_classify(file_bytes: bytes, file_type: str) -> tuple[str, str, f
     Returns (extracted_text, category, confidence).
     """
     from app.ml.docx_extractor import extract_text_from_docx
-    from app.ml.ocr import extract_text_from_image
+    from app.ml.ocr import extract_text_from_image, extract_text_from_tiff
     from app.ml.pdf_extractor import extract_text_from_pdf
 
     # Extract text based on file type
@@ -103,6 +109,10 @@ def extract_and_classify(file_bytes: bytes, file_type: str) -> tuple[str, str, f
             extracted_text = file_bytes.decode("utf-8", errors="replace")
         except Exception:
             extracted_text = ""
+    elif file_type in ("tiff", "tif"):
+        # H3: cv2.imdecode would drop TIFF pages 2+. Use the frame-iterating
+        # path so multi-page scans are fully OCR'd.
+        extracted_text = extract_text_from_tiff(file_bytes)
     else:
         extracted_text = extract_text_from_image(file_bytes)
 

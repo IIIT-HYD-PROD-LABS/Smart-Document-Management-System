@@ -29,13 +29,22 @@ def test_extractor_envelope_shape(extraction_envelope_fixture):
 
 
 def test_extract_notice_fields_raises_when_credential_missing():
-    """D-14: tenant without AICredential row raises the typed error the router maps to 412."""
+    """D-14: when NO provider is available (no per-tenant BYOK row AND no
+    server-default provider), extraction raises the typed error the router maps
+    to 412.
+
+    Post-2026-06-04: the extractor resolves its provider via
+    ai_service.resolve_credential, which falls back to the server-default
+    provider (settings.LLM_PROVIDER, e.g. Ollama) when a tenant has no key.
+    resolve_credential returns None only when neither source is available, so we
+    stub it to None to exercise the genuine "nothing configured" path.
+    """
     from app.compliance.services.notice_extractor_service import (
         NoticeExtractionCredentialMissingError,
         extract_notice_fields,
     )
     with patch(
-        "app.compliance.services.notice_extractor_service.ai_service.get_credential",
+        "app.compliance.services.notice_extractor_service.ai_service.resolve_credential",
         return_value=None,
     ):
         with pytest.raises(NoticeExtractionCredentialMissingError):

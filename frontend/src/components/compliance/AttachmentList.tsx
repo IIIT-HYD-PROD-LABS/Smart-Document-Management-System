@@ -56,8 +56,8 @@ export function AttachmentList({ noticeId }: Props) {
                 <div className="h-10 rounded bg-[var(--bg-hover)] animate-pulse" />
             ) : attachments.length === 0 ? (
                 <p className="text-[13px] text-[var(--text-muted)]">
-                    No attachments yet. Drop a PDF, JPG, or PNG below to attach
-                    one.
+                    No attachments yet. Drop a document below (PDF, Word, or
+                    image) to attach one.
                 </p>
             ) : (
                 <ul className="space-y-1.5">

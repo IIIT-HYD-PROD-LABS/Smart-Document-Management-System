@@ -168,7 +168,7 @@ export function ExtractionPreviewForm({
                 detail?.code === "no_ai_credential"
             ) {
                 setCredentialMissing(true);
-                toast.error("Connect an AI provider in settings to enable extraction");
+                toast.error("AI extraction is unavailable right now. Fill the form manually.");
                 setMode("manual");
                 return;
             }
@@ -219,10 +219,15 @@ export function ExtractionPreviewForm({
 
     const dropzone = useDropzone({
         onDrop,
+        // Mirrors backend settings.ALLOWED_EXTENSIONS + the notice content-type map.
         accept: {
-            "application/pdf": [],
-            "image/jpeg": [],
-            "image/png": [],
+            "application/pdf": [".pdf"],
+            "image/png": [".png"],
+            "image/jpeg": [".jpg", ".jpeg"],
+            "image/tiff": [".tif", ".tiff"],
+            "image/bmp": [".bmp"],
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                [".docx"],
         },
         multiple: false,
         disabled: extract.isPending,
@@ -395,10 +400,11 @@ export function ExtractionPreviewForm({
                             <input {...dropzone.getInputProps()} />
                             <FiUploadCloud className="w-7 h-7 text-[var(--text-muted)] mx-auto mb-3" />
                             <div className="text-[14px] text-[var(--text-primary)] mb-1">
-                                Drop a notice PDF, JPG, or PNG to auto-fill the form
+                                Drop a document to auto-fill the form
                             </div>
                             <div className="text-[12px] text-[var(--text-muted)] mb-3">
-                                Uses your connected AI provider. PDF/JPG/PNG only.
+                                AI reads the file for you. PDF, Word, or image
+                                (PNG, JPG, TIFF, BMP).
                             </div>
                             <button
                                 type="button"
@@ -424,15 +430,16 @@ export function ExtractionPreviewForm({
                 <div className="rounded-md border border-[color:color-mix(in_srgb,var(--warning)_30%,transparent)] bg-[var(--warning-soft)] px-3 py-2.5 text-[12px] text-[var(--warning)] flex items-start gap-2">
                     <FiAlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
                     <div>
-                        Connect an AI provider in{" "}
+                        AI extraction is unavailable right now. You can still
+                        upload the file and fill the form manually, or connect
+                        your own AI provider in{" "}
                         <Link
                             href="/dashboard/settings/ai"
                             className="underline hover:no-underline"
                         >
                             settings
-                        </Link>{" "}
-                        to enable extraction. You can still upload and fill the form
-                        manually.
+                        </Link>
+                        .
                     </div>
                 </div>
             ) : null}

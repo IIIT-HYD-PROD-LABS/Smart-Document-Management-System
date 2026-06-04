@@ -144,10 +144,12 @@ export default function AISettingsPage() {
                     AI assistant
                 </h1>
                 <p className="text-[13px] text-[var(--text-muted)] mt-2 max-w-prose">
-                    Connect your own Anthropic Claude or Google Gemini API key.
-                    TaxSync uses it only for compliance, notice, and invoice
-                    work — anything outside that scope is refused. Costs go to
-                    your provider account; we never charge for AI.
+                    AI summaries, extraction, and drafts work out of the box
+                    using TaxSync&apos;s built-in provider. Optionally connect
+                    your own Anthropic Claude or Google Gemini API key to run on
+                    your account instead. Either way, TaxSync uses it only for
+                    compliance, notice, and invoice work; anything outside that
+                    scope is refused.
                 </p>
             </header>
 

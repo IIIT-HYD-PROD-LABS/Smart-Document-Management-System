@@ -211,10 +211,7 @@ export default function PreviewPage() {
                 <div className="flex items-center gap-3 min-w-0">
                     <button
                         onClick={() => router.back()}
-                        className="transition-colors shrink-0 cursor-pointer touch-target flex items-center justify-center"
-                        style={{ color: "var(--text-secondary)" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; }}
+                        className="transition-colors shrink-0 cursor-pointer touch-target flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                     >
                         <FiArrowLeft className="w-5 h-5" />
                     </button>
@@ -229,10 +226,7 @@ export default function PreviewPage() {
                             <button
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                 disabled={currentPage <= 1}
-                                className="p-1.5 rounded disabled:opacity-30 transition-colors touch-target flex items-center justify-center"
-                                style={{ color: "var(--text-secondary)" }}
-                                onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                                className="p-1.5 rounded disabled:opacity-30 transition-colors touch-target flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] disabled:hover:bg-transparent"
                             >
                                 <FiChevronLeft className="w-4 h-4" />
                             </button>
@@ -242,10 +236,7 @@ export default function PreviewPage() {
                             <button
                                 onClick={() => setCurrentPage(p => Math.min(numPages, p + 1))}
                                 disabled={currentPage >= numPages}
-                                className="p-1.5 rounded disabled:opacity-30 transition-colors touch-target flex items-center justify-center"
-                                style={{ color: "var(--text-secondary)" }}
-                                onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                                className="p-1.5 rounded disabled:opacity-30 transition-colors touch-target flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] disabled:hover:bg-transparent"
                             >
                                 <FiChevronRight className="w-4 h-4" />
                             </button>
@@ -255,10 +246,7 @@ export default function PreviewPage() {
                         <div className="flex items-center gap-1 mr-1 sm:mr-3">
                             <button
                                 onClick={() => isPdf ? setZoom(z => Math.max(0.5, z - 0.25)) : setImgZoom(z => Math.max(0.25, z - 0.25))}
-                                className="p-1.5 rounded transition-colors touch-target flex items-center justify-center"
-                                style={{ color: "var(--text-secondary)" }}
-                                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                                className="p-1.5 rounded transition-colors touch-target flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
                             >
                                 <FiZoomOut className="w-4 h-4" />
                             </button>
@@ -267,10 +255,7 @@ export default function PreviewPage() {
                             </span>
                             <button
                                 onClick={() => isPdf ? setZoom(z => Math.min(3, z + 0.25)) : setImgZoom(z => Math.min(5, z + 0.25))}
-                                className="p-1.5 rounded transition-colors touch-target flex items-center justify-center"
-                                style={{ color: "var(--text-secondary)" }}
-                                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                                className="p-1.5 rounded transition-colors touch-target flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
                             >
                                 <FiZoomIn className="w-4 h-4" />
                             </button>
@@ -278,10 +263,7 @@ export default function PreviewPage() {
                     )}
                     <button
                         onClick={handleDownload}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded transition-colors cursor-pointer font-medium"
-                        style={{ background: "var(--accent)", color: "#ffffff" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-strong)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded transition-colors cursor-pointer font-medium text-white bg-[var(--accent)] hover:bg-[var(--accent-strong)]"
                     >
                         <FiDownload className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Download</span>
                     </button>
