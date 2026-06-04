@@ -216,9 +216,12 @@ def delete_credential(db: Session, client_id: int) -> bool:
 # ─────────────────────────────────────────────────────────────────────
 
 
-# Per-provider model used when settings.LLM_MODEL is unset.
+# Per-provider model used when settings.LLM_MODEL is unset. The Ollama default
+# is qwen2.5:3b: it follows the extraction prompt more reliably than
+# llama3.2:3b and emits usable per-field confidence (so notices can auto-apply
+# rather than always routing to review), at similar size/speed on CPU.
 _SERVER_DEFAULT_MODELS = {
-    "ollama": "llama3.2",
+    "ollama": "qwen2.5:3b",
     "google": "gemini-2.0-flash",
     "anthropic": "claude-sonnet-4-20250514",
     "openai": "gpt-4o-mini",
