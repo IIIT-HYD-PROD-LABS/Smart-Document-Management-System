@@ -105,7 +105,7 @@ export function FileDropzone({ noticeId, disabled = false }: Props) {
             />
             <p className="text-[13px] text-[var(--text-primary)]">
                 {uploading
-                    ? "Uploading…"
+                    ? "Uploading and reading with AI…"
                     : isDragActive
                       ? "Drop the file to upload"
                       : "Drag a document here"}

@@ -324,6 +324,11 @@ export const complianceApi = {
             fd,
             withTenant({
                 headers: { "Content-Type": "multipart/form-data" },
+                // The upload now also runs AI extraction on the file (so a
+                // detail-page upload fills the form), which adds an OCR + LLM
+                // round-trip. That exceeds the shared 30s axios timeout, so
+                // override it like extract-preview to avoid a false failure.
+                timeout: 120000,
             })
         );
     },

@@ -297,6 +297,10 @@ class OllamaProvider(AIProvider):
             "model": self._model,
             "messages": [{"role": "system", "content": system}, *messages],
             "stream": False,
+            # Keep the model resident for 30m so back-to-back extractions don't
+            # each pay the multi-second cold-load cost (the dominant latency on
+            # CPU-only hosts).
+            "keep_alive": "30m",
             "options": {"temperature": 0.2, "num_predict": max_tokens},
         }
         try:

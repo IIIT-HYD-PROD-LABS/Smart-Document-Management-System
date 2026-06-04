@@ -891,6 +891,18 @@ def upload_notice_file(
         except (IntegrityError, OperationalError):
             db.rollback()
         db.refresh(n)
+    # Auto-extract notice fields from the uploaded file so a detail-page upload
+    # fills the form (not just attaches it), matching the new-notice page. Best
+    # effort: only when the notice has no extraction yet and is not frozen; any
+    # failure leaves the file attached and the notice untouched.
+    _maybe_autoextract_from_upload(
+        db,
+        n,
+        contents=contents,
+        ext=ext,
+        client_id=membership.client_id,
+        user_id=current_user.id,
+    )
     # User-facing activity timeline (D-09).
     log_activity(
         db=db,
@@ -1005,6 +1017,46 @@ def _ocr_extract_text(file_bytes: bytes, file_ext: str) -> str:
     from app.ml.classifier import extract_and_classify
     text, _category, _confidence = extract_and_classify(file_bytes, file_ext)
     return text or ""
+
+
+def _maybe_autoextract_from_upload(
+    db, notice, *, contents: bytes, ext: str, client_id: int, user_id: int
+) -> None:
+    """Run notice AI extraction on a freshly-uploaded file and apply it, so a
+    detail-page upload populates the form instead of leaving it "Manual entry".
+
+    No-op when the notice already has extraction or is frozen (accepted /
+    superseded), or when extraction fails for any reason — the file stays
+    attached and the notice is left untouched. Synchronous on purpose so the
+    caller returns the populated notice (the upload client uses a long timeout).
+    """
+    from app.compliance.services.extraction_routing_service import (
+        apply_extraction_to_notice,
+        route_or_apply,
+        should_skip_extraction,
+    )
+    from app.compliance.services.notice_extractor_service import extract_notice_fields
+
+    if should_skip_extraction(notice) or notice.extracted_fields:
+        return
+    try:
+        text = _ocr_extract_text(contents, ext)
+        if not text.strip():
+            return
+        envelope = extract_notice_fields(
+            db, client_id=client_id, user_id=user_id, text=text, notice_id=notice.id
+        )
+        decision = route_or_apply(envelope)
+        apply_extraction_to_notice(db, notice, envelope, decision, fill_columns=True)
+        db.commit()
+        db.refresh(notice)
+    except Exception as exc:  # noqa: BLE001 — best-effort; file stays attached
+        db.rollback()
+        import structlog
+
+        structlog.get_logger().warning(
+            "notice_autoextract_failed", notice_id=notice.id, error=str(exc)
+        )
 
 
 @router.post(
