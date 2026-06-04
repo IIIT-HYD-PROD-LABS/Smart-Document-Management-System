@@ -115,8 +115,12 @@ def test_no_rls_table_lacks_force(db_as_app_runtime):
     # USING(true) passthrough policy (0024, added to satisfy the Supabase
     # advisor's "RLS disabled" flag) — they are NOT client-scoped, so FORCE is
     # irrelevant; app-layer user_id filtering is their isolation. alembic_version
-    # is owner-only migration metadata. No CLIENT-scoped table may appear here.
-    allowed = {"alembic_version", "users", "documents", "refresh_tokens"}
+    # is owner-only migration metadata. audit_logs (0040) is the append-only
+    # regulatory ledger: NOT client-scoped (no client_id; reads are API-gated),
+    # with permissive INSERT+SELECT policies for app_runtime and no UPDATE/DELETE
+    # policy so immutability holds — FORCE is irrelevant for it too.
+    # No CLIENT-scoped table may appear here.
+    allowed = {"alembic_version", "users", "documents", "refresh_tokens", "audit_logs"}
     unexpected = [t for t in offenders if t not in allowed]
     assert not unexpected, f"client-scoped table RLS enabled but not FORCEd: {unexpected}"
 

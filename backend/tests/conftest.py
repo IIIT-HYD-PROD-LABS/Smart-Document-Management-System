@@ -9,6 +9,30 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 
+@pytest.fixture(autouse=True)
+def _reset_tenant_context_vars():
+    """Isolate the request-scoped tenant ContextVars across tests.
+
+    get_current_user (security.py) and the tenant middleware call
+    current_user_id_var.set(...). A test that mocks SessionLocal sets it to a
+    MagicMock user_id; without a reset that value leaks into a LATER test in the
+    same process (the whole suite runs in one pytest process in CI), which is
+    why test_tenant_middleware_userid passed in isolation but failed in the full
+    run. Reset to defaults before every test so each starts from a clean
+    context regardless of what ran before.
+    """
+    from app.compliance.middleware.tenant_context import (
+        cross_client_mode_var,
+        current_client_id_var,
+        current_user_id_var,
+    )
+
+    current_user_id_var.set(None)
+    current_client_id_var.set(None)
+    cross_client_mode_var.set(False)
+    yield
+
+
 @pytest.fixture()
 def mock_settings(tmp_path):
     """Provide a Settings-like object with MODEL_DIR pointing to tmp_path."""
