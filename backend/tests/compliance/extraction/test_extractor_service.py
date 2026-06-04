@@ -1,8 +1,10 @@
 """Phase 17 EXTRACT-01 / EXTRACT-02 — extractor service contract.
 
-Plan 17-03 GREEN. The extractor:
-  - looks up the tenant's BYOK credential via Phase 16 get_credential,
-  - calls provider.complete(SCOPE_LOCK_SYSTEM, build_user_prompt(text)),
+The extractor:
+  - resolves the provider via ai_service.resolve_credential (BYOK first,
+    server-default Ollama fallback),
+  - calls provider.complete(EXTRACTION_SYSTEM_PROMPT, build_user_prompt(text))
+    via _run_extraction (the dedicated, non-refusing extraction prompt),
   - filters returned fields to FIELD_SCHEMA, computes raw average,
   - runs validator, writes audit, returns envelope.
 """
@@ -189,18 +191,22 @@ def test_extract_window_covers_fields_past_legacy_4000_chars():
     assert "2026-05-30" in prompt, "response deadline past 4000 chars must reach the model"
 
 
-def test_extract_notice_fields_propagates_out_of_scope():
-    """D-13: OUT_OF_SCOPE sentinel from the model bubbles up as AIOutOfScopeError."""
-    from app.compliance.services import ai_service, notice_extractor_service
+def test_extract_notice_fields_sentinel_degrades_to_empty_envelope():
+    """Extraction must NOT refuse. If a model still echoes the legacy
+    OUT_OF_SCOPE sentinel, the extractor degrades to an empty (manual-fill)
+    envelope instead of raising — no AIOutOfScopeError, no 422/502."""
+    from app.compliance.services import notice_extractor_service
 
     cred = MagicMock(provider="anthropic", model="claude-sonnet-test")
     provider = MagicMock()
     provider.complete.return_value = "OUT_OF_SCOPE"
 
-    with patch.object(notice_extractor_service.ai_service, "get_credential", return_value=cred), \
+    with patch.object(notice_extractor_service.ai_service, "resolve_credential", return_value=cred), \
          patch.object(notice_extractor_service.ai_service, "_build_active_provider", return_value=provider), \
          patch.object(notice_extractor_service, "log_audit_event_strict", return_value=True):
-        with pytest.raises(ai_service.AIOutOfScopeError):
-            notice_extractor_service.extract_notice_fields(
-                db=MagicMock(), client_id=1, user_id=1, text="anything",
-            )
+        env = notice_extractor_service.extract_notice_fields(
+            db=MagicMock(), client_id=1, user_id=1, text="anything",
+        )
+
+    assert env["fields"] == {}, "sentinel echo must yield an empty fields envelope"
+    assert env["average_confidence"] == 0.0

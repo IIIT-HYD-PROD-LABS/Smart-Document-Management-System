@@ -32,7 +32,11 @@ class AICredentialCreate(BaseModel):
     # canonical field name for both providers.
     model_config = ConfigDict(protected_namespaces=())
 
-    provider: Literal["anthropic", "google"]
+    # Enterprise BYOK: the client connects their own API. All three cloud
+    # providers the adapter factory (ai_providers.build_provider) supports are
+    # selectable; the per-tenant key is theirs. Ollama is server-side only (no
+    # key, SSRF-locked base URL) so it is not a BYOK choice.
+    provider: Literal["anthropic", "google", "openai"]
     model: str = Field(..., min_length=1, max_length=100)
     api_key: str = Field(..., min_length=8, max_length=500)
 

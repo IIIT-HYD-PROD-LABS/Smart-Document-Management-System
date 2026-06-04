@@ -103,7 +103,8 @@ def mock_provider_factory():
     """Factory that returns a MagicMock provider whose `complete` returns a JSON string.
 
     Matches `ai_providers.AIProvider.complete(system, user, max_tokens) -> str`.
-    The extractor calls `provider.complete(...)` via `ai_service._run`.
+    The extractor calls `provider.complete(...)` via `_run_extraction` (the
+    dedicated EXTRACTION_SYSTEM_PROMPT, not the chat scope-lock).
     """
     def _factory(envelope_payload: dict) -> MagicMock:
         provider = MagicMock()

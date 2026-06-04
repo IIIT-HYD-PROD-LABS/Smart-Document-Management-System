@@ -35,6 +35,7 @@ from app.compliance.services.ai_providers import (
     AIRateLimitError,
 )
 from app.compliance.services.notice_extraction_prompt import (
+    EXTRACTION_SYSTEM_PROMPT,
     FIELD_SCHEMA,
     MAX_TEXT_WINDOW,
     build_user_prompt,
@@ -64,6 +65,18 @@ class NoticeExtractionCredentialMissingError(Exception):
 
 class NoticeExtractionParseError(Exception):
     """Provider returned a body that could not be parsed as the expected envelope."""
+
+
+def _run_extraction(provider, user_prompt: str, max_tokens: int) -> str:
+    """Call the provider with the dedicated EXTRACTION_SYSTEM_PROMPT.
+
+    Deliberately does NOT go through ai_service._run (which pins the chat
+    scope-lock prompt and raises AIOutOfScopeError on the OUT_OF_SCOPE
+    sentinel). Extraction must never refuse a document the user explicitly
+    uploaded — see notice_extraction_prompt for the full rationale.
+    """
+    raw = provider.complete(EXTRACTION_SYSTEM_PROMPT, user_prompt, max_tokens=max_tokens)
+    return (raw or "").strip()
 
 
 def _sha256_text(text: str) -> str:
@@ -177,9 +190,12 @@ def extract_notice_fields(
 ) -> dict:
     """Run extraction and return the envelope.
 
+    Extraction uses EXTRACTION_SYSTEM_PROMPT (non-refusing), so it does NOT
+    raise AIOutOfScopeError — a non-notice degrades to an empty `{"fields": {}}`
+    envelope for graceful manual fill.
+
     Raises:
         NoticeExtractionCredentialMissingError: tenant has no AICredential.
-        ai_service.AIOutOfScopeError:           provider returned OUT_OF_SCOPE.
         AIAuthError / AIRateLimitError /
         AIProviderError:                        provider transport errors.
         NoticeExtractionParseError:             provider response unparseable.
@@ -195,7 +211,7 @@ def extract_notice_fields(
     started = time.monotonic()
 
     try:
-        raw_text = ai_service._run(provider, build_user_prompt(text), max_tokens=2048)
+        raw_text = _run_extraction(provider, build_user_prompt(text), max_tokens=2048)
     except (AIAuthError, AIRateLimitError, AIProviderError) as exc:
         elapsed_ms = int((time.monotonic() - started) * 1000)
         _write_audit(
@@ -215,6 +231,16 @@ def extract_notice_fields(
 
     elapsed_ms = int((time.monotonic() - started) * 1000)
     parsed = ai_service._parse_json_or_default(raw_text, {})
+
+    # Defensive: the extraction prompt instructs the model NOT to refuse, but a
+    # model could still echo the legacy refusal sentinel as bare text. Treat that
+    # as "no notice fields found" — an empty (manual-fill) envelope, never a hard
+    # error — so a misfire degrades gracefully instead of a scary 502/422.
+    if (
+        not (isinstance(parsed, dict) and isinstance(parsed.get("fields"), dict))
+        and raw_text == ai_service.OUT_OF_SCOPE_SENTINEL
+    ):
+        parsed = {"fields": {}}
 
     if not isinstance(parsed, dict) or not isinstance(parsed.get("fields"), dict):
         _write_audit(

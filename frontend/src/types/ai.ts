@@ -1,6 +1,6 @@
 // Phase 16 — BYOK AI types. Mirror backend/app/compliance/schemas/ai.py.
 
-export type AIProvider = "anthropic" | "google";
+export type AIProvider = "anthropic" | "google" | "openai";
 
 export interface AICredential {
     provider: AIProvider;
@@ -85,9 +85,11 @@ export interface ChatResponse {
 export const DEFAULT_MODEL: Record<AIProvider, string> = {
     anthropic: "claude-sonnet-4-6",
     google: "gemini-2.5-flash",
+    openai: "gpt-4o-mini",
 };
 
 export const PROVIDER_LABEL: Record<AIProvider, string> = {
     anthropic: "Anthropic Claude",
     google: "Google Gemini",
+    openai: "OpenAI GPT",
 };

@@ -66,7 +66,10 @@ class TestServerDefaultConfig:
         monkeypatch.setattr(ai_service.settings, "LLM_MODEL", "")
         prov, model, key = ai_service._server_default_config()
         assert prov == "ollama"
-        assert model == "llama3.2"  # per-provider default when LLM_MODEL unset
+        # Per-provider default when LLM_MODEL unset. qwen2.5:3b is the local
+        # default — it follows the extraction prompt more reliably than llama3.2
+        # and self-reports usable per-field confidence (see _SERVER_DEFAULT_MODELS).
+        assert model == "qwen2.5:3b"
 
     def test_gemini_maps_to_google_and_needs_key(self, monkeypatch):
         monkeypatch.setattr(ai_service.settings, "LLM_PROVIDER", "gemini")

@@ -209,8 +209,8 @@ export default function AISettingsPage() {
                             <legend className="microtype block mb-1.5">
                                 Provider
                             </legend>
-                            <div className="grid grid-cols-2 gap-2">
-                                {(["anthropic", "google"] as const).map((p) => (
+                            <div className="grid grid-cols-3 gap-2">
+                                {(["anthropic", "google", "openai"] as const).map((p) => (
                                     <label
                                         key={p}
                                         className={`
@@ -281,7 +281,7 @@ export default function AISettingsPage() {
                                 placeholder={
                                     cred
                                         ? "Enter a new key to replace the existing one"
-                                        : "sk-ant-... or AIza..."
+                                        : "sk-ant-... , AIza... , or sk-..."
                                 }
                                 autoComplete="off"
                                 className="
