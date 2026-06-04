@@ -56,6 +56,36 @@ def test_extract_notice_fields_raises_when_credential_missing():
             )
 
 
+class TestNormalizeFields:
+    """Provider output is coerced to the {value, confidence} envelope shape so a
+    small/local model that returns flat strings or omits confidence does not 500
+    or collapse the average to 0 (the 2026-06-04 'shows manual entry' bug)."""
+
+    def _norm(self, fields):
+        from app.compliance.services.notice_extractor_service import _normalize_fields
+        return _normalize_fields(fields)
+
+    def test_flat_scalar_is_wrapped(self):
+        out = self._norm({"notice_number": "DRC-01/2026/4456"})
+        assert out["notice_number"]["value"] == "DRC-01/2026/4456"
+        assert 0.0 < out["notice_number"]["confidence"] <= 1.0
+
+    def test_missing_confidence_gets_nonzero_default(self):
+        out = self._norm({"authority": {"value": "GST"}})
+        assert out["authority"]["value"] == "GST"
+        assert out["authority"]["confidence"] > 0.0  # not 0.0 -> not all-"review"
+
+    def test_present_confidence_preserved_and_clamped(self):
+        out = self._norm({"a": {"value": "v", "confidence": 0.9}, "b": {"value": "v", "confidence": 5}})
+        assert out["a"]["confidence"] == 0.9
+        assert out["b"]["confidence"] == 1.0  # clamped to <= 1.0
+
+    def test_list_value_wrapped(self):
+        out = self._norm({"legal_sections": ["Section 67"]})
+        assert out["legal_sections"]["value"] == ["Section 67"]
+        assert "confidence" in out["legal_sections"]
+
+
 def test_extract_notice_fields_happy_path_filters_to_schema(
     mock_provider_factory, extraction_envelope_fixture
 ):

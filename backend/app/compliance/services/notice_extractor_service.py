@@ -77,6 +77,41 @@ def _filter_to_schema(fields: dict) -> dict:
     return {name: payload for name, payload in fields.items() if name in FIELD_SCHEMA}
 
 
+_DEFAULT_FIELD_CONFIDENCE = 0.7
+
+
+def _normalize_fields(fields: dict) -> dict:
+    """Coerce each field into the {value, confidence} object the envelope schema
+    (ExtractedField) requires, regardless of how the provider shaped it.
+
+    Small/local models (e.g. Ollama llama3.2) are inconsistent: they often
+    return a FLAT mapping ({"notice_number": "DRC-01/..."}) instead of the
+    nested {"notice_number": {"value": ..., "confidence": ...}} envelope, and
+    routinely omit per-field confidence. Without this, flat scalars fail FastAPI
+    response validation (HTTP 500) and missing confidences collapse the average
+    to 0.0 so every field routes to "review" and the form looks empty. This
+    wraps bare scalars and backfills a sensible default confidence so ANY
+    provider's output is usable and renders pre-filled.
+    """
+    out: dict = {}
+    for name, payload in (fields or {}).items():
+        if isinstance(payload, dict):
+            raw_conf = payload.get("confidence")
+            try:
+                conf = float(raw_conf)
+            except (TypeError, ValueError):
+                conf = _DEFAULT_FIELD_CONFIDENCE
+            conf = min(1.0, max(0.0, conf))
+            obj = {"value": payload.get("value"), "confidence": conf}
+            if payload.get("source_span") is not None:
+                obj["source_span"] = payload["source_span"]
+            out[name] = obj
+        else:
+            # Flat scalar/list value (the common small-model shape): wrap it.
+            out[name] = {"value": payload, "confidence": _DEFAULT_FIELD_CONFIDENCE}
+    return out
+
+
 def _raw_average(fields: dict) -> float:
     if not fields:
         return 0.0
@@ -199,7 +234,7 @@ def extract_notice_fields(
             "Provider response could not be parsed as a fields envelope"
         )
 
-    fields = _filter_to_schema(parsed["fields"])
+    fields = _normalize_fields(_filter_to_schema(parsed["fields"]))
     raw_avg = _raw_average(fields)
 
     envelope = {
