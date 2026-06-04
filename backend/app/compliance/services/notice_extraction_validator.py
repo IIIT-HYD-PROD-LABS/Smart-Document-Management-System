@@ -86,6 +86,27 @@ def _check_authority(value: Any) -> str | None:
 def _check_non_negative_number(value: Any) -> str | None:
     if isinstance(value, bool):
         return "is a boolean, not a number"
+    # Providers return field values as STRINGS ("472.97", "2,45,000", "Rs 0").
+    # Demanding a native int/float flagged every extracted amount as "is not a
+    # number" and halved its confidence. Accept a numeric string, tolerating
+    # thousands separators, the rupee sign, and surrounding whitespace; an empty
+    # string means "not provided", which is not a structural error.
+    if isinstance(value, str):
+        s = value.strip()
+        if s == "":
+            return None
+        cleaned = (
+            s.replace(",", "")
+            .replace("₹", "")
+            .replace("Rs.", "")
+            .replace("Rs", "")
+            .replace("INR", "")
+            .strip()
+        )
+        try:
+            value = float(cleaned)
+        except ValueError:
+            return "is not a number"
     if not isinstance(value, (int, float)):
         return "is not a number"
     if value < 0:
