@@ -36,10 +36,12 @@ node_modules/
 *.swp
 *.swo
 
-# ML Datasets (large, downloaded from Kaggle)
+# ML Datasets (large, downloaded from Kaggle) + scraped/sample documents
 backend/datasets/raw/
 backend/datasets/processed/
 backend/datasets/training/
+backend/datasets/sample_uploads/
+backend/datasets/sebi/
 
 # ML Model artifacts (trained models are committed; only raw Kaggle data excluded above)
 # Exclude large raw model downloads if any:
