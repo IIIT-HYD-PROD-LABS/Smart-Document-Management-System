@@ -368,52 +368,65 @@ Status: COMPLETED (category + confidence score + metadata + AI summary)
 
 ## Project Structure
 
+This is a monorepo: backend and frontend live in one repository and are run
+together via Docker Compose. Top-level layout:
+
+```
+.
+  backend/                   # FastAPI + Celery service (Python)
+  frontend/                  # Next.js app (TypeScript)
+  docs/                      # Project documentation and exported reports
+  notes/                     # Deep-dive knowledge docs (architecture, security, ...)
+  scripts/                   # Report builders and per-phase smoke scripts
+  .planning/                 # GSD planning artifacts (roadmap, phases, research)
+  .github/                   # CI, CodeQL, Dependabot, deploy workflows
+  docker-compose.yml         # Postgres, Redis, Backend, Celery, Frontend
+  vercel.json                # Frontend deploy config
+  README.md
+```
+
+### Backend (`backend/`)
+
 ```
 backend/
   app/
-    main.py                  # FastAPI app, middleware, routes
+    main.py                  # FastAPI app, middleware wiring, route mounts
     config.py                # Pydantic settings from .env
-    database.py              # SQLAlchemy engine + session
-    models/                  # User, Document, RefreshToken
+    database.py              # SQLAlchemy engine + session (RLS-aware)
+    models/                  # SQLAlchemy ORM models
     schemas/                 # Request/response Pydantic models
-    routers/                 # auth.py, documents.py, admin.py
-    services/                # storage_service.py, oauth_service.py
-    middleware/               # Security headers, request logging
-    ml/
-      ocr.py                 # Image preprocessing + Tesseract
-      pdf_extractor.py       # pdfplumber + OCR fallback
-      docx_extractor.py      # python-docx extraction
-      text_preprocessor.py   # Text cleaning for ML
-      classifier.py          # Classification orchestrator
-      metadata_extractor.py  # Date/amount/vendor regex extraction
-      train.py               # Model training pipeline
-      datasets/              # Kaggle download + data preparation
+    routers/                 # HTTP route handlers (auth, documents, admin, ...)
+    services/                # Business logic (storage, oauth, ...)
+    middleware/              # Security headers, request logging, tenant context
+    compliance/              # v2.0 compliance notice management domain
+    email/                   # Outbound email (Gmail SMTP) + templates
+    ml/                      # OCR, extractors, classifier, training pipeline
     tasks/                   # Celery task definitions
-    utils/                   # JWT, rate limiter, logging
+    utils/                   # JWT, rate limiter, logging helpers
   alembic/                   # Database migrations
+  tests/                     # Pytest suite (fixtures/ is gitignored sample docs)
+  scripts/                   # Backend operational scripts
   Dockerfile
   requirements.txt
+  pyproject.toml
+```
 
+### Frontend (`frontend/`)
+
+```
 frontend/
   src/
-    app/
-      page.tsx               # Landing page
-      login/                 # Sign in
-      register/              # Sign up
-      oauth/callback/        # OAuth callback handler
-      dashboard/
-        page.tsx             # Overview (stats, categories, recent)
-        upload/              # Drag-drop upload with progress
-        documents/           # Document list with category filters
-        search/              # Full-text search
-        analytics/           # Category distribution, processing status
-        admin/               # Admin panel (user management, stats)
-        shared/              # Shared documents view
-    context/                 # Auth context (token management)
-    lib/                     # Axios API client with refresh interceptor
+    app/                     # Next.js App Router pages (login, dashboard, ...)
+    components/              # Reusable UI components
+    context/                 # React context providers (auth/token management)
+    hooks/                   # Custom React hooks
+    stores/                  # Client-side state stores
+    lib/                     # API client with refresh interceptor, helpers
+    types/                   # Shared TypeScript types
+    middleware.ts            # Next.js edge middleware (auth gating)
+  public/                    # Static assets
   Dockerfile
-
-docker-compose.yml           # Redis, Backend, Celery, Frontend
+  package.json
 ```
 
 ---

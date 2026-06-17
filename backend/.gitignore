@@ -6,3 +6,5 @@ uploads/
 # ML trained model weights (not app/models/ which contains SQLAlchemy models)
 /models/
 *.egg-info
+# Manual-test sample documents (may contain real/PII notices — never commit)
+tests/fixtures/
