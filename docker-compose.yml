@@ -204,7 +204,10 @@ services:
     build: ./frontend
     container_name: smartdocs-frontend
     ports:
-      - "3000:3000"
+      # Host 3100 (not 3000/3001): both are taken by the SYAM project's CRA dev
+      # servers (syam-user:3000, syam-admin:3001). 3100 is clear of that range.
+      # Backend ALLOWED_ORIGINS + FRONTEND_URL match this in the override.
+      - "3100:3000"
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
