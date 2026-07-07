@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     # Database - REQUIRED, no default
     DATABASE_URL: str
 
+    # TLS for REMOTE Postgres (local hosts always skip SSL). Secure by default:
+    # with neither set, remote connections verify the server cert against the
+    # system CA bundle and fail closed on an untrusted/self-signed cert.
+    #   DB_SSL_ROOT_CERT : path to the server's CA cert -> verify against it
+    #                      (verify-ca). Preferred for self-signed deployments.
+    #   DB_SSL_NO_VERIFY : explicit opt-out -> encrypt but do NOT verify the
+    #                      cert. Only for a trusted network where the CA cert
+    #                      is not yet available (e.g. campus Postgres interim).
+    DB_SSL_ROOT_CERT: str = ""
+    DB_SSL_NO_VERIFY: bool = False
+
     # JWT Auth - REQUIRED, no default for SECRET_KEY
     SECRET_KEY: str
     ALGORITHM: str = "HS256"

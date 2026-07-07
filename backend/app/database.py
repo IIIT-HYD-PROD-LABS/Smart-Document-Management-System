@@ -15,9 +15,18 @@ _LOCAL_HOSTS = ("localhost", "127.0.0.1", "@db:", "@db/")
 
 
 def _connect_args_for(url: str) -> dict:
+    # psycopg2 sync engine. Secure by default for remote hosts: verify the cert
+    # (against DB_SSL_ROOT_CERT if given, else the system CA bundle). DB_SSL_NO_VERIFY
+    # is the explicit escape hatch to encrypt-without-verify. Local hosts skip SSL.
     args: dict = {"connect_timeout": 10}
     if url.startswith("postgresql") and not any(h in url for h in _LOCAL_HOSTS):
-        args["sslmode"] = "require"
+        if settings.DB_SSL_ROOT_CERT:
+            args["sslmode"] = "verify-ca"
+            args["sslrootcert"] = settings.DB_SSL_ROOT_CERT
+        elif settings.DB_SSL_NO_VERIFY:
+            args["sslmode"] = "require"
+        else:
+            args["sslmode"] = "verify-full"
     return args
 
 
@@ -37,10 +46,20 @@ def _async_connect_args_for(url: str) -> dict:
     # this kept the async request path from reaching that host at all.
     args: dict = {"timeout": 10}
     if url.startswith("postgresql") and not any(h in url for h in _LOCAL_HOSTS):
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        args["ssl"] = ctx
+        if settings.DB_SSL_ROOT_CERT:
+            # verify-ca equivalent: trust the given CA, encrypt+verify chain.
+            args["ssl"] = ssl.create_default_context(cafile=settings.DB_SSL_ROOT_CERT)
+        elif settings.DB_SSL_NO_VERIFY:
+            # Explicit opt-out: encrypt, do not verify. Parity with psycopg2
+            # sslmode=require. Used for the campus Postgres self-signed cert
+            # until its CA cert is available (then set DB_SSL_ROOT_CERT instead).
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            args["ssl"] = ctx
+        else:
+            # Secure default: verify against the system CA bundle (fail closed).
+            args["ssl"] = ssl.create_default_context()
     return args
 
 
