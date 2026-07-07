@@ -1,9 +1,11 @@
 services:
-  # PostgreSQL (Local development & testing only — Phase 9+)
-  # Production uses Supabase via DATABASE_URL override.
-  # This local Postgres supports Phase 9 RLS / audit immutability tests
-  # which require trigger DDL, CREATE ROLE, and FORCE ROW LEVEL SECURITY —
-  # operations not reliably supported by the Supabase pooler in transaction mode.
+  # PostgreSQL — primary DB as of 2026-07-03 (Product Labs / Shashank directed
+  # move off Supabase: deployment was failing against it). DATABASE_URL* in
+  # docker-compose.override.yml now points here instead of Supabase. Will be
+  # repointed again once Shashank hands over the IIIT server Postgres link.
+  # Also still used for Phase 9 RLS / audit immutability tests, which need
+  # trigger DDL, CREATE ROLE, and FORCE ROW LEVEL SECURITY — operations not
+  # reliably supported by the Supabase pooler in transaction mode.
   db:
     image: postgres:16-alpine
     container_name: smartdocs-db
@@ -13,7 +15,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      # Host 5434 (not 5432): a host-level snap postgresql.service already
+      # owns 127.0.0.1:5432 on this machine. Only affects host-side `psql`
+      # access — backend/workers reach this over the Docker network as
+      # `db:5432` regardless of the published host port.
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -58,7 +64,10 @@ services:
     container_name: smartdocs-backend
     env_file: .env
     ports:
-      - "8000:8000"
+      # Host 8010 (not 8000): the unrelated "yukthi" project's API container
+      # already owns host 8000. Frontend NEXT_PUBLIC_API_URL (below) and its
+      # build arg are kept in sync with this.
+      - "8010:8000"
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -201,7 +210,14 @@ services:
 
   # Next.js Frontend
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      # NEXT_PUBLIC_* vars are inlined into the client bundle at build time,
+      # so the backend's host port has to be passed in here too, not just
+      # via the runtime `environment:` below (that only reaches server-side
+      # code, e.g. the CSP header in next.config.mjs).
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8010
     container_name: smartdocs-frontend
     ports:
       # Host 3100 (not 3000/3001): both are taken by the SYAM project's CRA dev
@@ -210,7 +226,8 @@ services:
       - "3100:3000"
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      # Host 8010 (not 8000): see the backend service's ports comment.
+      NEXT_PUBLIC_API_URL: http://localhost:8010
     depends_on:
       backend:
         condition: service_healthy
