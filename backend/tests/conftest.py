@@ -5,7 +5,8 @@ import os
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, select, text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 
@@ -199,6 +200,209 @@ def db_as_app_runtime(app_runtime_engine):
     yield session
     session.rollback()
     session.close()
+
+
+@pytest.fixture(scope="session")
+async def app_runtime_async_engine():
+    """Async counterpart of app_runtime_engine.
+
+    Same DATABASE_URL (owner role, SET ROLE-eligible) as the sync fixture,
+    rewritten to the asyncpg dialect via app.database's own helpers so the
+    connect_args match production exactly (timeout vs sslmode naming differs
+    between psycopg2 and asyncpg — see app/database.py's
+    _async_connect_args_for). Session-scoped to match
+    asyncio_default_fixture_loop_scope="session" in pyproject.toml; a
+    function-scoped async engine would attempt to bind connections across
+    event loops between tests.
+    """
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        pytest.skip("DATABASE_URL not set")
+    from app.database import _async_connect_args_for, _async_url_for
+
+    async_url = _async_url_for(url)
+    engine = create_async_engine(
+        async_url, pool_pre_ping=True, connect_args=_async_connect_args_for(async_url)
+    )
+    try:
+        async with engine.connect() as probe:
+            await probe.execute(text("SET ROLE app_runtime"))
+            await probe.execute(text("RESET ROLE"))
+    except Exception as exc:  # noqa: BLE001 — any failure means the role can't be assumed
+        await engine.dispose()
+        pytest.skip(
+            f"Cannot SET ROLE app_runtime: {exc}. Grant it via "
+            f"'GRANT app_runtime TO <conn_user> WITH SET TRUE' on the DB."
+        )
+    yield engine
+    await engine.dispose()
+
+
+async def _set_tenant_context_async(session, *, client_id: int = 0, user_id: int = 1):
+    """Async counterpart of _set_tenant_context — same is_local=false choreography."""
+    await session.execute(
+        text("SELECT set_config('app.current_client_id', :cid, false)"),
+        {"cid": str(client_id)},
+    )
+    await session.execute(
+        text("SELECT set_config('app.user_id', :uid, false)"),
+        {"uid": str(user_id)},
+    )
+
+
+@pytest.fixture()
+async def db_as_app_runtime_async(app_runtime_async_engine):
+    """Async counterpart of db_as_app_runtime. Same default state (postgres
+    superuser, RLS-bypassed) unless a factory fixture below re-subjects it."""
+    SessionAR = async_sessionmaker(
+        bind=app_runtime_async_engine, autoflush=False, expire_on_commit=False
+    )
+    session = SessionAR()
+    yield session
+    await session.rollback()
+    await session.close()
+
+
+async def _create_client_with_rls_bypass_async(db, name: str):
+    """Async counterpart of _create_client_with_rls_bypass — identical
+    RESET ROLE / SET ROLE choreography and sequencing rationale (capture
+    client_id into a local int before switching roles)."""
+    from app.compliance.models.client import Client
+    from app.compliance.models.membership import ClientMembership
+
+    await db.execute(text("RESET ROLE"))
+    c = Client(name=name, client_type="pvt_ltd")
+    db.add(c)
+    await db.flush()
+    m = ClientMembership(user_id=1, client_id=c.id, compliance_role="compliance_head")
+    db.add(m)
+    await db.commit()
+    await db.refresh(c)  # eagerly reload attrs while still bypassing RLS
+    client_id = c.id
+    await db.execute(text("SET ROLE app_runtime"))
+    await _set_tenant_context_async(db, client_id=client_id, user_id=1)
+    return c
+
+
+async def _delete_with_rls_bypass_async(db, *objs):
+    """Async counterpart of _delete_with_rls_bypass."""
+    await db.rollback()  # clear any failed-test state
+    await db.execute(text("RESET ROLE"))
+    for obj in objs:
+        try:
+            await db.delete(obj)
+        except Exception:
+            pass
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+    await db.execute(text("SET ROLE app_runtime"))
+
+
+@pytest.fixture()
+async def client_a_async(db_as_app_runtime_async):
+    """Async counterpart of client_a."""
+    try:
+        from app.compliance.models.client import Client  # noqa: F401
+    except ImportError:
+        pytest.skip("Client model not yet created — Plan 03")
+    c = await _create_client_with_rls_bypass_async(db_as_app_runtime_async, "Test Client A (async)")
+    yield c
+    await _delete_with_rls_bypass_async(db_as_app_runtime_async, c)
+
+
+@pytest.fixture()
+async def client_b_async(db_as_app_runtime_async):
+    """Async counterpart of client_b."""
+    try:
+        from app.compliance.models.client import Client  # noqa: F401
+    except ImportError:
+        pytest.skip("Client model not yet created — Plan 03")
+    c = await _create_client_with_rls_bypass_async(db_as_app_runtime_async, "Test Client B (async)")
+    yield c
+    await _delete_with_rls_bypass_async(db_as_app_runtime_async, c)
+
+
+@pytest.fixture()
+async def auditor_membership_async(db_as_app_runtime_async, client_a_async):
+    """Async counterpart of auditor_membership."""
+    try:
+        from app.compliance.models.membership import ClientMembership
+        from app.models.user import User
+    except ImportError:
+        pytest.skip("ClientMembership not yet created — Plan 03")
+    # Capture client_a_async.id BEFORE any role/commit cycle expires its attrs.
+    client_a_id = client_a_async.id
+    await db_as_app_runtime_async.execute(text("RESET ROLE"))
+    existing = (
+        await db_as_app_runtime_async.execute(select(User).where(User.id == 2))
+    ).scalar_one_or_none()
+    if existing is None:
+        db_as_app_runtime_async.add(
+            User(
+                id=2,
+                email="phase9-auditor-async@example.com",
+                username="phase9_auditor_async",
+                hashed_password="x",
+                role="viewer",
+            )
+        )
+        await db_as_app_runtime_async.commit()
+    m = ClientMembership(
+        user_id=2,
+        client_id=client_a_id,
+        compliance_role="auditor",
+        access_start=None,
+        access_end=None,
+    )
+    db_as_app_runtime_async.add(m)
+    await db_as_app_runtime_async.commit()
+    await db_as_app_runtime_async.refresh(m)
+    await db_as_app_runtime_async.execute(text("SET ROLE app_runtime"))
+    await _set_tenant_context_async(db_as_app_runtime_async, client_id=client_a_id, user_id=2)
+    yield m
+    await _delete_with_rls_bypass_async(db_as_app_runtime_async, m)
+
+
+@pytest.fixture()
+async def client_with_membership_async(db_as_app_runtime_async):
+    """Async counterpart of client_with_membership — factory fixture."""
+    try:
+        from app.compliance.models.client import Client
+        from app.compliance.models.membership import ClientMembership
+        from app.models.user import User
+    except ImportError:
+        pytest.skip("Phase 9 models not yet created — Plan 03")
+    created = []
+
+    async def _factory(compliance_role: str):
+        await db_as_app_runtime_async.execute(text("RESET ROLE"))
+        u = User(
+            email=f"test-{compliance_role}-async@example.com",
+            username=f"u_{compliance_role}_async",
+            hashed_password="x",
+            role="editor",
+        )
+        db_as_app_runtime_async.add(u)
+        await db_as_app_runtime_async.flush()
+        c = Client(name=f"Client for {compliance_role} (async)", client_type="pvt_ltd")
+        db_as_app_runtime_async.add(c)
+        await db_as_app_runtime_async.flush()
+        m = ClientMembership(
+            user_id=u.id,
+            client_id=c.id,
+            compliance_role=compliance_role,
+        )
+        db_as_app_runtime_async.add(m)
+        await db_as_app_runtime_async.commit()
+        await db_as_app_runtime_async.execute(text("SET ROLE app_runtime"))
+        await _set_tenant_context_async(db_as_app_runtime_async, client_id=c.id, user_id=u.id)
+        created.extend([u, c, m])
+        return u
+
+    yield _factory
+    await _delete_with_rls_bypass_async(db_as_app_runtime_async, *reversed(created))
 
 
 def _create_client_with_rls_bypass(db, name: str):

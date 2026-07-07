@@ -8,6 +8,7 @@ and sub-2-second performance under GIN indexes.
 Note: FTS/trigram tests require real PostgreSQL. Tests skip gracefully if only
 SQLite or no DB is available.
 """
+import asyncio
 import os
 import time
 import pytest
@@ -15,6 +16,20 @@ from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _reset_async_engine_pool():
+    """Other test modules exercise app.database's module-level async_engine
+    under their own (pytest-asyncio) event loops. Once those loops close,
+    a pooled connection checked back out here raises "Task attached to a
+    different loop". Dispose the pool before this module's real requests
+    run so fresh connections get opened under our TestClient's loop.
+    """
+    from app.database import async_engine
+
+    asyncio.run(async_engine.dispose())
+    yield
 
 
 # ---------------------------------------------------------------------------
@@ -45,11 +60,21 @@ def _make_doc(**kwargs):
     return doc
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def authenticated_client():
-    """Create a TestClient with auth dependency properly overridden."""
+    """Create a TestClient with auth dependency properly overridden.
+
+    Module-scoped and entered as a context manager: without `with`,
+    starlette's TestClient opens a fresh anyio portal (its own event loop)
+    per request. The async engine's connection pool is a process-wide
+    singleton, so a connection opened under request 1's loop gets handed
+    to request 2's (different) loop, raising "Task attached to a
+    different loop". Entering the context manager once keeps a single
+    portal/loop alive for every request the fixture serves.
+    """
     from app.main import app
     from app.utils.security import get_current_user
+    from app.utils.rate_limiter import limiter
 
     test_user = MagicMock()
     test_user.id = 1
@@ -58,10 +83,16 @@ def authenticated_client():
     test_user.is_active = True
     test_user.role = "editor"
 
+    # The limiter's in-memory store is process-wide and outlives any one
+    # test module, so requests other modules made against the same route
+    # count toward this module's quota too. Disable it here, matching the
+    # pattern already used by tests/test_documents.py.
+    limiter.enabled = False
     app.dependency_overrides[get_current_user] = lambda: test_user
-    client = TestClient(app)
-    yield client
+    with TestClient(app) as client:
+        yield client
     app.dependency_overrides.pop(get_current_user, None)
+    limiter.enabled = True
 
 
 # ---------------------------------------------------------------------------

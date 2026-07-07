@@ -40,7 +40,7 @@ def _unwrap(view):
     return getattr(view, "__wrapped__", view)
 
 
-def test_byok_missing_credential_returns_412():
+async def test_byok_missing_credential_returns_412():
     """D-14: tenant without AICredential gets HTTP 412 from extract-preview."""
     from fastapi import HTTPException
 
@@ -61,11 +61,11 @@ def test_byok_missing_credential_returns_412():
 
     with patch.object(notices_router, "_ocr_extract_text", return_value="some notice text body"), \
          patch(
-             "app.compliance.services.notice_extractor_service.extract_notice_fields",
+             "app.compliance.services.notice_extractor_service.extract_notice_fields_async",
              side_effect=NoticeExtractionCredentialMissingError("no credential"),
          ):
         with pytest.raises(HTTPException) as excinfo:
-            handler(
+            await handler(
                 request=MagicMock(),
                 response=MagicMock(),
                 file=file_mock,
@@ -80,7 +80,7 @@ def test_byok_missing_credential_returns_412():
     assert detail.get("code") == "no_ai_credential"
 
 
-def test_extract_preview_rejects_disallowed_content_type():
+async def test_extract_preview_rejects_disallowed_content_type():
     """Defence-in-depth: text/plain or application/zip are rejected with HTTP 400."""
     from fastapi import HTTPException
 
@@ -92,7 +92,7 @@ def test_extract_preview_rejects_disallowed_content_type():
     handler = _unwrap(notices_router.extract_preview)
 
     with pytest.raises(HTTPException) as excinfo:
-        handler(
+        await handler(
             request=MagicMock(),
             response=MagicMock(),
             file=file_mock,

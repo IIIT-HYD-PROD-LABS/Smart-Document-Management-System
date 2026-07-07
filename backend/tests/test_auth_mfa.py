@@ -1,12 +1,13 @@
 """Endpoint flow tests for MFA login, enrollment, and per-account lockout.
 
-Mock-DB style (mirrors test_auth.py): ``get_db`` is overridden with a MagicMock
-and ``get_current_user`` is overridden for the protected enrollment endpoints.
-Rate limiting is disabled. ``log_audit_event`` is patched on the failure/enable
-paths so tests never touch the real audit table.
+Mock-DB style (mirrors test_auth.py): ``get_async_db`` is overridden with a
+mock AsyncSession and ``get_current_user`` is overridden for the protected
+enrollment endpoints. Rate limiting is disabled. ``log_audit_event`` is
+patched on the failure/enable paths so tests never touch the real audit
+table.
 """
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -28,35 +29,33 @@ def _user(**ov):
     return u
 
 
-class _Q:
-    def __init__(self, rv):
-        self._rv = rv
+def _result(scalar_one_or_none=None):
+    """Mock for the object returned by ``await db.execute(stmt)``."""
+    r = MagicMock()
+    r.scalar_one_or_none.return_value = scalar_one_or_none
+    return r
 
-    def filter(self, *a, **k):
-        return self
 
-    def with_for_update(self, **k):
-        return self
-
-    def first(self):
-        return self._rv
-
-    def count(self):
-        return 0 if self._rv is None else 1
+def _make_mock_db():
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.scalar = AsyncMock(return_value=0)
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    db.refresh = AsyncMock()
+    db.delete = AsyncMock()
+    return db
 
 
 @pytest.fixture()
 def client():
     from app.main import app
-    from app.database import get_db
+    from app.database import get_async_db
     from app.utils.rate_limiter import limiter
 
-    mock_db = MagicMock()
+    mock_db = _make_mock_db()
 
-    def override_get_db():
-        yield mock_db
-
-    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_async_db] = lambda: mock_db
     limiter.enabled = False
     yield TestClient(app), mock_db
     limiter.enabled = True
@@ -74,7 +73,7 @@ class TestLoginLockoutAndMfa:
     @patch("app.routers.auth.verify_password", return_value=True)
     def test_mfa_enabled_returns_challenge_not_tokens(self, _vp, client):
         tc, db = client
-        db.query.return_value = _Q(_user(mfa_enabled=True))
+        db.execute.return_value = _result(_user(mfa_enabled=True))
         r = tc.post("/api/auth/login", json={"email": "a@e.com", "password": "x"})
         assert r.status_code == 200
         body = r.json()
@@ -88,14 +87,14 @@ class TestLoginLockoutAndMfa:
         # guess budget refills every round and lockout is unenforceable.
         tc, db = client
         user = _user(mfa_enabled=True, failed_login_count=4)
-        db.query.return_value = _Q(user)
+        db.execute.return_value = _result(user)
         r = tc.post("/api/auth/login", json={"email": "a@e.com", "password": "x"})
         assert r.status_code == 200 and r.json().get("mfa_required") is True
         assert user.failed_login_count == 4 and user.locked_until is None
 
     def test_locked_account_returns_429(self, client):
         tc, db = client
-        db.query.return_value = _Q(_user(locked_until=datetime.now(timezone.utc) + timedelta(minutes=10)))
+        db.execute.return_value = _result(_user(locked_until=datetime.now(timezone.utc) + timedelta(minutes=10)))
         r = tc.post("/api/auth/login", json={"email": "a@e.com", "password": "x"})
         assert r.status_code == 429
 
@@ -104,7 +103,7 @@ class TestLoginLockoutAndMfa:
     def test_bad_password_locks_at_threshold(self, _vp, _audit, client):
         tc, db = client
         user = _user(failed_login_count=4)  # next failure -> 5 -> lock
-        db.query.return_value = _Q(user)
+        db.execute.return_value = _result(user)
         r = tc.post("/api/auth/login", json={"email": "a@e.com", "password": "x"})
         assert r.status_code == 429
         assert user.failed_login_count == 5 and user.locked_until is not None
@@ -114,7 +113,7 @@ class TestLoginLockoutAndMfa:
     def test_bad_password_below_threshold_returns_401(self, _vp, _audit, client):
         tc, db = client
         user = _user(failed_login_count=0)
-        db.query.return_value = _Q(user)
+        db.execute.return_value = _result(user)
         r = tc.post("/api/auth/login", json={"email": "a@e.com", "password": "x"})
         assert r.status_code == 401
         assert user.failed_login_count == 1
@@ -128,7 +127,7 @@ class TestMfaVerify:
     def test_valid_totp_returns_tokens(self, _ds, _vt, _ca, _cr, client):
         from app.services import mfa_service
         tc, db = client
-        db.query.return_value = _Q(_user(mfa_enabled=True, totp_secret_enc=b"x"))
+        db.execute.return_value = _result(_user(mfa_enabled=True, totp_secret_enc=b"x"))
         token = mfa_service.issue_challenge_token(1)
         r = tc.post("/api/auth/mfa/verify", json={"mfa_token": token, "code": "123456"})
         assert r.status_code == 200 and r.json()["access_token"] == "acc"
@@ -140,7 +139,7 @@ class TestMfaVerify:
         from app.services import mfa_service
         tc, db = client
         user = _user(mfa_enabled=True, totp_secret_enc=b"x")
-        db.query.return_value = _Q(user)
+        db.execute.return_value = _result(user)
         token = mfa_service.issue_challenge_token(1)
         r = tc.post("/api/auth/mfa/verify", json={"mfa_token": token, "code": "000000"})
         assert r.status_code == 401 and user.failed_login_count == 1

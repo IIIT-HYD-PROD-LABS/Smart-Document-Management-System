@@ -1,18 +1,18 @@
 """Tests for Admin API endpoints.
 
-All tests run without a real database. Dependencies (require_admin, get_db)
+All tests run without a real database. Dependencies (require_admin, get_async_db)
 are overridden via FastAPI dependency_overrides and the rate limiter is
 patched out so no Redis connection is needed.
 """
 
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 
-from app.database import get_db
+from app.database import get_async_db
 from app.main import app
 from app.utils.security import require_admin
 
@@ -47,8 +47,14 @@ def _make_mock_user(
 
 
 def _make_mock_db():
-    """Return a MagicMock that stands in for a SQLAlchemy Session."""
-    return MagicMock()
+    """Return a MagicMock that stands in for an AsyncSession."""
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.scalar = AsyncMock()
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    db.refresh = AsyncMock()
+    return db
 
 
 # ---------------------------------------------------------------------------
@@ -67,9 +73,9 @@ def mock_db():
 
 @pytest.fixture()
 def client(admin_user, mock_db):
-    """TestClient with require_admin and get_db overridden, rate limiter disabled."""
+    """TestClient with require_admin and get_async_db overridden, rate limiter disabled."""
     app.dependency_overrides[require_admin] = lambda: admin_user
-    app.dependency_overrides[get_db] = lambda: mock_db
+    app.dependency_overrides[get_async_db] = lambda: mock_db
 
     with patch("app.routers.admin.limiter") as mock_limiter:
         # Make the limiter decorator a pass-through
@@ -89,7 +95,7 @@ def non_admin_client(mock_db):
         )
 
     app.dependency_overrides[require_admin] = _deny
-    app.dependency_overrides[get_db] = lambda: mock_db
+    app.dependency_overrides[get_async_db] = lambda: mock_db
 
     with patch("app.routers.admin.limiter") as mock_limiter:
         mock_limiter.limit.return_value = lambda f: f
@@ -146,43 +152,21 @@ class TestListUsers:
     """Tests for GET /api/admin/users."""
 
     def _setup_list_query(self, mock_db, users_with_counts, total=None):
-        """Wire up the mock_db query chain for list_users.
+        """Wire up the mock_db for list_users.
 
         The endpoint does:
-          query = db.query(User)             -- base query
-          query.filter(...)                   -- optional search
-          total = query.count()
-          doc_count_subq = db.query(...).group_by(...).subquery()
-          users_with_counts = query.outerjoin(...).add_columns(...) \
-              .order_by(...).offset(...).limit(...).all()
+          total = await db.scalar(select(func.count())...)
+          result = await db.execute(select(User, doc_count)...outerjoin...)
+          users_with_counts = result.all()
         """
         if total is None:
             total = len(users_with_counts)
 
-        # The chain object returned by db.query(User)
-        chain = MagicMock()
-        chain.filter.return_value = chain
-        chain.count.return_value = total
-        chain.outerjoin.return_value = chain
-        chain.add_columns.return_value = chain
-        chain.order_by.return_value = chain
-        chain.offset.return_value = chain
-        chain.limit.return_value = chain
-        chain.all.return_value = users_with_counts
+        mock_db.scalar = AsyncMock(return_value=total)
 
-        # The subquery chain for document counts
-        subq_chain = MagicMock()
-        subq_chain.group_by.return_value = subq_chain
-        subq_chain.subquery.return_value = MagicMock()
-
-        call_count = [0]
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return chain       # db.query(User)
-            else:
-                return subq_chain  # db.query(Document.user_id, ...)
-        mock_db.query.side_effect = side_effect
+        result = MagicMock()
+        result.all.return_value = users_with_counts
+        mock_db.execute = AsyncMock(return_value=result)
 
     def test_returns_paginated_list(self, client, mock_db):
         user1 = _make_mock_user(user_id=1, email="alice@example.com", username="alice")
@@ -243,26 +227,14 @@ class TestGetUserDetail:
     def _setup_detail_query(self, mock_db, user, doc_count=0):
         """Wire mock_db for the get_user_detail endpoint.
 
-        The endpoint does two queries:
-          1. db.query(User).filter(User.id == ...).first()
-          2. db.query(func.count(Document.id)).filter(...).scalar()
+        The endpoint does:
+          1. (await db.execute(select(User)...)).scalar_one_or_none() -> user
+          2. await db.scalar(select(func.count(Document.id))...)     -> doc_count
         """
-        first_chain = MagicMock()
-        first_chain.filter.return_value = first_chain
-        first_chain.first.return_value = user
-
-        count_chain = MagicMock()
-        count_chain.filter.return_value = count_chain
-        count_chain.scalar.return_value = doc_count
-
-        call_count = [0]
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return first_chain
-            else:
-                return count_chain
-        mock_db.query.side_effect = side_effect
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = user
+        mock_db.execute = AsyncMock(return_value=result)
+        mock_db.scalar = AsyncMock(return_value=doc_count)
 
     def test_returns_user_when_found(self, client, mock_db):
         target = _make_mock_user(user_id=42, email="target@example.com", username="target")
@@ -298,26 +270,14 @@ class TestUpdateRole:
         """Wire mock_db for the update_user_role endpoint.
 
         The endpoint does:
-          1. db.query(User).filter(User.id == ...).first() -> target_user
-          2. (conditional) db.query(func.count(User.id)).filter(...).scalar() -> admin_count
-          3. db.commit()
+          1. (await db.execute(select(User)...)).scalar_one_or_none() -> target_user
+          2. (conditional) await db.scalar(select(func.count(User.id))...) -> admin_count
+          3. await db.commit()
         """
-        user_chain = MagicMock()
-        user_chain.filter.return_value = user_chain
-        user_chain.first.return_value = target_user
-
-        count_chain = MagicMock()
-        count_chain.filter.return_value = count_chain
-        count_chain.scalar.return_value = admin_count
-
-        call_count = [0]
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return user_chain
-            else:
-                return count_chain
-        mock_db.query.side_effect = side_effect
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = target_user
+        mock_db.execute = AsyncMock(return_value=result)
+        mock_db.scalar = AsyncMock(return_value=admin_count)
 
     def test_valid_role_change_succeeds(self, client, mock_db):
         target = _make_mock_user(user_id=2, role="editor")
@@ -383,33 +343,15 @@ class TestUpdateStatus:
         """Wire mock_db for the update_user_status endpoint.
 
         The endpoint does:
-          1. db.query(User).filter(User.id == ...).first() -> target_user
-          2. (conditional) db.query(func.count(User.id)).filter(...).scalar() -> admin_count
-          3. (conditional) db.query(RefreshToken).filter(...).update(...)
-          4. db.commit()
+          1. (await db.execute(select(User)...)).scalar_one_or_none() -> target_user
+          2. (conditional) await db.scalar(select(func.count(User.id))...) -> admin_count
+          3. (conditional) await db.execute(update(RefreshToken)...)
+          4. await db.commit()
         """
-        user_chain = MagicMock()
-        user_chain.filter.return_value = user_chain
-        user_chain.first.return_value = target_user
-
-        count_chain = MagicMock()
-        count_chain.filter.return_value = count_chain
-        count_chain.scalar.return_value = admin_count
-
-        token_chain = MagicMock()
-        token_chain.filter.return_value = token_chain
-        token_chain.update.return_value = 0
-
-        call_count = [0]
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return user_chain    # db.query(User)
-            elif call_count[0] == 2:
-                return count_chain   # db.query(func.count(User.id)) for admin check
-            else:
-                return token_chain   # db.query(RefreshToken) for token revocation
-        mock_db.query.side_effect = side_effect
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = target_user
+        mock_db.execute = AsyncMock(return_value=result)
+        mock_db.scalar = AsyncMock(return_value=admin_count)
 
     def test_deactivation_succeeds(self, client, mock_db):
         target = _make_mock_user(user_id=2, role="editor", is_active=True)
@@ -429,17 +371,15 @@ class TestUpdateStatus:
 
         resp = client.patch("/api/admin/users/2/status", json={"is_active": False})
         assert resp.status_code == 200
-        # The third db.query call (RefreshToken) should have .update() called
-        # Verify that query was called at least 3 times (User, count, RefreshToken)
-        assert mock_db.query.call_count >= 2
+        # db.execute is called for the user lookup and the RefreshToken bulk update.
+        assert mock_db.execute.call_count >= 2
 
     def test_activation_succeeds(self, client, mock_db):
         target = _make_mock_user(user_id=2, role="editor", is_active=False)
         # For activation, no admin count check or token revocation happens
-        user_chain = MagicMock()
-        user_chain.filter.return_value = user_chain
-        user_chain.first.return_value = target
-        mock_db.query.return_value = user_chain
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = target
+        mock_db.execute = AsyncMock(return_value=result)
 
         resp = client.patch("/api/admin/users/2/status", json={"is_active": True})
         assert resp.status_code == 200
@@ -474,10 +414,9 @@ class TestUpdateStatus:
         assert target.is_active is False
 
     def test_user_not_found_returns_404(self, client, mock_db):
-        user_chain = MagicMock()
-        user_chain.filter.return_value = user_chain
-        user_chain.first.return_value = None
-        mock_db.query.return_value = user_chain
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = None
+        mock_db.execute = AsyncMock(return_value=result)
 
         resp = client.patch("/api/admin/users/999/status", json={"is_active": False})
         assert resp.status_code == 404
@@ -503,11 +442,11 @@ class TestAdminStats:
         """Wire mock_db for the get_admin_stats endpoint.
 
         The endpoint does:
-          1. db.query(func.count(User.id)).scalar()             -> total_users
-          2. db.query(func.count(User.id)).filter(...).scalar() -> active_users
-          3. db.query(User.role, func.count(User.id)).group_by(...).all() -> role_rows
-          4. db.query(func.count(Document.id)).scalar()         -> total_documents
-          5. db.query(Document.status, func.count(Document.id)).group_by(...).all() -> status_rows
+          1. await db.scalar(...) -> total_users
+          2. await db.scalar(...) -> active_users
+          3. (await db.execute(...)).all() -> role_rows
+          4. await db.scalar(...) -> total_documents
+          5. (await db.execute(...)).all() -> status_rows
         """
         if role_rows is None:
             role_rows = [("admin", 2), ("editor", 5), ("viewer", 3)]
@@ -519,40 +458,13 @@ class TestAdminStats:
                 mock_status.value = s
                 status_rows.append((mock_status, c))
 
-        # Each db.query(...) call returns a new chain
-        chains = []
+        mock_db.scalar = AsyncMock(side_effect=[total_users, active_users, total_documents])
 
-        # 1. total_users: db.query(func.count(User.id)).filter(deleted_at IS NULL).scalar()
-        c1 = MagicMock()
-        c1.filter.return_value = c1
-        c1.scalar.return_value = total_users
-        chains.append(c1)
-
-        # 2. active_users: db.query(func.count(User.id)).filter(...).scalar()
-        c2 = MagicMock()
-        c2.filter.return_value = c2
-        c2.scalar.return_value = active_users
-        chains.append(c2)
-
-        # 3. role_rows: db.query(User.role, func.count(User.id)).filter(...).group_by(...).all()
-        c3 = MagicMock()
-        c3.filter.return_value = c3
-        c3.group_by.return_value = c3
-        c3.all.return_value = role_rows
-        chains.append(c3)
-
-        # 4. total_documents: db.query(func.count(Document.id)).scalar()
-        c4 = MagicMock()
-        c4.scalar.return_value = total_documents
-        chains.append(c4)
-
-        # 5. status_rows: db.query(Document.status, func.count(Document.id)).group_by(...).all()
-        c5 = MagicMock()
-        c5.group_by.return_value = c5
-        c5.all.return_value = status_rows
-        chains.append(c5)
-
-        mock_db.query.side_effect = chains
+        role_result = MagicMock()
+        role_result.all.return_value = role_rows
+        status_result = MagicMock()
+        status_result.all.return_value = status_rows
+        mock_db.execute = AsyncMock(side_effect=[role_result, status_result])
 
     def test_returns_expected_keys(self, client, mock_db):
         self._setup_stats_query(mock_db)
@@ -639,36 +551,15 @@ class TestDeleteUser:
         """Wire mock_db for the delete_user endpoint.
 
         The endpoint does:
-          1. db.query(User).filter(...).first()              -> target_user
-          2. (only if target is admin) db.query(...).scalar() -> admin_count
-          3. db.query(RefreshToken).filter(...).update(...)
-          4. db.commit()
+          1. (await db.execute(select(User)...)).scalar_one_or_none() -> target_user
+          2. (only if target is admin) await db.scalar(...) -> admin_count
+          3. await db.execute(update(RefreshToken)...)
+          4. await db.commit()
         """
-        user_chain = MagicMock()
-        user_chain.filter.return_value = user_chain
-        user_chain.first.return_value = target_user
-
-        count_chain = MagicMock()
-        count_chain.filter.return_value = count_chain
-        count_chain.scalar.return_value = admin_count
-
-        token_chain = MagicMock()
-        token_chain.filter.return_value = token_chain
-        token_chain.update.return_value = 0
-
-        is_admin_target = target_user is not None and target_user.role == "admin"
-
-        call_count = [0]
-
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return user_chain
-            if is_admin_target and call_count[0] == 2:
-                return count_chain
-            return token_chain
-
-        mock_db.query.side_effect = side_effect
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = target_user
+        mock_db.execute = AsyncMock(return_value=result)
+        mock_db.scalar = AsyncMock(return_value=admin_count)
 
     def test_delete_succeeds(self, client, mock_db):
         target = _make_mock_user(
@@ -750,8 +641,8 @@ class TestDeleteUser:
 
         resp = client.delete("/api/admin/users/2")
         assert resp.status_code == 200
-        # The endpoint must have queried RefreshToken at least once after the user lookup
-        assert mock_db.query.call_count >= 2
+        # db.execute is called for the user lookup and the RefreshToken bulk update.
+        assert mock_db.execute.call_count >= 2
 
     def test_delete_rejects_non_positive_user_id(self, client, mock_db):
         resp = client.delete("/api/admin/users/0")

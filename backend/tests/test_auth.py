@@ -1,11 +1,14 @@
 """Comprehensive tests for authentication endpoints (register, login, refresh, logout, providers).
 
-All tests run WITHOUT a real database by overriding the ``get_db`` dependency
-with a mock session and patching internal helpers where needed.
+All tests run WITHOUT a real database by overriding the ``get_async_db``
+dependency with a mock AsyncSession and patching internal helpers where
+needed. The router uses AsyncSession (db.execute/db.scalar/db.commit/
+db.refresh are all awaited), so the mock db exposes those as AsyncMock,
+mirroring the pattern used in test_documents.py.
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -65,53 +68,54 @@ def _make_mock_refresh_token(**overrides):
     return tok
 
 
-class _QueryChain:
-    """Tiny helper that simulates ``db.query(Model).filter(...).first()`` chains.
+def _make_result(scalar_one_or_none=None):
+    """Build a mock for the object returned by ``await db.execute(stmt)``."""
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = scalar_one_or_none
+    return result
 
-    Usage::
 
-        chain = _QueryChain(return_value=some_user)
-        mock_db.query.return_value = chain
-        # db.query(User).filter(User.email == x).first()  -> some_user
-    """
+def _exec_sequence(*results):
+    """AsyncMock side_effect: returns each result in order, then an empty
+    result for any further call (e.g. the best-effort advisory-lock
+    statement in ``_safe_role``, whose return value is never consumed)."""
+    queue = list(results)
 
-    def __init__(self, return_value=None):
-        self._return_value = return_value
+    async def _side_effect(*_args, **_kwargs):
+        if queue:
+            return queue.pop(0)
+        return _make_result()
 
-    def filter(self, *args, **kwargs):  # noqa: A003
-        return self
+    return _side_effect
 
-    def with_for_update(self, **kwargs):
-        return self
 
-    def first(self):
-        return self._return_value
-
-    def count(self):
-        return 0 if self._return_value is None else 1
-
-    def update(self, values):
-        return 1
+def _make_mock_db():
+    """Create a mock AsyncSession (db.add stays sync, everything awaited is AsyncMock)."""
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.scalar = AsyncMock(return_value=0)
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    db.refresh = AsyncMock()
+    db.delete = AsyncMock()
+    return db
 
 
 @pytest.fixture()
 def client():
     """Yield a (TestClient, mock_db) tuple with proper cleanup."""
     from app.main import app
-    from app.database import get_db
+    from app.database import get_async_db
     from app.utils.rate_limiter import limiter
 
-    mock_db = MagicMock()
+    mock_db = _make_mock_db()
 
-    def override_get_db():
-        yield mock_db
-
-    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_async_db] = lambda: mock_db
     limiter.enabled = False
     test_client = TestClient(app)
     yield test_client, mock_db
     limiter.enabled = True
-    app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_async_db, None)
 
 
 # =========================================================================
@@ -143,20 +147,17 @@ class TestRegister:
 
         new_user = _make_mock_user(
             id=1, email="newuser@example.com", username="newuser",
-            full_name="New User", role="editor",
+            full_name="New User", role="admin",
         )
 
-        # query(User).filter(email==...).first() -> None (no duplicate email)
-        # query(User).filter(username==...).first() -> None (no duplicate username)
-        # query(User).count() -> 0 (first user check)
-        call_count = 0
-
-        def query_side_effect(model):
-            nonlocal call_count
-            call_count += 1
-            return _QueryChain(return_value=None)
-
-        mock_db.query.side_effect = query_side_effect
+        # 1) email check -> None (no duplicate)
+        # 2) username check -> None (no duplicate)
+        # _safe_role(): db.scalar(count) -> 0 -> bootstrap admin, no invitation needed
+        mock_db.execute.side_effect = _exec_sequence(
+            _make_result(scalar_one_or_none=None),
+            _make_result(scalar_one_or_none=None),
+        )
+        mock_db.scalar.return_value = 0
 
         # db.refresh(user) should populate the mock
         def refresh_side_effect(user):
@@ -186,17 +187,9 @@ class TestRegister:
         test_client, mock_db = client
         existing = _make_mock_user(email="newuser@example.com")
 
-        call_count = 0
-
-        def query_side_effect(model):
-            nonlocal call_count
-            call_count += 1
-            # First query: email check -> return existing user
-            if call_count == 1:
-                return _QueryChain(return_value=existing)
-            return _QueryChain(return_value=None)
-
-        mock_db.query.side_effect = query_side_effect
+        mock_db.execute.side_effect = _exec_sequence(
+            _make_result(scalar_one_or_none=existing),
+        )
 
         response = test_client.post("/api/auth/register", json=self.VALID_PAYLOAD)
 
@@ -209,20 +202,10 @@ class TestRegister:
         test_client, mock_db = client
         existing = _make_mock_user(username="newuser")
 
-        call_count = 0
-
-        def query_side_effect(model):
-            nonlocal call_count
-            call_count += 1
-            # First query: email check -> None
-            if call_count == 1:
-                return _QueryChain(return_value=None)
-            # Second query: username check -> existing user
-            if call_count == 2:
-                return _QueryChain(return_value=existing)
-            return _QueryChain(return_value=None)
-
-        mock_db.query.side_effect = query_side_effect
+        mock_db.execute.side_effect = _exec_sequence(
+            _make_result(scalar_one_or_none=None),
+            _make_result(scalar_one_or_none=existing),
+        )
 
         response = test_client.post("/api/auth/register", json=self.VALID_PAYLOAD)
 
@@ -327,7 +310,7 @@ class TestLogin:
         mock_refresh.return_value = ("refresh-opaque", datetime.now(timezone.utc) + timedelta(days=7))
 
         user = _make_mock_user()
-        mock_db.query.return_value = _QueryChain(return_value=user)
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=user))
 
         response = test_client.post("/api/auth/login", json=self.VALID_PAYLOAD)
 
@@ -344,7 +327,7 @@ class TestLogin:
     def test_wrong_password_returns_401(self, mock_verify, client):
         test_client, mock_db = client
         user = _make_mock_user()
-        mock_db.query.return_value = _QueryChain(return_value=user)
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=user))
 
         response = test_client.post("/api/auth/login", json=self.VALID_PAYLOAD)
 
@@ -355,7 +338,7 @@ class TestLogin:
 
     def test_unknown_email_returns_401(self, client):
         test_client, mock_db = client
-        mock_db.query.return_value = _QueryChain(return_value=None)
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=None))
 
         response = test_client.post("/api/auth/login", json=self.VALID_PAYLOAD)
 
@@ -368,7 +351,7 @@ class TestLogin:
     def test_deactivated_user_returns_401(self, mock_verify, client):
         test_client, mock_db = client
         user = _make_mock_user(is_active=False)
-        mock_db.query.return_value = _QueryChain(return_value=user)
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=user))
 
         response = test_client.post("/api/auth/login", json=self.VALID_PAYLOAD)
 
@@ -380,7 +363,7 @@ class TestLogin:
     def test_oauth_user_cannot_use_local_login(self, client):
         test_client, mock_db = client
         user = _make_mock_user(auth_provider="google")
-        mock_db.query.return_value = _QueryChain(return_value=user)
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=user))
 
         response = test_client.post("/api/auth/login", json=self.VALID_PAYLOAD)
 
@@ -392,7 +375,7 @@ class TestLogin:
     def test_user_without_password_returns_401(self, client):
         test_client, mock_db = client
         user = _make_mock_user(hashed_password=None)
-        mock_db.query.return_value = _QueryChain(return_value=user)
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=user))
 
         response = test_client.post("/api/auth/login", json=self.VALID_PAYLOAD)
 
@@ -420,18 +403,11 @@ class TestRefresh:
         db_token = _make_mock_refresh_token()
         user = _make_mock_user()
 
-        call_count = 0
-
-        def query_side_effect(model):
-            nonlocal call_count
-            call_count += 1
-            # First query: RefreshToken lookup
-            if call_count == 1:
-                return _QueryChain(return_value=db_token)
-            # Second query: User lookup
-            return _QueryChain(return_value=user)
-
-        mock_db.query.side_effect = query_side_effect
+        # 1) RefreshToken lookup, 2) User lookup
+        mock_db.execute.side_effect = _exec_sequence(
+            _make_result(scalar_one_or_none=db_token),
+            _make_result(scalar_one_or_none=user),
+        )
 
         response = test_client.post(
             "/api/auth/refresh",
@@ -453,7 +429,7 @@ class TestRefresh:
             expires_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
         )
 
-        mock_db.query.return_value = _QueryChain(return_value=db_token)
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=db_token))
 
         response = test_client.post(
             "/api/auth/refresh",
@@ -467,7 +443,7 @@ class TestRefresh:
 
     def test_unknown_refresh_token_returns_401(self, client):
         test_client, mock_db = client
-        mock_db.query.return_value = _QueryChain(return_value=None)
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=None))
 
         response = test_client.post(
             "/api/auth/refresh",
@@ -483,14 +459,12 @@ class TestRefresh:
         test_client, mock_db = client
         db_token = _make_mock_refresh_token(is_revoked=True, user_id=1)
 
-        # Track the mass-revocation update call
-        update_chain = MagicMock()
-        update_chain.filter.return_value = update_chain
-        update_chain.with_for_update.return_value = update_chain
-        update_chain.first.return_value = db_token
-        update_chain.update.return_value = 3  # 3 tokens revoked
-
-        mock_db.query.return_value = update_chain
+        # 1) RefreshToken lookup -> revoked token, 2) mass-revocation UPDATE
+        # statement (return value unused by the router).
+        mock_db.execute.side_effect = _exec_sequence(
+            _make_result(scalar_one_or_none=db_token),
+            _make_result(),
+        )
 
         response = test_client.post(
             "/api/auth/refresh",
@@ -499,8 +473,8 @@ class TestRefresh:
 
         assert response.status_code == 401
         assert "reuse" in response.json()["detail"].lower()
-        # Verify that update was called (mass revocation)
-        assert update_chain.update.called
+        # Verify that the mass-revocation commit happened.
+        assert mock_db.commit.await_count >= 1
 
     # -- deactivated user on refresh ---------------------------------------
 
@@ -513,16 +487,10 @@ class TestRefresh:
         db_token = _make_mock_refresh_token()
         user = _make_mock_user(is_active=False)
 
-        call_count = 0
-
-        def query_side_effect(model):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return _QueryChain(return_value=db_token)
-            return _QueryChain(return_value=user)
-
-        mock_db.query.side_effect = query_side_effect
+        mock_db.execute.side_effect = _exec_sequence(
+            _make_result(scalar_one_or_none=db_token),
+            _make_result(scalar_one_or_none=user),
+        )
 
         response = test_client.post(
             "/api/auth/refresh",
@@ -542,16 +510,10 @@ class TestRefresh:
         test_client, mock_db = client
         db_token = _make_mock_refresh_token()
 
-        call_count = 0
-
-        def query_side_effect(model):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return _QueryChain(return_value=db_token)
-            return _QueryChain(return_value=None)
-
-        mock_db.query.side_effect = query_side_effect
+        mock_db.execute.side_effect = _exec_sequence(
+            _make_result(scalar_one_or_none=db_token),
+            _make_result(scalar_one_or_none=None),
+        )
 
         response = test_client.post(
             "/api/auth/refresh",
@@ -572,7 +534,7 @@ class TestLogout:
     def test_valid_logout_returns_200(self, client):
         test_client, mock_db = client
         db_token = _make_mock_refresh_token()
-        mock_db.query.return_value = _QueryChain(return_value=db_token)
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=db_token))
 
         response = test_client.post(
             "/api/auth/logout",
@@ -586,7 +548,7 @@ class TestLogout:
     def test_logout_revokes_token(self, client):
         test_client, mock_db = client
         db_token = _make_mock_refresh_token(is_revoked=False)
-        mock_db.query.return_value = _QueryChain(return_value=db_token)
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=db_token))
 
         test_client.post(
             "/api/auth/logout",
@@ -599,7 +561,7 @@ class TestLogout:
     def test_logout_already_revoked_token_still_200(self, client):
         test_client, mock_db = client
         db_token = _make_mock_refresh_token(is_revoked=True)
-        mock_db.query.return_value = _QueryChain(return_value=db_token)
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=db_token))
 
         response = test_client.post(
             "/api/auth/logout",
@@ -611,7 +573,7 @@ class TestLogout:
 
     def test_logout_unknown_token_returns_401(self, client):
         test_client, mock_db = client
-        mock_db.query.return_value = _QueryChain(return_value=None)
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=None))
 
         response = test_client.post(
             "/api/auth/logout",
@@ -754,35 +716,23 @@ class TestInputValidation:
         assert response.status_code == 422
 
     def test_register_email_is_normalised_to_lowercase(self, client):
-        """Verify that the schema normalises email to lowercase."""
+        """Verify that the schema normalises email to lowercase.
+
+        We only care that the (upper-cased) email reaches the endpoint
+        normalised; let it fail on the duplicate-email check -- the
+        important thing is that it does not fail schema validation (422).
+        """
         test_client, mock_db = client
-
-        # We only care about the email reaching the endpoint normalised;
-        # let it fail on duplicate check -- we just inspect the call.
         existing = _make_mock_user(email="alice@example.com")
-
-        captured_filter_args = []
-
-        class _CapturingQueryChain:
-            def filter(self, *args, **kwargs):
-                captured_filter_args.append(args)
-                return self
-
-            def first(self):
-                return existing
-
-            def count(self):
-                return 1
-
-        mock_db.query.return_value = _CapturingQueryChain()
+        mock_db.execute.side_effect = _exec_sequence(_make_result(scalar_one_or_none=existing))
 
         payload = {
             "email": "ALICE@Example.COM",
             "username": "alice",
             "password": "Str0ng!Pass",
         }
-        test_client.post("/api/auth/register", json=payload)
+        response = test_client.post("/api/auth/register", json=payload)
 
-        # The request should have hit 409, which is fine.  The important
-        # thing is that it did not fail on validation (422) and the email
-        # was accepted in its upper-case form by Pydantic (which lowercases it).
+        # The request should have hit 409 (duplicate email), which is fine.
+        # The important thing is that it did not fail validation (422).
+        assert response.status_code == 409

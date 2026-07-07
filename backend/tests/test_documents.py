@@ -2,11 +2,15 @@
 
 All tests run WITHOUT a real database, Celery broker, or storage backend.
 Dependencies are overridden with mocks via FastAPI dependency_overrides.
+
+The router uses AsyncSession (db.execute/db.scalar/db.commit/db.refresh/
+db.delete are all awaited), so the mock db exposes those as AsyncMock while
+db.add stays a plain (synchronous) MagicMock, matching the real API.
 """
 
 from datetime import datetime, timezone
 from io import BytesIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 from app.models.document import DocumentCategory, DocumentStatus
@@ -84,9 +88,33 @@ def _make_mock_document(**kwargs):
     return doc
 
 
+def _make_mock_result(scalar_one_or_none=None, scalars_all=None, rows=None):
+    """Build a mock for the object returned by `await db.execute(stmt)`.
+
+    Only the accessor the caller actually uses needs to be configured;
+    the others default to harmless MagicMocks.
+    """
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = scalar_one_or_none
+    result.scalars.return_value.all.return_value = scalars_all if scalars_all is not None else []
+    result.all.return_value = rows if rows is not None else []
+    return result
+
+
 def _make_mock_db():
-    """Create a mock SQLAlchemy session."""
+    """Create a mock AsyncSession.
+
+    db.add stays a plain sync MagicMock (matches the real API: add() does
+    not hit the DB and is never awaited). Everything else that the router
+    awaits is an AsyncMock.
+    """
     db = MagicMock()
+    db.execute = AsyncMock()
+    db.scalar = AsyncMock()
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    db.refresh = AsyncMock()
+    db.delete = AsyncMock()
     return db
 
 
@@ -97,7 +125,7 @@ def _build_client(user=None, db=None):
     before making requests.
     """
     from app.main import app
-    from app.database import get_db
+    from app.database import get_async_db
     from app.utils.security import get_current_user, require_editor
     from app.utils.rate_limiter import limiter
 
@@ -108,7 +136,7 @@ def _build_client(user=None, db=None):
 
     app.dependency_overrides[get_current_user] = lambda: user
     app.dependency_overrides[require_editor] = lambda: user
-    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_async_db] = lambda: db
     limiter.enabled = False
 
     client = TestClient(app, raise_server_exceptions=False)
@@ -117,13 +145,13 @@ def _build_client(user=None, db=None):
 
 def _cleanup_overrides(app):
     """Remove all dependency overrides to avoid test pollution."""
-    from app.database import get_db
+    from app.database import get_async_db
     from app.utils.security import get_current_user, require_editor
     from app.utils.rate_limiter import limiter
 
     app.dependency_overrides.pop(get_current_user, None)
     app.dependency_overrides.pop(require_editor, None)
-    app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_async_db, None)
     limiter.enabled = True
 
 
@@ -201,30 +229,24 @@ class TestUploadValidation:
 
         client, app, user, db = _build_client()
 
-        # Configure mock DB: no existing doc, commit succeeds, refresh populates id
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.with_for_update.return_value = mock_query
-        mock_query.first.return_value = None  # no existing document
-        db.query.return_value = mock_query
-
-        def _set_doc_id(doc=None):
-            """Simulate database assigning an id on commit."""
-            if hasattr(db, '_added_docs') and db._added_docs:
-                for d in db._added_docs:
-                    if not hasattr(d, '_id_set') or not d._id_set:
-                        d.id = 42
-                        d._id_set = True
+        # No existing document with this filename (with_for_update query)
+        db.execute.return_value = _make_mock_result(scalar_one_or_none=None)
 
         db._added_docs = []
 
         def _track_add(obj):
             db._added_docs.append(obj)
 
+        def _set_doc_id():
+            for d in db._added_docs:
+                if not getattr(d, "_id_set", False):
+                    d.id = 42
+                    d._id_set = True
+
         db.add = _track_add
         db.commit.side_effect = _set_doc_id
 
-        def _refresh(obj):
+        async def _refresh(obj):
             obj.id = 42
             obj.original_filename = "test.pdf"
             obj.current_version = 1
@@ -279,14 +301,8 @@ class TestGetAllDocuments:
 
         client, app, user, db = _build_client()
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.count.return_value = 2
-        mock_query.order_by.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.all.return_value = [doc1, doc2]
-        db.query.return_value = mock_query
+        db.scalar.return_value = 2
+        db.execute.return_value = _make_mock_result(scalars_all=[doc1, doc2])
 
         try:
             resp = client.get("/api/documents/all")
@@ -305,14 +321,8 @@ class TestGetAllDocuments:
 
         client, app, user, db = _build_client()
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.count.return_value = 50
-        mock_query.order_by.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.all.return_value = [doc1]
-        db.query.return_value = mock_query
+        db.scalar.return_value = 50
+        db.execute.return_value = _make_mock_result(scalars_all=[doc1])
 
         try:
             resp = client.get("/api/documents/all?per_page=5&page=2")
@@ -327,14 +337,8 @@ class TestGetAllDocuments:
         """Only documents belonging to the current user are returned."""
         client, app, user, db = _build_client()
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.count.return_value = 0
-        mock_query.order_by.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.all.return_value = []
-        db.query.return_value = mock_query
+        db.scalar.return_value = 0
+        db.execute.return_value = _make_mock_result(scalars_all=[])
 
         try:
             resp = client.get("/api/documents/all")
@@ -342,8 +346,7 @@ class TestGetAllDocuments:
             body = resp.json()
             assert body["total"] == 0
             assert body["documents"] == []
-            # Verify the filter was called (user_id filtering)
-            mock_query.filter.assert_called()
+            db.execute.assert_called()
         finally:
             _cleanup_overrides(app)
 
@@ -351,14 +354,8 @@ class TestGetAllDocuments:
         """User with no documents gets an empty list, not an error."""
         client, app, user, db = _build_client()
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.count.return_value = 0
-        mock_query.order_by.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.all.return_value = []
-        db.query.return_value = mock_query
+        db.scalar.return_value = 0
+        db.execute.return_value = _make_mock_result(scalars_all=[])
 
         try:
             resp = client.get("/api/documents/all")
@@ -383,11 +380,7 @@ class TestGetDocumentById:
 
         client, app, user, db = _build_client()
 
-        mock_query = MagicMock()
-        mock_query.options.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = doc
-        db.query.return_value = mock_query
+        db.execute.return_value = _make_mock_result(scalar_one_or_none=doc)
 
         try:
             resp = client.get("/api/documents/10")
@@ -402,11 +395,7 @@ class TestGetDocumentById:
         """Returns 404 when document does not exist."""
         client, app, user, db = _build_client()
 
-        mock_query = MagicMock()
-        mock_query.options.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None  # document not found
-        db.query.return_value = mock_query
+        db.execute.return_value = _make_mock_result(scalar_one_or_none=None)
 
         try:
             resp = client.get("/api/documents/9999")
@@ -422,30 +411,12 @@ class TestGetDocumentById:
         user = _make_mock_user(user_id=1, role="editor")
         client, app, _, db = _build_client(user=user)
 
-        # First query returns the doc (it exists), second returns None (no permission)
-        mock_doc_query = MagicMock()
-        mock_doc_query.filter.return_value = mock_doc_query
-        mock_doc_query.first.return_value = other_user_doc
-
-        mock_perm_query = MagicMock()
-        mock_perm_query.filter.return_value = mock_perm_query
-        mock_perm_query.first.return_value = None  # no shared permission
-
-        # The function queries Document first, then DocumentPermission
-        from app.models.document import Document
-        from app.models.document_permission import DocumentPermission
-
-        def query_side_effect(model):
-            q = MagicMock()
-            q.options.return_value = q
-            q.filter.return_value = q
-            if model is Document:
-                q.first.return_value = other_user_doc
-            elif model is DocumentPermission:
-                q.first.return_value = None
-            return q
-
-        db.query.side_effect = query_side_effect
+        # First execute() call returns the doc (it exists), second returns
+        # None (no shared permission).
+        db.execute.side_effect = [
+            _make_mock_result(scalar_one_or_none=other_user_doc),
+            _make_mock_result(scalar_one_or_none=None),
+        ]
 
         try:
             resp = client.get("/api/documents/5")
@@ -471,10 +442,7 @@ class TestDeleteDocument:
         user = _make_mock_user(user_id=1, role="editor")
         client, app, _, db = _build_client(user=user)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = doc
-        db.query.return_value = mock_query
+        db.execute.return_value = _make_mock_result(scalar_one_or_none=doc)
 
         try:
             resp = client.delete("/api/documents/3")
@@ -492,10 +460,7 @@ class TestDeleteDocument:
         user = _make_mock_user(user_id=1, role="editor")
         client, app, _, db = _build_client(user=user)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = doc
-        db.query.return_value = mock_query
+        db.execute.return_value = _make_mock_result(scalar_one_or_none=doc)
 
         try:
             resp = client.delete("/api/documents/7")
@@ -515,10 +480,7 @@ class TestDeleteDocument:
         admin_user = _make_mock_user(user_id=2, role="admin")
         client, app, _, db = _build_client(user=admin_user)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = doc
-        db.query.return_value = mock_query
+        db.execute.return_value = _make_mock_result(scalar_one_or_none=doc)
 
         try:
             resp = client.delete("/api/documents/15")
@@ -532,10 +494,7 @@ class TestDeleteDocument:
         user = _make_mock_user(user_id=1, role="editor")
         client, app, _, db = _build_client(user=user)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None
-        db.query.return_value = mock_query
+        db.execute.return_value = _make_mock_result(scalar_one_or_none=None)
 
         try:
             resp = client.delete("/api/documents/9999")
@@ -563,10 +522,7 @@ class TestBatchDelete:
         user = _make_mock_user(user_id=1, role="editor")
         client, app, _, db = _build_client(user=user)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.all.return_value = [doc1, doc2]
-        db.query.return_value = mock_query
+        db.execute.return_value = _make_mock_result(scalars_all=[doc1, doc2])
 
         try:
             resp = client.post(
@@ -652,11 +608,8 @@ class TestBatchDelete:
         user = _make_mock_user(user_id=1, role="editor")
         client, app, _, db = _build_client(user=user)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
         # Query filters to user_id=1, so only doc_owned is returned
-        mock_query.all.return_value = [doc_owned]
-        db.query.return_value = mock_query
+        db.execute.return_value = _make_mock_result(scalars_all=[doc_owned])
 
         try:
             resp = client.post(
@@ -702,29 +655,11 @@ class TestDocumentStats:
         # Mock recent uploads
         recent_doc = _make_mock_document(id=1, user_id=1, category="bills")
 
-        call_count = [0]
-
-        def query_side_effect(model_or_cols, *args):
-            """Route different db.query() calls to correct mocks."""
-            call_count[0] += 1
-            q = MagicMock()
-            q.filter.return_value = q
-            q.group_by.return_value = q
-            q.order_by.return_value = q
-            q.limit.return_value = q
-
-            if call_count[0] == 1:
-                # First call: category counts
-                q.all.return_value = cat_rows
-            elif call_count[0] == 2:
-                # Second call: recent uploads
-                q.all.return_value = [recent_doc]
-            elif call_count[0] == 3:
-                # Third call: status counts
-                q.all.return_value = status_rows
-            return q
-
-        db.query.side_effect = query_side_effect
+        db.execute.side_effect = [
+            _make_mock_result(rows=cat_rows),
+            _make_mock_result(scalars_all=[recent_doc]),
+            _make_mock_result(rows=status_rows),
+        ]
 
         try:
             resp = client.get("/api/documents/stats")
@@ -746,19 +681,11 @@ class TestDocumentStats:
         user = _make_mock_user(user_id=1, role="editor")
         client, app, _, db = _build_client(user=user)
 
-        call_count = [0]
-
-        def query_side_effect(model_or_cols, *args):
-            call_count[0] += 1
-            q = MagicMock()
-            q.filter.return_value = q
-            q.group_by.return_value = q
-            q.order_by.return_value = q
-            q.limit.return_value = q
-            q.all.return_value = []
-            return q
-
-        db.query.side_effect = query_side_effect
+        db.execute.side_effect = [
+            _make_mock_result(rows=[]),
+            _make_mock_result(scalars_all=[]),
+            _make_mock_result(rows=[]),
+        ]
 
         try:
             resp = client.get("/api/documents/stats")
@@ -783,24 +710,11 @@ class TestDocumentStats:
         cat_rows = [(DocumentCategory.UPI, 12)]
         status_rows = [(DocumentStatus.COMPLETED, 12)]
 
-        call_count = [0]
-
-        def query_side_effect(model_or_cols, *args):
-            call_count[0] += 1
-            q = MagicMock()
-            q.filter.return_value = q
-            q.group_by.return_value = q
-            q.order_by.return_value = q
-            q.limit.return_value = q
-            if call_count[0] == 1:
-                q.all.return_value = cat_rows
-            elif call_count[0] == 2:
-                q.all.return_value = []  # no recent docs needed
-            elif call_count[0] == 3:
-                q.all.return_value = status_rows
-            return q
-
-        db.query.side_effect = query_side_effect
+        db.execute.side_effect = [
+            _make_mock_result(rows=cat_rows),
+            _make_mock_result(scalars_all=[]),
+            _make_mock_result(rows=status_rows),
+        ]
 
         try:
             resp = client.get("/api/documents/stats")

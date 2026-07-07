@@ -7,7 +7,7 @@ and accepted values plus `was_edited`.
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 
@@ -42,8 +42,8 @@ def _stub_notice():
     return notice
 
 
-def _patched_call(payload_items, *, notice=None, permission_ok=True):
-    """Helper: invoke accept_extraction with dependencies mocked."""
+async def _patched_call(payload_items, *, notice=None, permission_ok=True):
+    """Helper: invoke accept_extraction (async) with dependencies mocked."""
     from app.compliance.routers.notices import accept_extraction
     from app.compliance.schemas.extraction import (
         AcceptExtractionItem,
@@ -52,9 +52,11 @@ def _patched_call(payload_items, *, notice=None, permission_ok=True):
 
     notice = notice if notice is not None else _stub_notice()
     db = MagicMock()
-    db.query.return_value.filter.return_value.first.return_value = notice
-    db.commit = MagicMock()
-    db.refresh = MagicMock()
+    execute_result = MagicMock()
+    execute_result.scalars.return_value.first.return_value = notice
+    db.execute = AsyncMock(return_value=execute_result)
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
 
     current_user = MagicMock(id=99)
     # ClientMembership stores the role on `compliance_role`, not `role`.
@@ -75,7 +77,7 @@ def _patched_call(payload_items, *, notice=None, permission_ok=True):
 
     with patch("app.compliance.routers.notices.log_audit_event", side_effect=_audit):
         try:
-            result = accept_extraction(
+            result = await accept_extraction(
                 notice_id=42,
                 payload=payload,
                 current_user=current_user,
@@ -88,9 +90,9 @@ def _patched_call(payload_items, *, notice=None, permission_ok=True):
     return result, captured, None
 
 
-def test_accept_extraction_writes_per_field_audit_row():
+async def test_accept_extraction_writes_per_field_audit_row():
     """D-17: one audit row per accepted field with original/accepted SHA-256 + was_edited."""
-    _result, captured, exc = _patched_call(
+    _result, captured, exc = await _patched_call(
         [
             {"field": "notice_number", "value": "DRC-01/2026/4456", "accept_as_is": True},
             {"field": "authority", "value": "GST", "accept_as_is": True},
@@ -109,10 +111,10 @@ def test_accept_extraction_writes_per_field_audit_row():
         assert details["was_edited"] is False
 
 
-def test_accept_extraction_copies_fields_to_canonical_columns():
+async def test_accept_extraction_copies_fields_to_canonical_columns():
     """D-11: accepted notice_number, authority, dates, amounts land on the corresponding notice columns."""
     notice = _stub_notice()
-    _result, _captured, exc = _patched_call(
+    _result, _captured, exc = await _patched_call(
         [
             {"field": "notice_number", "value": "DRC-01/2026/4456", "accept_as_is": True},
             {"field": "authority", "value": "GST", "accept_as_is": True},
@@ -126,11 +128,11 @@ def test_accept_extraction_copies_fields_to_canonical_columns():
     assert notice.tax_demand == 145000.0
 
 
-def test_accept_extraction_flips_extraction_status_to_accepted():
+async def test_accept_extraction_flips_extraction_status_to_accepted():
     """D-11: extraction_status moves from 'completed' to 'accepted' after acceptance."""
     notice = _stub_notice()
     assert notice.extraction_status == "completed"
-    _result, _captured, exc = _patched_call(
+    _result, _captured, exc = await _patched_call(
         [{"field": "authority", "value": "GST", "accept_as_is": True}],
         notice=notice,
     )
@@ -138,9 +140,9 @@ def test_accept_extraction_flips_extraction_status_to_accepted():
     assert notice.extraction_status == "accepted"
 
 
-def test_edited_field_records_was_edited_true_in_audit():
+async def test_edited_field_records_was_edited_true_in_audit():
     """D-17: when the user edited the value before accepting, was_edited=True and the hashes differ."""
-    _result, captured, exc = _patched_call(
+    _result, captured, exc = await _patched_call(
         [
             {"field": "notice_number", "value": "DRC-01/2026/CORRECTED", "accept_as_is": False},
         ]
@@ -151,13 +153,13 @@ def test_edited_field_records_was_edited_true_in_audit():
     assert details["original_value_sha256"] != details["accepted_value_sha256"]
 
 
-def test_accept_extraction_rejects_when_status_is_pending():
+async def test_accept_extraction_rejects_when_status_is_pending():
     """D-11: 409 Conflict when notice.extraction_status is not yet 'completed' or 'accepted'."""
     from fastapi import HTTPException
 
     notice = _stub_notice()
     notice.extraction_status = "pending"
-    _result, _captured, exc = _patched_call(
+    _result, _captured, exc = await _patched_call(
         [{"field": "authority", "value": "GST", "accept_as_is": True}],
         notice=notice,
     )
@@ -165,7 +167,7 @@ def test_accept_extraction_rejects_when_status_is_pending():
     assert exc.status_code == 409
 
 
-def test_accept_extraction_coerces_currency_formatted_amount():
+async def test_accept_extraction_coerces_currency_formatted_amount():
     """Regression: a currency-formatted amount must coerce to Decimal, not 500.
 
     Before the coercion fix, '₹1,45,000' reached the Numeric(18,2) column as a
@@ -174,7 +176,7 @@ def test_accept_extraction_coerces_currency_formatted_amount():
     from decimal import Decimal
 
     notice = _stub_notice()
-    _result, _captured, exc = _patched_call(
+    _result, _captured, exc = await _patched_call(
         [{"field": "tax_demand", "value": "₹1,45,000", "accept_as_is": False}],
         notice=notice,
     )
@@ -182,12 +184,12 @@ def test_accept_extraction_coerces_currency_formatted_amount():
     assert notice.tax_demand == Decimal("145000.00")
 
 
-def test_accept_extraction_coerces_non_iso_indian_date():
+async def test_accept_extraction_coerces_non_iso_indian_date():
     """Regression: a DD-MM-YYYY date must coerce to a date, not 500."""
     from datetime import date
 
     notice = _stub_notice()
-    _result, _captured, exc = _patched_call(
+    _result, _captured, exc = await _patched_call(
         [{"field": "issued_date", "value": "31-03-2025", "accept_as_is": False}],
         notice=notice,
     )
@@ -195,12 +197,12 @@ def test_accept_extraction_coerces_non_iso_indian_date():
     assert notice.received_date == date(2025, 3, 31)
 
 
-def test_accept_extraction_rejects_unparseable_amount_with_422():
+async def test_accept_extraction_rejects_unparseable_amount_with_422():
     """An amount that cannot be coerced yields a clean 422, never an uncaught 500."""
     from fastapi import HTTPException
 
     notice = _stub_notice()
-    _result, _captured, exc = _patched_call(
+    _result, _captured, exc = await _patched_call(
         [{"field": "tax_demand", "value": "see annexure", "accept_as_is": False}],
         notice=notice,
     )
@@ -208,12 +210,12 @@ def test_accept_extraction_rejects_unparseable_amount_with_422():
     assert exc.status_code == 422
 
 
-def test_accept_extraction_rejects_invalid_authority_with_422():
+async def test_accept_extraction_rejects_invalid_authority_with_422():
     """An authority outside the allowed set is rejected before the CHECK constraint."""
     from fastapi import HTTPException
 
     notice = _stub_notice()
-    _result, _captured, exc = _patched_call(
+    _result, _captured, exc = await _patched_call(
         [{"field": "authority", "value": "CUSTOMS", "accept_as_is": False}],
         notice=notice,
     )
