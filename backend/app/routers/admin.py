@@ -5,12 +5,12 @@ from datetime import date, datetime, timedelta, timezone
 import jwt
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path as PathParam, Query, Request, Response, status
-from sqlalchemy import func
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import get_db
+from app.database import get_async_db
 from app.models.user import User
 from app.models.document import Document
 from app.models.audit_log import AuditLog
@@ -36,48 +36,48 @@ router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 @router.get("/users", response_model=AdminUserListResponse)
 @limiter.limit("30/minute")
-def list_users(
+async def list_users(
     request: Request,
     response: Response,
     page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
     search: str | None = Query(None, max_length=200),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
     """List all users (admin only). Soft-deleted users are excluded."""
-    query = db.query(User).filter(User.deleted_at.is_(None))
+    filters = [User.deleted_at.is_(None)]
 
     if search:
         escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         search_term = f"%{escaped}%"
-        query = query.filter(
+        filters.append(
             (User.email.ilike(search_term)) |
             (User.username.ilike(search_term)) |
             (User.full_name.ilike(search_term))
         )
 
-    total = query.count()
+    total = await db.scalar(select(func.count()).select_from(User).where(*filters))
 
     # Single query with LEFT JOIN subquery to count documents per user,
     # avoiding N+1 (previously ran a separate COUNT per user).
     doc_count_subq = (
-        db.query(
+        select(
             Document.user_id,
             func.count(Document.id).label("doc_count"),
         )
         .group_by(Document.user_id)
         .subquery()
     )
-    users_with_counts = (
-        query
+    result = await db.execute(
+        select(User, func.coalesce(doc_count_subq.c.doc_count, 0).label("doc_count"))
+        .where(*filters)
         .outerjoin(doc_count_subq, User.id == doc_count_subq.c.user_id)
-        .add_columns(func.coalesce(doc_count_subq.c.doc_count, 0).label("doc_count"))
         .order_by(User.created_at.desc())
         .offset((page - 1) * per_page)
         .limit(per_page)
-        .all()
     )
+    users_with_counts = result.all()
 
     user_responses = []
     for u, doc_count in users_with_counts:
@@ -105,23 +105,23 @@ def list_users(
 
 @router.get("/users/{user_id}", response_model=AdminUserResponse)
 @limiter.limit("30/minute")
-def get_user_detail(
+async def get_user_detail(
     request: Request,
     response: Response,
     user_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
     """Get user detail with document count (admin only). Soft-deleted users 404."""
     user = (
-        db.query(User)
-        .filter(User.id == user_id, User.deleted_at.is_(None))
-        .first()
-    )
+        await db.execute(
+            select(User).where(User.id == user_id, User.deleted_at.is_(None))
+        )
+    ).scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    doc_count = db.query(func.count(Document.id)).filter(Document.user_id == user.id).scalar()
+    doc_count = await db.scalar(select(func.count(Document.id)).where(Document.user_id == user.id))
 
     return AdminUserResponse(
         id=user.id,
@@ -140,13 +140,13 @@ def get_user_detail(
 
 @router.patch("/users/{user_id}/role")
 @limiter.limit("10/minute")
-def update_user_role(
+async def update_user_role(
     request: Request,
     response: Response,
     payload: RoleUpdateRequest,
     background_tasks: BackgroundTasks,
     user_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
     """Change a user's role (admin only). Cannot demote self or remove the last admin."""
@@ -157,20 +157,22 @@ def update_user_role(
         )
 
     user = (
-        db.query(User)
-        .filter(User.id == user_id, User.deleted_at.is_(None))
-        .first()
-    )
+        await db.execute(
+            select(User).where(User.id == user_id, User.deleted_at.is_(None))
+        )
+    ).scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Prevent removing the last active admin (deleted users do not count)
     if user.role == "admin" and payload.role != "admin":
-        admin_count = db.query(func.count(User.id)).filter(
-            User.role == "admin",
-            User.is_active == True,  # noqa: E712
-            User.deleted_at.is_(None),
-        ).scalar()
+        admin_count = await db.scalar(
+            select(func.count(User.id)).where(
+                User.role == "admin",
+                User.is_active == True,  # noqa: E712
+                User.deleted_at.is_(None),
+            )
+        )
         if admin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -180,9 +182,9 @@ def update_user_role(
     old_role = user.role
     user.role = payload.role
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to update role")
 
     logger.info("role_changed", user_id=user_id, old_role=old_role, new_role=payload.role, changed_by=current_user.id)
@@ -199,13 +201,13 @@ def update_user_role(
 
 @router.patch("/users/{user_id}/status")
 @limiter.limit("10/minute")
-def update_user_status(
+async def update_user_status(
     request: Request,
     response: Response,
     payload: StatusUpdateRequest,
     background_tasks: BackgroundTasks,
     user_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
     """Activate or deactivate a user (admin only). Cannot deactivate self or the last admin."""
@@ -216,20 +218,22 @@ def update_user_status(
         )
 
     user = (
-        db.query(User)
-        .filter(User.id == user_id, User.deleted_at.is_(None))
-        .first()
-    )
+        await db.execute(
+            select(User).where(User.id == user_id, User.deleted_at.is_(None))
+        )
+    ).scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Prevent deactivating the last active admin (deleted users do not count)
     if user.role == "admin" and not payload.is_active:
-        admin_count = db.query(func.count(User.id)).filter(
-            User.role == "admin",
-            User.is_active == True,  # noqa: E712
-            User.deleted_at.is_(None),
-        ).scalar()
+        admin_count = await db.scalar(
+            select(func.count(User.id)).where(
+                User.role == "admin",
+                User.is_active == True,  # noqa: E712
+                User.deleted_at.is_(None),
+            )
+        )
         if admin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -241,20 +245,19 @@ def update_user_status(
     # Revoke all active refresh tokens when deactivating a user
     if not payload.is_active:
         from app.models.refresh_token import RefreshToken
-        db.query(RefreshToken).filter(
-            RefreshToken.user_id == user_id,
-            RefreshToken.is_revoked == False,  # noqa: E712
-        ).update(
-            {
-                "is_revoked": True,
-                "revoked_at": datetime.now(timezone.utc),
-            }
+        await db.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.is_revoked == False,  # noqa: E712
+            )
+            .values(is_revoked=True, revoked_at=datetime.now(timezone.utc))
         )
 
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to update user status")
 
     status_str = "activated" if payload.is_active else "deactivated"
@@ -272,12 +275,12 @@ def update_user_status(
 
 @router.delete("/users/{user_id}")
 @limiter.limit("5/minute")
-def delete_user(
+async def delete_user(
     request: Request,
     response: Response,
     background_tasks: BackgroundTasks,
     user_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
     """Soft-delete and anonymize a user (admin only).
@@ -296,20 +299,22 @@ def delete_user(
         )
 
     user = (
-        db.query(User)
-        .filter(User.id == user_id, User.deleted_at.is_(None))
-        .first()
-    )
+        await db.execute(
+            select(User).where(User.id == user_id, User.deleted_at.is_(None))
+        )
+    ).scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Last-admin guard mirrors update_user_role/update_user_status.
     if user.role == "admin":
-        admin_count = db.query(func.count(User.id)).filter(
-            User.role == "admin",
-            User.is_active == True,  # noqa: E712
-            User.deleted_at.is_(None),
-        ).scalar()
+        admin_count = await db.scalar(
+            select(func.count(User.id)).where(
+                User.role == "admin",
+                User.is_active == True,  # noqa: E712
+                User.deleted_at.is_(None),
+            )
+        )
         if admin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -334,17 +339,19 @@ def delete_user(
 
     # Revoke all active refresh tokens (mirrors deactivation path).
     from app.models.refresh_token import RefreshToken
-    db.query(RefreshToken).filter(
-        RefreshToken.user_id == user_id,
-        RefreshToken.is_revoked == False,  # noqa: E712
-    ).update(
-        {"is_revoked": True, "revoked_at": now}
+    await db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.is_revoked == False,  # noqa: E712
+        )
+        .values(is_revoked=True, revoked_at=now)
     )
 
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to delete user",
@@ -375,37 +382,37 @@ def delete_user(
 
 @router.get("/stats", response_model=AdminStatsResponse)
 @limiter.limit("20/minute")
-def get_admin_stats(
+async def get_admin_stats(
     request: Request,
     response: Response,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
     """Get system-wide statistics (admin only). Soft-deleted users are excluded."""
-    total_users = db.query(func.count(User.id)).filter(User.deleted_at.is_(None)).scalar()
-    active_users = (
-        db.query(func.count(User.id))
-        .filter(User.is_active == True, User.deleted_at.is_(None))  # noqa: E712
-        .scalar()
+    total_users = await db.scalar(select(func.count(User.id)).where(User.deleted_at.is_(None)))
+    active_users = await db.scalar(
+        select(func.count(User.id))
+        .where(User.is_active == True, User.deleted_at.is_(None))  # noqa: E712
     )
 
     # Single GROUP BY instead of one COUNT per role
     role_rows = (
-        db.query(User.role, func.count(User.id))
-        .filter(User.deleted_at.is_(None))
-        .group_by(User.role)
-        .all()
-    )
+        await db.execute(
+            select(User.role, func.count(User.id))
+            .where(User.deleted_at.is_(None))
+            .group_by(User.role)
+        )
+    ).all()
     users_by_role = {role: count for role, count in role_rows if count > 0}
 
-    total_documents = db.query(func.count(Document.id)).scalar()
+    total_documents = await db.scalar(select(func.count(Document.id)))
 
     # Single GROUP BY instead of one COUNT per status
     status_rows = (
-        db.query(Document.status, func.count(Document.id))
-        .group_by(Document.status)
-        .all()
-    )
+        await db.execute(
+            select(Document.status, func.count(Document.id)).group_by(Document.status)
+        )
+    ).all()
     docs_by_status = {s.value: count for s, count in status_rows if count > 0}
 
     return AdminStatsResponse(
@@ -419,7 +426,7 @@ def get_admin_stats(
 
 @router.get("/audit", response_model=AuditLogListResponse)
 @limiter.limit("30/minute")
-def list_audit_logs(
+async def list_audit_logs(
     request: Request,
     response: Response,
     user_id: int | None = Query(None, ge=1),
@@ -430,34 +437,36 @@ def list_audit_logs(
     date_to: date | None = Query(None),
     page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
     """Query audit logs with optional filters (admin only)."""
-    query = db.query(AuditLog)
+    filters = []
 
     if user_id is not None:
-        query = query.filter(AuditLog.user_id == user_id)
+        filters.append(AuditLog.user_id == user_id)
     if action is not None:
-        query = query.filter(AuditLog.action == action)
+        filters.append(AuditLog.action == action)
     if resource_type is not None:
-        query = query.filter(AuditLog.resource_type == resource_type)
+        filters.append(AuditLog.resource_type == resource_type)
     if resource_id is not None:
-        query = query.filter(AuditLog.resource_id == resource_id)
+        filters.append(AuditLog.resource_id == resource_id)
     if date_from is not None:
-        query = query.filter(AuditLog.created_at >= datetime.combine(date_from, datetime.min.time(), tzinfo=timezone.utc))
+        filters.append(AuditLog.created_at >= datetime.combine(date_from, datetime.min.time(), tzinfo=timezone.utc))
     if date_to is not None:
-        query = query.filter(AuditLog.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc))
+        filters.append(AuditLog.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc))
 
-    total = query.count()
+    total = await db.scalar(select(func.count()).select_from(AuditLog).where(*filters))
 
     items = (
-        query
-        .order_by(AuditLog.created_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
+        await db.execute(
+            select(AuditLog)
+            .where(*filters)
+            .order_by(AuditLog.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+    ).scalars().all()
 
     return AuditLogListResponse(
         items=[AuditLogResponse.model_validate(item) for item in items],
@@ -472,39 +481,41 @@ def list_audit_logs(
 
 @router.get("/early-access", response_model=EarlyAccessListResponse)
 @limiter.limit("30/minute")
-def list_early_access(
+async def list_early_access(
     request: Request,
     response: Response,
     status_filter: str | None = Query(None, alias="status_filter", pattern=r"^(pending|approved|rejected)$"),
     search: str | None = Query(None, max_length=200),
     page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
     """List early access requests (admin only)."""
-    query = db.query(EarlyAccessRequest)
+    filters = []
 
     if status_filter:
-        query = query.filter(EarlyAccessRequest.status == status_filter)
+        filters.append(EarlyAccessRequest.status == status_filter)
 
     if search:
         escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         search_term = f"%{escaped}%"
-        query = query.filter(
+        filters.append(
             (EarlyAccessRequest.email.ilike(search_term))
             | (EarlyAccessRequest.full_name.ilike(search_term))
             | (EarlyAccessRequest.company.ilike(search_term))
         )
 
-    total = query.count()
+    total = await db.scalar(select(func.count()).select_from(EarlyAccessRequest).where(*filters))
     items = (
-        query
-        .order_by(EarlyAccessRequest.created_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
+        await db.execute(
+            select(EarlyAccessRequest)
+            .where(*filters)
+            .order_by(EarlyAccessRequest.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+    ).scalars().all()
 
     return EarlyAccessListResponse(
         items=[EarlyAccessResponse.model_validate(item) for item in items],
@@ -516,18 +527,19 @@ def list_early_access(
 
 @router.get("/early-access/stats")
 @limiter.limit("30/minute")
-def get_early_access_stats(
+async def get_early_access_stats(
     request: Request,
     response: Response,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
     """Get early access request counts by status (admin only)."""
     rows = (
-        db.query(EarlyAccessRequest.status, func.count(EarlyAccessRequest.id))
-        .group_by(EarlyAccessRequest.status)
-        .all()
-    )
+        await db.execute(
+            select(EarlyAccessRequest.status, func.count(EarlyAccessRequest.id))
+            .group_by(EarlyAccessRequest.status)
+        )
+    ).all()
     counts = {s: c for s, c in rows}
     return {
         "pending": counts.get("pending", 0),
@@ -539,17 +551,19 @@ def get_early_access_stats(
 
 @router.patch("/early-access/{request_id}")
 @limiter.limit("10/minute")
-def review_early_access(
+async def review_early_access(
     request: Request,
     response: Response,
     payload: EarlyAccessReviewRequest,
     background_tasks: BackgroundTasks,
     request_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_admin),
 ):
     """Approve or reject an early access request (admin only)."""
-    ea_request = db.query(EarlyAccessRequest).filter(EarlyAccessRequest.id == request_id).first()
+    ea_request = (
+        await db.execute(select(EarlyAccessRequest).where(EarlyAccessRequest.id == request_id))
+    ).scalar_one_or_none()
     if not ea_request:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Early access request not found")
 
@@ -579,9 +593,9 @@ def review_early_access(
         ea_request.invitation_token = invitation_token
 
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to update request",

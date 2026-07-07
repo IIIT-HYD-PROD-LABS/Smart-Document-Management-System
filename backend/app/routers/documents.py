@@ -9,13 +9,14 @@ import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path as PathParam, Request, Response, UploadFile, File, Query, status
 from pydantic import BaseModel, Field, model_validator
 from fastapi.responses import FileResponse
-from sqlalchemy import func, or_, Float
+from sqlalchemy import func, or_, Float, select
 from sqlalchemy.exc import IntegrityError, OperationalError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.utils.rate_limiter import limiter
-from app.database import get_db
+from app.database import get_async_db
 from app.models.user import User
 from app.models.document import Document, DocumentCategory, DocumentStatus
 from app.models.document_permission import DocumentPermission
@@ -35,9 +36,9 @@ logger = structlog.stdlib.get_logger()
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
 
-def _get_accessible_document(document_id: int, user: User, db: Session, require_edit: bool = False) -> Document:
+async def _get_accessible_document(document_id: int, user: User, db: AsyncSession, require_edit: bool = False) -> Document:
     """Get a document if the user is owner, admin, or has shared access."""
-    doc = db.query(Document).filter(Document.id == document_id).first()
+    doc = (await db.execute(select(Document).where(Document.id == document_id))).scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
@@ -50,10 +51,10 @@ def _get_accessible_document(document_id: int, user: User, db: Session, require_
         return doc
 
     # Check shared permissions
-    perm = db.query(DocumentPermission).filter(
+    perm = (await db.execute(select(DocumentPermission).where(
         DocumentPermission.document_id == document_id,
         DocumentPermission.user_id == user.id,
-    ).first()
+    ))).scalar_one_or_none()
 
     if not perm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
@@ -71,7 +72,7 @@ async def upload_document(
     response: Response,
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_editor),
 ):
     """Upload a document file for async OCR + ML classification."""
@@ -134,11 +135,13 @@ async def upload_document(
     # Check for existing document with same original_filename for this user (version control).
     # Use with_for_update() to acquire a row-level lock, preventing race conditions
     # when two concurrent uploads target the same filename.
-    existing_doc = db.query(Document).filter(
-        Document.original_filename == file.filename,
-        Document.user_id == current_user.id,
-        Document.status != DocumentStatus.FAILED,
-    ).with_for_update().first()
+    existing_doc = (await db.execute(
+        select(Document).where(
+            Document.original_filename == file.filename,
+            Document.user_id == current_user.id,
+            Document.status != DocumentStatus.FAILED,
+        ).with_for_update()
+    )).scalar_one_or_none()
 
     # Save file to storage
     try:
@@ -193,13 +196,13 @@ async def upload_document(
 
         doc = existing_doc
         try:
-            db.commit()
+            await db.commit()
         except (IntegrityError, OperationalError):
-            db.rollback()
+            await db.rollback()
             # Clean up the orphaned file that was already saved to storage
             delete_file(file_path, s3_url)
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Concurrent upload conflict. Please retry.")
-        db.refresh(doc)
+        await db.refresh(doc)
     else:
         # Create new document record with PENDING status
         doc = Document(
@@ -215,25 +218,25 @@ async def upload_document(
         )
         db.add(doc)
         try:
-            db.commit()
+            await db.commit()
         except (IntegrityError, OperationalError):
-            db.rollback()
+            await db.rollback()
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to save document record")
-        db.refresh(doc)
+        await db.refresh(doc)
 
     # Dispatch async processing
     try:
         task = process_document_task.delay(doc.id)
         doc.celery_task_id = task.id
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.error("celery_dispatch_failed", document_id=doc.id, error=str(e))
         doc.status = DocumentStatus.FAILED
         doc.extracted_text = "Processing queue unavailable. Please retry later."
         try:
-            db.commit()
+            await db.commit()
         except (IntegrityError, OperationalError):
-            db.rollback()
+            await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Document saved but processing queue is unavailable. Please retry later.",
@@ -258,31 +261,30 @@ async def upload_document(
 
 @router.get("/shared-with-me", response_model=DocumentListResponse)
 @limiter.limit("30/minute")
-def get_shared_documents(
+async def get_shared_documents(
     request: Request,
     response: Response,
     page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get documents shared with the current user (excluding deactivated owners)."""
-    query = (
-        db.query(Document)
+    base_stmt = (
+        select(Document)
         .join(DocumentPermission, DocumentPermission.document_id == Document.id)
         .join(User, Document.user_id == User.id)
-        .filter(
+        .where(
             DocumentPermission.user_id == current_user.id,
             User.is_active == True,  # noqa: E712
         )
     )
-    total = query.count()
-    documents = (
-        query.order_by(Document.created_at.desc())
+    total = await db.scalar(select(func.count()).select_from(base_stmt.subquery()))
+    documents = (await db.execute(
+        base_stmt.order_by(Document.created_at.desc())
         .offset((page - 1) * per_page)
         .limit(per_page)
-        .all()
-    )
+    )).scalars().all()
     return DocumentListResponse(
         documents=[DocumentListItem.model_validate(d) for d in documents],
         total=total,
@@ -293,7 +295,7 @@ def get_shared_documents(
 
 @router.get("/search", response_model=DocumentListResponse)
 @limiter.limit("30/minute")
-def search_documents(
+async def search_documents(
     request: Request,
     response: Response,
     q: str = Query(..., min_length=1, max_length=500, description="Search query"),
@@ -304,7 +306,7 @@ def search_documents(
     amount_max: float | None = Query(None, ge=0, le=1e15, description="Maximum document amount"),
     page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Search documents by extracted text content using PostgreSQL FTS."""
@@ -329,7 +331,7 @@ def search_documents(
             detail="amount_min must not exceed amount_max",
         )
 
-    query = db.query(Document).filter(
+    query = select(Document).where(
         Document.user_id == current_user.id,
         Document.status == DocumentStatus.COMPLETED,
     )
@@ -342,7 +344,7 @@ def search_documents(
         # Escape SQL LIKE wildcards to prevent pattern injection
         escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         search_term = f"%{escaped}%"
-        query = query.filter(
+        query = query.where(
             or_(
                 Document.extracted_text.ilike(search_term),
                 Document.original_filename.ilike(search_term),
@@ -355,7 +357,7 @@ def search_documents(
         # Escape LIKE wildcards for filename search
         escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         filename_term = f"%{escaped}%"
-        query = query.filter(
+        query = query.where(
             or_(
                 Document.search_vector.op("@@")(search_query),    # FTS: stemmed exact match
                 Document.extracted_text.op("%")(q),               # trigram: typo tolerance
@@ -365,14 +367,14 @@ def search_documents(
 
     # Category filter (ignore invalid categories silently)
     if category and category.lower() in {c.value for c in DocumentCategory}:
-        query = query.filter(Document.category == DocumentCategory(category.lower()))
+        query = query.where(Document.category == DocumentCategory(category.lower()))
 
     # Date filters (Pydantic auto-validates YYYY-MM-DD format, returns 422 on bad input)
     if date_from:
-        query = query.filter(Document.created_at >= datetime.combine(date_from, datetime.min.time()).replace(tzinfo=timezone.utc))
+        query = query.where(Document.created_at >= datetime.combine(date_from, datetime.min.time()).replace(tzinfo=timezone.utc))
     if date_to:
         # +1 day for inclusive end boundary (include all of date_to, not just midnight)
-        query = query.filter(Document.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time()).replace(tzinfo=timezone.utc))
+        query = query.where(Document.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time()).replace(tzinfo=timezone.utc))
 
     # Amount filters with NULL guard + safe numeric cast
     # Column is JSON (not JSONB), so use json_extract_path_text for ->> equivalent
@@ -381,37 +383,35 @@ def search_documents(
         amount_text = func.json_extract_path_text(Document.extracted_metadata, 'amount')
         amount_is_numeric = amount_text.op('~')(r'^-?\d+\.?\d*$')
         if amount_min is not None:
-            query = query.filter(
+            query = query.where(
                 Document.extracted_metadata.isnot(None),
                 amount_is_numeric,
                 amount_text.cast(Float) >= amount_min,
             )
         if amount_max is not None:
-            query = query.filter(
+            query = query.where(
                 Document.extracted_metadata.isnot(None),
                 amount_is_numeric,
                 amount_text.cast(Float) <= amount_max,
             )
 
-    total = query.count()
+    total = await db.scalar(select(func.count()).select_from(query.subquery()))
 
     # Order by ts_rank for FTS/trigram queries; by created_at for short fallback queries
     if rank_expr is not None:
-        documents = (
+        documents = (await db.execute(
             query
             .order_by(rank_expr.desc())
             .offset((page - 1) * per_page)
             .limit(per_page)
-            .all()
-        )
+        )).scalars().all()
     else:
-        documents = (
+        documents = (await db.execute(
             query
             .order_by(Document.created_at.desc())
             .offset((page - 1) * per_page)
             .limit(per_page)
-            .all()
-        )
+        )).scalars().all()
 
     return DocumentListResponse(
         documents=[DocumentListItem.model_validate(d) for d in documents],
@@ -423,13 +423,13 @@ def search_documents(
 
 @router.get("/category/{category}", response_model=DocumentListResponse)
 @limiter.limit("30/minute")
-def get_documents_by_category(
+async def get_documents_by_category(
     request: Request,
     response: Response,
     category: str,
     page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get all documents filtered by category."""
@@ -441,19 +441,18 @@ def get_documents_by_category(
             detail=f"Invalid category '{category}'. Valid: {[c.value for c in DocumentCategory]}",
         )
 
-    query = db.query(Document).filter(
+    query = select(Document).where(
         Document.user_id == current_user.id,
         Document.category == cat_enum,
     )
 
-    total = query.count()
-    documents = (
+    total = await db.scalar(select(func.count()).select_from(query.subquery()))
+    documents = (await db.execute(
         query
         .order_by(Document.created_at.desc())
         .offset((page - 1) * per_page)
         .limit(per_page)
-        .all()
-    )
+    )).scalars().all()
 
     return DocumentListResponse(
         documents=[DocumentListItem.model_validate(d) for d in documents],
@@ -465,39 +464,37 @@ def get_documents_by_category(
 
 @router.get("/stats", response_model=DocumentStats)
 @limiter.limit("20/minute")
-def get_document_stats(
+async def get_document_stats(
     request: Request,
     response: Response,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get document statistics for the dashboard."""
     # Single GROUP BY instead of one COUNT per category (was N+1)
-    cat_rows = (
-        db.query(Document.category, func.count(Document.id))
-        .filter(Document.user_id == current_user.id)
+    cat_rows = (await db.execute(
+        select(Document.category, func.count(Document.id))
+        .where(Document.user_id == current_user.id)
         .group_by(Document.category)
-        .all()
-    )
+    )).all()
     category_counts = {cat.value: count for cat, count in cat_rows if count > 0}
     total = sum(category_counts.values())
 
     # Recent uploads (last 5)
-    recent = (
-        db.query(Document)
-        .filter(Document.user_id == current_user.id)
+    recent = (await db.execute(
+        select(Document)
+        .options(selectinload(Document.versions))
+        .where(Document.user_id == current_user.id)
         .order_by(Document.created_at.desc())
         .limit(5)
-        .all()
-    )
+    )).scalars().all()
 
     # Single GROUP BY instead of separate COUNT per status (was N+1)
-    status_rows = (
-        db.query(Document.status, func.count(Document.id))
-        .filter(Document.user_id == current_user.id)
+    status_rows = (await db.execute(
+        select(Document.status, func.count(Document.id))
+        .where(Document.user_id == current_user.id)
         .group_by(Document.status)
-        .all()
-    )
+    )).all()
     status_counts = {s.value: count for s, count in status_rows}
 
     return DocumentStats(
@@ -512,11 +509,11 @@ def get_document_stats(
 
 @router.get("/stats/trends", response_model=DocumentTrends)
 @limiter.limit("20/minute")
-def get_document_trends(
+async def get_document_trends(
     request: Request,
     response: Response,
     months: int = Query(12, ge=1, le=24),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get monthly document upload trends for the dashboard chart."""
@@ -525,19 +522,18 @@ def get_document_trends(
     now = datetime.now(timezone.utc)
     start = (now - relativedelta(months=months - 1)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    rows = (
-        db.query(
+    rows = (await db.execute(
+        select(
             func.date_trunc("month", Document.created_at).label("month"),
             func.count().label("count"),
         )
-        .filter(
+        .where(
             Document.user_id == current_user.id,
             Document.created_at >= start,
         )
         .group_by("month")
         .order_by("month")
-        .all()
-    )
+    )).all()
 
     # Build a lookup from query results
     counts_by_month: dict[str, int] = {}
@@ -561,7 +557,7 @@ _VALID_SOURCE_FILTERS = ("manual", "gmail", "portal", "all")
 
 @router.get("/all", response_model=DocumentListResponse)
 @limiter.limit("30/minute")
-def get_all_documents(
+async def get_all_documents(
     request: Request,
     response: Response,
     page: int = Query(1, ge=1, le=10000),
@@ -573,7 +569,7 @@ def get_all_documents(
             "'gmail' covers both attachments and synthetic body documents."
         ),
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get all documents for the current user.
@@ -592,26 +588,25 @@ def get_all_documents(
             ),
         )
 
-    query = db.query(Document).filter(Document.user_id == current_user.id)
+    query = select(Document).where(Document.user_id == current_user.id)
 
     if source_filter == "manual":
-        query = query.filter(Document.source == "manual")
+        query = query.where(Document.source == "manual")
     elif source_filter == "gmail":
         # Both attachments (source='gmail') and synthetic body docs
         # (source='gmail_body') belong to the Gmail provenance bucket.
-        query = query.filter(Document.source.in_(("gmail", "gmail_body")))
+        query = query.where(Document.source.in_(("gmail", "gmail_body")))
     elif source_filter == "portal":
-        query = query.filter(Document.source == "portal")
+        query = query.where(Document.source == "portal")
     # source_filter == "all" -> no extra filter
 
-    total = query.count()
-    documents = (
+    total = await db.scalar(select(func.count()).select_from(query.subquery()))
+    documents = (await db.execute(
         query
         .order_by(Document.created_at.desc())
         .offset((page - 1) * per_page)
         .limit(per_page)
-        .all()
-    )
+    )).scalars().all()
 
     return DocumentListResponse(
         documents=[DocumentListItem.model_validate(d) for d in documents],
@@ -623,12 +618,12 @@ def get_all_documents(
 
 @router.post("/batch-delete", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
-def batch_delete_documents(
+async def batch_delete_documents(
     request: Request,
     response: Response,
     ids: list[int],
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_editor),
 ):
     """Delete multiple documents at once."""
@@ -642,10 +637,14 @@ def batch_delete_documents(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="All document IDs must be positive integers.",
         )
-    docs = db.query(Document).filter(
-        Document.id.in_(ids),
-        Document.user_id == current_user.id,
-    ).all()
+    docs = (await db.execute(
+        select(Document)
+        .options(selectinload(Document.versions))
+        .where(
+            Document.id.in_(ids),
+            Document.user_id == current_user.id,
+        )
+    )).scalars().all()
     deleted = []
     for doc in docs:
         background_tasks.add_task(
@@ -658,39 +657,38 @@ def batch_delete_documents(
         for version in doc.versions:
             delete_file(version.file_path, version.s3_url)
         delete_file(doc.file_path, doc.s3_url)
-        db.delete(doc)
+        await db.delete(doc)
         deleted.append(doc.id)
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to delete documents")
     return {"deleted": deleted, "count": len(deleted)}
 
 
 @router.get("/{document_id}/versions", response_model=DocumentVersionListResponse)
 @limiter.limit("30/minute")
-def list_document_versions(
+async def list_document_versions(
     request: Request,
     response: Response,
     document_id: int = PathParam(..., ge=1),
     page: int = Query(1, ge=1, le=10000),
     per_page: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """List all versions of a document, paginated."""
-    doc = _get_accessible_document(document_id, current_user, db)
+    doc = await _get_accessible_document(document_id, current_user, db)
 
-    query = db.query(DocumentVersion).filter(DocumentVersion.document_id == document_id)
-    total = query.count()
-    versions = (
+    query = select(DocumentVersion).where(DocumentVersion.document_id == document_id)
+    total = await db.scalar(select(func.count()).select_from(query.subquery()))
+    versions = (await db.execute(
         query
         .order_by(DocumentVersion.version_number.desc())
         .offset((page - 1) * per_page)
         .limit(per_page)
-        .all()
-    )
+    )).scalars().all()
 
     # The versions table stores snapshots of *previous* states, so the live
     # document's current_version is never in this table.  Mark the most recent
@@ -713,26 +711,26 @@ def list_document_versions(
 
 @router.post("/{document_id}/rollback", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
-def rollback_document(
+async def rollback_document(
     request: Request,
     response: Response,
     payload: RollbackRequest,
     background_tasks: BackgroundTasks,
     document_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_editor),
 ):
     """Rollback a document to a previous version.
 
     Snapshots the current state as a new version, then restores the target version.
     """
-    doc = _get_accessible_document(document_id, current_user, db, require_edit=True)
+    doc = await _get_accessible_document(document_id, current_user, db, require_edit=True)
 
     # Find the target version
-    target_version = db.query(DocumentVersion).filter(
+    target_version = (await db.execute(select(DocumentVersion).where(
         DocumentVersion.document_id == document_id,
         DocumentVersion.version_number == payload.version_number,
-    ).first()
+    ))).scalar_one_or_none()
     if not target_version:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -794,11 +792,11 @@ def rollback_document(
     doc.current_version = new_version_number
 
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to rollback document")
-    db.refresh(doc)
+    await db.refresh(doc)
 
     background_tasks.add_task(
         log_audit_event, user_id=current_user.id, action="rollback",
@@ -817,23 +815,23 @@ def rollback_document(
 
 @router.get("/{document_id}/versions/{version_number}/download")
 @limiter.limit("30/minute")
-def download_document_version(
+async def download_document_version(
     request: Request,
     response: Response,
     document_id: int = PathParam(..., ge=1),
     version_number: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Download a specific version of a document file."""
     from app.services.storage_service import get_presigned_url, _validate_path_inside_upload_dir
 
-    _get_accessible_document(document_id, current_user, db)  # access control check
+    await _get_accessible_document(document_id, current_user, db)  # access control check
 
-    version = db.query(DocumentVersion).filter(
+    version = (await db.execute(select(DocumentVersion).where(
         DocumentVersion.document_id == document_id,
         DocumentVersion.version_number == version_number,
-    ).first()
+    ))).scalar_one_or_none()
     if not version:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -862,18 +860,18 @@ def download_document_version(
 
 @router.get("/{document_id}/status")
 @limiter.limit("120/minute")
-def get_document_status(
+async def get_document_status(
     request: Request,
     response: Response,
     document_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get processing status of a document."""
     from celery.result import AsyncResult
     from app.tasks import celery_app
 
-    doc = _get_accessible_document(document_id, current_user, db)
+    doc = await _get_accessible_document(document_id, current_user, db)
 
     result = {
         "document_id": doc.id,
@@ -895,18 +893,18 @@ def get_document_status(
 
 @router.get("/{document_id}/download")
 @limiter.limit("30/minute")
-def download_document(
+async def download_document(
     request: Request,
     response: Response,
     background_tasks: BackgroundTasks,
     document_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Download the file for a specific document (authenticated)."""
     from app.services.storage_service import get_presigned_url, _validate_path_inside_upload_dir
 
-    doc = _get_accessible_document(document_id, current_user, db)
+    doc = await _get_accessible_document(document_id, current_user, db)
 
     background_tasks.add_task(
         log_audit_event, user_id=current_user.id, action="download",
@@ -937,17 +935,17 @@ def download_document(
 
 @router.get("/{document_id}/preview")
 @limiter.limit("30/minute")
-def preview_document(
+async def preview_document(
     request: Request,
     response: Response,
     document_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Preview a document inline (Content-Disposition: inline)."""
     from app.services.storage_service import get_presigned_url, _validate_path_inside_upload_dir
 
-    doc = _get_accessible_document(document_id, current_user, db)
+    doc = await _get_accessible_document(document_id, current_user, db)
 
     if doc.s3_url and settings.USE_S3:
         s3_key = doc.s3_url.split(".amazonaws.com/")[-1]
@@ -987,24 +985,24 @@ class HighlightItem(BaseModel):
 
 @router.put("/{document_id}/highlights")
 @limiter.limit("20/minute")
-def save_highlights(
+async def save_highlights(
     request: Request,
     response: Response,
     highlights: list[HighlightItem],
     document_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_editor),
 ):
     """Save user-highlighted text selections for a document."""
     if len(highlights) > 500:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Too many highlights (max 500)")
-    doc = _get_accessible_document(document_id, current_user, db, require_edit=True)
+    doc = await _get_accessible_document(document_id, current_user, db, require_edit=True)
 
     doc.highlighted_text = [h.model_dump() for h in highlights]
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to save highlights")
 
     return {"detail": "Highlights saved", "count": len(highlights)}
@@ -1012,31 +1010,30 @@ def save_highlights(
 
 @router.get("/{document_id}", response_model=DocumentResponse)
 @limiter.limit("60/minute")
-def get_document(
+async def get_document(
     request: Request,
     response: Response,
     document_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get a single document by ID."""
     # Eager-load versions to avoid N+1 lazy load when DocumentResponse
     # computes total_versions via the versions relationship.
-    doc = (
-        db.query(Document)
+    doc = (await db.execute(
+        select(Document)
         .options(selectinload(Document.versions))
-        .filter(Document.id == document_id)
-        .first()
-    )
+        .where(Document.id == document_id)
+    )).scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Reuse existing access-control logic: owner, admin, or shared permission
     if doc.user_id != current_user.id and current_user.role != "admin":
-        perm = db.query(DocumentPermission).filter(
+        perm = (await db.execute(select(DocumentPermission).where(
             DocumentPermission.document_id == document_id,
             DocumentPermission.user_id == current_user.id,
-        ).first()
+        ))).scalar_one_or_none()
         if not perm:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
@@ -1045,28 +1042,28 @@ def get_document(
 
 @router.post("/{document_id}/share")
 @limiter.limit("20/minute")
-def share_document(
+async def share_document(
     request: Request,
     response: Response,
     payload: ShareDocumentRequest,
     background_tasks: BackgroundTasks,
     document_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_editor),
 ):
     """Share a document with another user by email."""
-    doc = db.query(Document).filter(
+    doc = (await db.execute(select(Document).where(
         Document.id == document_id,
         Document.user_id == current_user.id,
-    ).first()
+    ))).scalar_one_or_none()
     if not doc and current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     if not doc:
-        doc = db.query(Document).filter(Document.id == document_id).first()
+        doc = (await db.execute(select(Document).where(Document.id == document_id))).scalar_one_or_none()
         if not doc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-    target_user = db.query(User).filter(User.email == payload.email).first()
+    target_user = (await db.execute(select(User).where(User.email == payload.email))).scalar_one_or_none()
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
@@ -1079,17 +1076,17 @@ def share_document(
     if target_user.id == doc.user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot share with document owner")
 
-    existing = db.query(DocumentPermission).filter(
+    existing = (await db.execute(select(DocumentPermission).where(
         DocumentPermission.document_id == document_id,
         DocumentPermission.user_id == target_user.id,
-    ).first()
+    ))).scalar_one_or_none()
 
     if existing:
         existing.permission = payload.permission
         try:
-            db.commit()
+            await db.commit()
         except (IntegrityError, OperationalError):
-            db.rollback()
+            await db.rollback()
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to update permission")
         background_tasks.add_task(
             log_audit_event, user_id=current_user.id, action="share",
@@ -1107,11 +1104,11 @@ def share_document(
     )
     db.add(perm)
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Permission already exists")
-    db.refresh(perm)
+    await db.refresh(perm)
     background_tasks.add_task(
         log_audit_event, user_id=current_user.id, action="share",
         resource_type="document", resource_id=document_id,
@@ -1123,16 +1120,16 @@ def share_document(
 
 @router.get("/{document_id}/permissions", response_model=list[DocumentPermissionResponse])
 @limiter.limit("30/minute")
-def get_document_permissions(
+async def get_document_permissions(
     request: Request,
     response: Response,
     document_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """List who has access to a document."""
     # Validate document exists first (prevents silent empty-list on bogus IDs for admins)
-    doc = db.query(Document).filter(Document.id == document_id).first()
+    doc = (await db.execute(select(Document).where(Document.id == document_id))).scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
@@ -1141,12 +1138,11 @@ def get_document_permissions(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Single JOIN instead of one SELECT per permission (was N+1)
-    rows = (
-        db.query(DocumentPermission, User)
+    rows = (await db.execute(
+        select(DocumentPermission, User)
         .join(User, DocumentPermission.user_id == User.id)
-        .filter(DocumentPermission.document_id == document_id)
-        .all()
-    )
+        .where(DocumentPermission.document_id == document_id)
+    )).all()
 
     result = []
     for p, user in rows:
@@ -1165,18 +1161,18 @@ def get_document_permissions(
 
 @router.delete("/{document_id}/share/{permission_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("20/minute")
-def revoke_share(
+async def revoke_share(
     request: Request,
     response: Response,
     background_tasks: BackgroundTasks,
     document_id: int = PathParam(..., ge=1),
     permission_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_editor),
 ):
     """Revoke a document share."""
     # Validate document exists first
-    doc = db.query(Document).filter(Document.id == document_id).first()
+    doc = (await db.execute(select(Document).where(Document.id == document_id))).scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
@@ -1184,18 +1180,18 @@ def revoke_share(
     if doc.user_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-    perm = db.query(DocumentPermission).filter(
+    perm = (await db.execute(select(DocumentPermission).where(
         DocumentPermission.id == permission_id,
         DocumentPermission.document_id == document_id,
-    ).first()
+    ))).scalar_one_or_none()
     if not perm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found")
 
-    db.delete(perm)
+    await db.delete(perm)
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to revoke permission")
 
     background_tasks.add_task(
@@ -1208,17 +1204,21 @@ def revoke_share(
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("10/minute")
-def delete_document(
+async def delete_document(
     request: Request,
     response: Response,
     background_tasks: BackgroundTasks,
     document_id: int = PathParam(..., ge=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(require_editor),
 ):
     """Delete a document and its associated file."""
     # Only document owner or admin can delete (shared edit users cannot)
-    doc = db.query(Document).filter(Document.id == document_id).first()
+    doc = (await db.execute(
+        select(Document)
+        .options(selectinload(Document.versions))
+        .where(Document.id == document_id)
+    )).scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     if doc.user_id != current_user.id and current_user.role != "admin":
@@ -1239,9 +1239,9 @@ def delete_document(
     delete_file(doc.file_path, doc.s3_url)
 
     # Delete from database
-    db.delete(doc)
+    await db.delete(doc)
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to delete document")

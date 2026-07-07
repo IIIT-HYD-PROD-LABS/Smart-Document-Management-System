@@ -11,11 +11,12 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import get_db
+from app.database import get_async_db
 from app.models.early_access import EarlyAccessRequest
 from app.models.user import User
 from app.models.refresh_token import RefreshToken
@@ -53,7 +54,7 @@ from app.services import mfa_service, lockout_service
 _FIRST_USER_LOCK_KEY = 7398126503
 
 
-def _safe_role(db: Session) -> str:
+async def _safe_role(db: AsyncSession) -> str:
     """Decide register role with a PG advisory lock to dodge the count==0 race.
 
     Three call sites (local register, Google callback, Microsoft callback)
@@ -63,15 +64,17 @@ def _safe_role(db: Session) -> str:
     non-PG (test SQLite) and on inactive-user-only databases (M-3).
     """
     try:
-        db.execute(sa_text(f"SELECT pg_advisory_xact_lock({_FIRST_USER_LOCK_KEY})"))
+        await db.execute(sa_text(f"SELECT pg_advisory_xact_lock({_FIRST_USER_LOCK_KEY})"))
     except Exception:  # pragma: no cover - non-PG fallback
         pass
-    is_first = db.query(User).filter(User.is_active == True).count() == 0  # noqa: E712
-    return "admin" if is_first else "editor"
+    count = await db.scalar(
+        select(func.count()).select_from(User).where(User.is_active == True)  # noqa: E712
+    )
+    return "admin" if count == 0 else "editor"
 
 
-def _consume_invitation(
-    db: Session, *, token: str | None, email: str
+async def _consume_invitation(
+    db: AsyncSession, *, token: str | None, email: str
 ) -> EarlyAccessRequest | None:
     """Validate + atomically consume an early-access invitation JWT.
 
@@ -105,15 +108,15 @@ def _consume_invitation(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email does not match the invitation.",
         )
-    ea = (
-        db.query(EarlyAccessRequest)
-        .filter(
+    result = await db.execute(
+        select(EarlyAccessRequest)
+        .where(
             EarlyAccessRequest.id == token_payload.get("ea_id"),
             EarlyAccessRequest.status == "approved",
         )
         .with_for_update()
-        .first()
     )
+    ea = result.scalar_one_or_none()
     if not ea or not ea.invitation_token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -166,7 +169,7 @@ def _consume_mfa_challenge_jti(jti: str) -> bool:
         return _mark_exchange_used(jti)
 
 
-def _create_token_pair(user: User, db: Session) -> TokenPairResponse:
+async def _create_token_pair(user: User, db: AsyncSession) -> TokenPairResponse:
     """Create an access + refresh token pair for a user and persist the refresh token."""
     access_token = create_access_token(data={"sub": str(user.id), "role": user.role})
     refresh_token_value, expires_at = create_refresh_token()
@@ -178,9 +181,9 @@ def _create_token_pair(user: User, db: Session) -> TokenPairResponse:
     )
     db.add(db_refresh_token)
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to create session")
 
     return TokenPairResponse(
@@ -192,25 +195,25 @@ def _create_token_pair(user: User, db: Session) -> TokenPairResponse:
 
 @router.post("/register", response_model=TokenPairResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def register(request: Request, response: Response, payload: UserRegister, db: Session = Depends(get_db)):
+async def register(request: Request, response: Response, payload: UserRegister, db: AsyncSession = Depends(get_async_db)):
     """Register a new user account and return a token pair.
 
     Gate: after the bootstrap admin exists, registration requires an
     approved early-access invitation JWT. Without this, the public
     /register endpoint trivially bypassed the early-access workflow.
     """
-    if db.query(User).filter(User.email == payload.email).first():
+    if (await db.execute(select(User).where(User.email == payload.email))).scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered",
         )
-    if db.query(User).filter(User.username == payload.username).first():
+    if (await db.execute(select(User).where(User.username == payload.username))).scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username already taken",
         )
 
-    role = _safe_role(db)
+    role = await _safe_role(db)
     # Bootstrap exception: a fresh DB has no admin yet, allow self-register.
     # Any subsequent register MUST present a valid invitation token.
     if role != "admin":
@@ -219,7 +222,7 @@ def register(request: Request, response: Response, payload: UserRegister, db: Se
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Registration requires an invitation. Request early access first.",
             )
-        _consume_invitation(db, token=payload.invitation_token, email=payload.email)
+        await _consume_invitation(db, token=payload.invitation_token, email=payload.email)
 
     user = User(
         email=payload.email,
@@ -230,25 +233,25 @@ def register(request: Request, response: Response, payload: UserRegister, db: Se
     )
     db.add(user)
     try:
-        db.commit()
+        await db.commit()
     except IntegrityError:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email or username already registered")
     except OperationalError:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database temporarily unavailable")
-    db.refresh(user)
+    await db.refresh(user)
 
-    return _create_token_pair(user, db)
+    return await _create_token_pair(user, db)
 
 
 @router.post("/accept-invite", response_model=TokenPairResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def accept_invite(
+async def accept_invite(
     request: Request,
     response: Response,
     payload: AcceptInviteRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Complete a tenant-team invitation: set password + activate + sign in.
 
@@ -256,25 +259,25 @@ def accept_invite(
     is active) returns 400 with a "sign in normally" hint, rather than
     silently overwriting the password.
     """
-    from app.services.invitation_service import InvitationError, accept_invite as _accept
+    from app.services.invitation_service import InvitationError, accept_invite_async as _accept
 
     try:
-        user = _accept(db, token=payload.token, new_password=payload.password)
+        user = await _accept(db, token=payload.token, new_password=payload.password)
     except InvitationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
         )
 
-    return _create_token_pair(user, db)
+    return await _create_token_pair(user, db)
 
 
 @router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("3/minute")
-def forgot_password(
+async def forgot_password(
     request: Request,
     response: Response,
     payload: ForgotPasswordRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Initiate a self-service password reset.
 
@@ -292,11 +295,10 @@ def forgot_password(
     from app.services.audit_service import log_audit_event
     from app.utils.email import send_password_reset_email
 
-    user = (
-        db.query(User)
-        .filter(User.email == payload.email, User.is_active == True)  # noqa: E712
-        .first()
+    result = await db.execute(
+        select(User).where(User.email == payload.email, User.is_active == True)  # noqa: E712
     )
+    user = result.scalar_one_or_none()
     if user is None or (user.auth_provider and user.auth_provider != "local"):
         # Either no user, deactivated, or OAuth-only. Always log + 204.
         log_audit_event(
@@ -330,11 +332,11 @@ def forgot_password(
 
 @router.post("/reset-password", response_model=TokenPairResponse)
 @limiter.limit("5/minute")
-def reset_password(
+async def reset_password(
     request: Request,
     response: Response,
     payload: ResetPasswordRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Complete a password reset and sign the user in.
 
@@ -348,12 +350,12 @@ def reset_password(
     """
     from app.services.password_reset_service import (
         PasswordResetError,
-        consume_reset_token,
+        consume_reset_token_async,
     )
     from app.services.audit_service import log_audit_event
 
     try:
-        user = consume_reset_token(
+        user = await consume_reset_token_async(
             db, token=payload.token, new_password=payload.password
         )
     except PasswordResetError as e:
@@ -368,12 +370,12 @@ def reset_password(
         resource_id=user.id,
         details={},
     )
-    return _create_token_pair(user, db)
+    return await _create_token_pair(user, db)
 
 
 @router.post("/login", response_model=Union[TokenPairResponse, MfaChallengeResponse])
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def login(request: Request, response: Response, payload: UserLogin, db: Session = Depends(get_db)):
+async def login(request: Request, response: Response, payload: UserLogin, db: AsyncSession = Depends(get_async_db)):
     """Authenticate a user.
 
     Returns a token pair, or an MFA challenge (HTTP 200 with ``mfa_required``)
@@ -383,7 +385,8 @@ def login(request: Request, response: Response, payload: UserLogin, db: Session 
     """
     from app.services.audit_service import log_audit_event
 
-    user = db.query(User).filter(User.email == payload.email).first()
+    result = await db.execute(select(User).where(User.email == payload.email))
+    user = result.scalar_one_or_none()
     if not user:
         logger.warning("login_failed", reason="unknown_email")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
@@ -412,7 +415,7 @@ def login(request: Request, response: Response, payload: UserLogin, db: Session 
 
     if not user.hashed_password or not verify_password(payload.password, user.hashed_password):
         locked_now = lockout_service.register_failure(user)
-        db.commit()
+        await db.commit()
         logger.warning("login_failed", user_id=user.id, reason="bad_password",
                        failed_count=user.failed_login_count, locked=locked_now)
         log_audit_event(user_id=user.id, action="login_failed", resource_type="user",
@@ -440,14 +443,14 @@ def login(request: Request, response: Response, payload: UserLogin, db: Session 
     # Full (non-MFA) login succeeded — clear any accumulated failure/lock state.
     if user.failed_login_count or user.locked_until:
         lockout_service.reset(user)
-        db.commit()
+        await db.commit()
 
-    return _create_token_pair(user, db)
+    return await _create_token_pair(user, db)
 
 
 @router.post("/mfa/verify", response_model=TokenPairResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def mfa_verify(request: Request, response: Response, payload: MfaVerifyRequest, db: Session = Depends(get_db)):
+async def mfa_verify(request: Request, response: Response, payload: MfaVerifyRequest, db: AsyncSession = Depends(get_async_db)):
     """Second step of MFA login: exchange the challenge token plus a TOTP or
     backup code for a token pair."""
     from app.services.audit_service import log_audit_event
@@ -458,7 +461,8 @@ def mfa_verify(request: Request, response: Response, payload: MfaVerifyRequest, 
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Invalid or expired MFA session. Sign in again.")
 
-    user = db.query(User).filter(User.id == user_id).first()
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
     if user is None or not user.is_active or not user.mfa_enabled:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Invalid or expired MFA session. Sign in again.")
@@ -483,7 +487,7 @@ def mfa_verify(request: Request, response: Response, payload: MfaVerifyRequest, 
 
     if not ok:
         locked_now = lockout_service.register_failure(user)
-        db.commit()
+        await db.commit()
         logger.warning("mfa_failed", user_id=user.id, failed_count=user.failed_login_count, locked=locked_now)
         log_audit_event(user_id=user.id, action="mfa_challenge_failed", resource_type="user",
                         resource_id=user.id, details={"failed_count": user.failed_login_count})
@@ -511,18 +515,18 @@ def mfa_verify(request: Request, response: Response, payload: MfaVerifyRequest, 
     # roll back the single-use consumption and allow the code to be replayed.
     lockout_service.reset(user)
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                             detail="Failed to complete MFA verification")
     logger.info("mfa_verified", user_id=user.id)
-    return _create_token_pair(user, db)
+    return await _create_token_pair(user, db)
 
 
 @router.post("/totp/enroll", response_model=TotpEnrollResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def totp_enroll(request: Request, response: Response, db: Session = Depends(get_db),
+async def totp_enroll(request: Request, response: Response, db: AsyncSession = Depends(get_async_db),
                 current_user: User = Depends(get_current_user)):
     """Begin TOTP enrollment: store an encrypted *pending* secret and return the
     provisioning material. MFA stays inactive until /totp/confirm succeeds."""
@@ -534,7 +538,7 @@ def totp_enroll(request: Request, response: Response, db: Session = Depends(get_
                             detail="MFA is already enabled. Disable it first to re-enroll.")
     secret = mfa_service.generate_totp_secret()
     current_user.totp_secret_enc = mfa_service.encrypt_secret(secret)
-    db.commit()
+    await db.commit()
     return TotpEnrollResponse(
         secret=secret,
         otpauth_uri=mfa_service.provisioning_uri(secret, current_user.email),
@@ -544,8 +548,8 @@ def totp_enroll(request: Request, response: Response, db: Session = Depends(get_
 
 @router.post("/totp/confirm", response_model=BackupCodesResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def totp_confirm(request: Request, response: Response, payload: TotpConfirmRequest,
-                 db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def totp_confirm(request: Request, response: Response, payload: TotpConfirmRequest,
+                 db: AsyncSession = Depends(get_async_db), current_user: User = Depends(get_current_user)):
     """Finish enrollment: verify a code against the pending secret, enable MFA,
     and return one-time backup codes (shown exactly once)."""
     from app.services.audit_service import log_audit_event
@@ -568,19 +572,24 @@ def totp_confirm(request: Request, response: Response, payload: TotpConfirmReque
     current_user.mfa_enrolled_at = datetime.now(timezone.utc)
     # Revoke outstanding refresh tokens so other sessions must re-auth through
     # the new MFA gate; a token stolen pre-enrollment must not survive it.
-    db.query(RefreshToken).filter(
-        RefreshToken.user_id == current_user.id,
-        RefreshToken.is_revoked == False,  # noqa: E712
-    ).update({"is_revoked": True, "revoked_at": datetime.now(timezone.utc)}, synchronize_session=False)
-    db.commit()
+    await db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == current_user.id,
+            RefreshToken.is_revoked == False,  # noqa: E712
+        )
+        .values(is_revoked=True, revoked_at=datetime.now(timezone.utc))
+        .execution_options(synchronize_session=False)
+    )
+    await db.commit()
     log_audit_event(user_id=current_user.id, action="mfa_enabled", resource_type="user", resource_id=current_user.id)
     return BackupCodesResponse(backup_codes=codes)
 
 
 @router.post("/totp/disable", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def totp_disable(request: Request, response: Response, payload: MfaDisableRequest,
-                 db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def totp_disable(request: Request, response: Response, payload: MfaDisableRequest,
+                 db: AsyncSession = Depends(get_async_db), current_user: User = Depends(get_current_user)):
     """Disable MFA. Requires a current TOTP or backup code so a hijacked session
     that never cleared the second factor cannot strip MFA off the account."""
     from app.services.audit_service import log_audit_event
@@ -602,18 +611,23 @@ def totp_disable(request: Request, response: Response, payload: MfaDisableReques
     current_user.mfa_enrolled_at = None
     # Revoke outstanding refresh tokens so other sessions must re-auth after the
     # MFA state change rather than riding tokens minted under the old posture.
-    db.query(RefreshToken).filter(
-        RefreshToken.user_id == current_user.id,
-        RefreshToken.is_revoked == False,  # noqa: E712
-    ).update({"is_revoked": True, "revoked_at": datetime.now(timezone.utc)}, synchronize_session=False)
-    db.commit()
+    await db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == current_user.id,
+            RefreshToken.is_revoked == False,  # noqa: E712
+        )
+        .values(is_revoked=True, revoked_at=datetime.now(timezone.utc))
+        .execution_options(synchronize_session=False)
+    )
+    await db.commit()
     log_audit_event(user_id=current_user.id, action="mfa_disabled", resource_type="user", resource_id=current_user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/refresh", response_model=TokenPairResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def refresh(request: Request, response: Response, payload: RefreshTokenRequest, db: Session = Depends(get_db)):
+async def refresh(request: Request, response: Response, payload: RefreshTokenRequest, db: AsyncSession = Depends(get_async_db)):
     """Exchange a valid refresh token for a new access + refresh token pair.
 
     Implements token rotation with reuse detection:
@@ -621,12 +635,12 @@ def refresh(request: Request, response: Response, payload: RefreshTokenRequest, 
     - If a revoked (already-used) token is presented, ALL tokens for that user
       are revoked immediately to protect against token theft.
     """
-    db_token = (
-        db.query(RefreshToken)
-        .filter(RefreshToken.token == payload.refresh_token)
+    result = await db.execute(
+        select(RefreshToken)
+        .where(RefreshToken.token == payload.refresh_token)
         .with_for_update()  # Row-level lock prevents concurrent rotation race
-        .first()
     )
+    db_token = result.scalar_one_or_none()
 
     if db_token is None:
         raise HTTPException(
@@ -637,19 +651,19 @@ def refresh(request: Request, response: Response, payload: RefreshTokenRequest, 
     # Reuse detection: if a revoked token is presented, an attacker may have
     # stolen the token chain. Revoke ALL tokens for this user.
     if db_token.is_revoked:
-        db.query(RefreshToken).filter(
-            RefreshToken.user_id == db_token.user_id,
-            RefreshToken.is_revoked == False,  # noqa: E712
-        ).update(
-            {
-                "is_revoked": True,
-                "revoked_at": datetime.now(timezone.utc),
-            }
+        await db.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == db_token.user_id,
+                RefreshToken.is_revoked == False,  # noqa: E712
+            )
+            .values(is_revoked=True, revoked_at=datetime.now(timezone.utc))
+            .execution_options(synchronize_session=False)
         )
         try:
-            db.commit()
+            await db.commit()
         except (IntegrityError, OperationalError):
-            db.rollback()
+            await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token reuse detected -- all sessions revoked",
@@ -660,16 +674,17 @@ def refresh(request: Request, response: Response, payload: RefreshTokenRequest, 
         db_token.is_revoked = True
         db_token.revoked_at = datetime.now(timezone.utc)
         try:
-            db.commit()
+            await db.commit()
         except (IntegrityError, OperationalError):
-            db.rollback()
+            await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token has expired",
         )
 
     # Load and validate user BEFORE rotating tokens
-    user = db.query(User).filter(User.id == db_token.user_id).first()
+    result = await db.execute(select(User).where(User.id == db_token.user_id))
+    user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -696,9 +711,9 @@ def refresh(request: Request, response: Response, payload: RefreshTokenRequest, 
     )
     db.add(new_db_token)
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to refresh session")
 
     access_token = create_access_token(data={"sub": str(user.id), "role": user.role})
@@ -712,13 +727,12 @@ def refresh(request: Request, response: Response, payload: RefreshTokenRequest, 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def logout(request: Request, response: Response, payload: RefreshTokenRequest, db: Session = Depends(get_db)):
+async def logout(request: Request, response: Response, payload: RefreshTokenRequest, db: AsyncSession = Depends(get_async_db)):
     """Revoke the provided refresh token (server-side logout)."""
-    db_token = (
-        db.query(RefreshToken)
-        .filter(RefreshToken.token == payload.refresh_token)
-        .first()
+    result = await db.execute(
+        select(RefreshToken).where(RefreshToken.token == payload.refresh_token)
     )
+    db_token = result.scalar_one_or_none()
 
     if db_token is None:
         raise HTTPException(
@@ -730,9 +744,9 @@ def logout(request: Request, response: Response, payload: RefreshTokenRequest, d
         db_token.is_revoked = True
         db_token.revoked_at = datetime.now(timezone.utc)
         try:
-            db.commit()
+            await db.commit()
         except (IntegrityError, OperationalError):
-            db.rollback()
+            await db.rollback()
 
     return {"detail": "Successfully logged out"}
 
@@ -751,10 +765,10 @@ def get_auth_providers(request: Request, response: Response):
 
 @router.get("/oauth/diag")
 @limiter.limit("30/minute")
-def oauth_diag(
+async def oauth_diag(
     request: Request,
     response: Response,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
 ):
     """Diagnostic for OAuth setup.
@@ -779,7 +793,10 @@ def oauth_diag(
                 detail="Invalid token",
             )
         uid = tok_payload.get("sub")
-        u = db.query(User).filter(User.id == int(uid)).first() if uid else None
+        u = None
+        if uid:
+            result = await db.execute(select(User).where(User.id == int(uid)))
+            u = result.scalar_one_or_none()
         if not u or u.role != "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -850,7 +867,7 @@ async def google_callback(
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Handle Google OAuth callback with CSRF state validation."""
     if not settings.GOOGLE_CLIENT_ID:
@@ -893,9 +910,11 @@ async def google_callback(
     email = email.lower()
 
     oauth_id = f"google_{user_info['id']}"
-    user = db.query(User).filter(User.oauth_id == oauth_id).first()
+    result = await db.execute(select(User).where(User.oauth_id == oauth_id))
+    user = result.scalar_one_or_none()
     if not user:
-        user = db.query(User).filter(User.email == email).first()
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
         if user:
             if user.auth_provider == "local" and user.hashed_password:
                 # Refuse to auto-link OAuth to a password-protected local account.
@@ -917,18 +936,18 @@ async def google_callback(
             if not user.oauth_id:
                 user.oauth_id = oauth_id
             try:
-                db.commit()
+                await db.commit()
             except (IntegrityError, OperationalError):
-                db.rollback()
+                await db.rollback()
         else:
             # Create new user. _safe_role() uses an advisory lock so
             # concurrent OAuth callbacks cannot both insert as admin.
-            role = _safe_role(db)
+            role = await _safe_role(db)
             import re as _re
             username = _re.sub(r'[^a-zA-Z0-9_-]', '', email.split("@")[0]) or "user"
             base_username = username
             counter = 1
-            while db.query(User).filter(User.username == username).first():
+            while (await db.execute(select(User).where(User.username == username))).scalar_one_or_none():
                 username = f"{base_username}{counter}"
                 counter += 1
             user = User(
@@ -941,12 +960,13 @@ async def google_callback(
             )
             try:
                 db.add(user)
-                db.commit()
-                db.refresh(user)
+                await db.commit()
+                await db.refresh(user)
             except IntegrityError:
-                db.rollback()
+                await db.rollback()
                 # User was created by a concurrent request, re-fetch
-                user = db.query(User).filter(User.email == email).first()
+                result = await db.execute(select(User).where(User.email == email))
+                user = result.scalar_one_or_none()
                 if not user:
                     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Account creation failed")
 
@@ -990,7 +1010,7 @@ async def microsoft_callback(
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Handle Microsoft OAuth callback with CSRF state validation."""
     if not settings.MICROSOFT_CLIENT_ID:
@@ -1037,9 +1057,11 @@ async def microsoft_callback(
     email_is_tenant_asserted = _tenant not in ("common", "organizations", "consumers")
 
     oauth_id = f"microsoft_{user_info['id']}"
-    user = db.query(User).filter(User.oauth_id == oauth_id).first()
+    result = await db.execute(select(User).where(User.oauth_id == oauth_id))
+    user = result.scalar_one_or_none()
     if not user:
-        user = db.query(User).filter(User.email == email).first()
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
         if user:
             # Refuse to auto-link/authenticate a pre-existing local account on an
             # unverified UPN match (account takeover). Password-protected accounts
@@ -1064,16 +1086,16 @@ async def microsoft_callback(
             if not user.oauth_id:
                 user.oauth_id = oauth_id
             try:
-                db.commit()
+                await db.commit()
             except (IntegrityError, OperationalError):
-                db.rollback()
+                await db.rollback()
         else:
-            role = _safe_role(db)
+            role = await _safe_role(db)
             import re as _re
             username = _re.sub(r'[^a-zA-Z0-9_-]', '', email.split("@")[0]) or "user"
             base_username = username
             counter = 1
-            while db.query(User).filter(User.username == username).first():
+            while (await db.execute(select(User).where(User.username == username))).scalar_one_or_none():
                 username = f"{base_username}{counter}"
                 counter += 1
             user = User(
@@ -1086,12 +1108,13 @@ async def microsoft_callback(
             )
             try:
                 db.add(user)
-                db.commit()
-                db.refresh(user)
+                await db.commit()
+                await db.refresh(user)
             except IntegrityError:
-                db.rollback()
+                await db.rollback()
                 # User was created by a concurrent request, re-fetch
-                user = db.query(User).filter(User.email == email).first()
+                result = await db.execute(select(User).where(User.email == email))
+                user = result.scalar_one_or_none()
                 if not user:
                     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Account creation failed")
 
@@ -1110,7 +1133,7 @@ async def microsoft_callback(
 
 @router.post("/oauth/exchange", response_model=TokenPairResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-def exchange_oauth_code(request: Request, response: Response, payload: OAuthExchangeRequest, db: Session = Depends(get_db)):
+async def exchange_oauth_code(request: Request, response: Response, payload: OAuthExchangeRequest, db: AsyncSession = Depends(get_async_db)):
     """Exchange a one-time OAuth code for a token pair.
 
     Each exchange token can only be used once. The jti (JWT ID) is tracked in
@@ -1170,11 +1193,12 @@ def exchange_oauth_code(request: Request, response: Response, payload: OAuthExch
         user_id_int = int(user_id)
     except (ValueError, TypeError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
-    user = db.query(User).filter(User.id == user_id_int).first()
+    result = await db.execute(select(User).where(User.id == user_id_int))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
 
-    return _create_token_pair(user, db)
+    return await _create_token_pair(user, db)

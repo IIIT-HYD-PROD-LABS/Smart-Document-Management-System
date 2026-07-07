@@ -27,6 +27,8 @@ from datetime import datetime, timedelta, timezone
 
 import jwt as pyjwt
 from passlib.context import CryptContext
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -141,4 +143,65 @@ def consume_reset_token(
 
     db.commit()
     db.refresh(user)
+    return user
+
+
+async def consume_reset_token_async(
+    db: AsyncSession,
+    *,
+    token: str,
+    new_password: str,
+) -> User:
+    """Async twin of `consume_reset_token`, used by the /reset-password router."""
+    try:
+        payload = pyjwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+    except pyjwt.ExpiredSignatureError:
+        raise PasswordResetError("Reset link has expired. Request a new one.")
+    except pyjwt.InvalidTokenError:
+        raise PasswordResetError("Reset link is invalid or has been used.")
+
+    if payload.get("type") != RESET_TOKEN_TYPE:
+        raise PasswordResetError("Reset link is not valid for password reset.")
+
+    try:
+        user_id = int(payload.get("sub", "0"))
+    except (TypeError, ValueError):
+        raise PasswordResetError("Reset link is malformed.")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active or getattr(user, "deleted_at", None) is not None:
+        raise PasswordResetError("Reset link is not valid for this account.")
+
+    if user.auth_provider and user.auth_provider != "local":
+        # OAuth-only accounts have no password to reset. Tell the user to
+        # use their OAuth provider instead of letting them set a password
+        # that the login flow will never accept.
+        raise PasswordResetError(
+            "This account signs in with a provider, not a password. Use the "
+            "provider button on /login."
+        )
+
+    expected_anchor = _user_token_anchor(user)
+    if int(payload.get("anchor", -1)) != expected_anchor:
+        # Token was issued before the most recent password change OR
+        # already consumed (consumption advances updated_at).
+        raise PasswordResetError("Reset link has already been used or superseded.")
+
+    user.hashed_password = _pwd_context.hash(new_password)
+    user.updated_at = datetime.now(timezone.utc)
+
+    # Invalidate every outstanding refresh token for this user. A
+    # compromised cookie must not survive a password change.
+    await db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.is_revoked == False,  # noqa: E712
+        )
+        .values(is_revoked=True)
+    )
+
+    await db.commit()
+    await db.refresh(user)
     return user

@@ -35,6 +35,8 @@ from typing import Optional, Tuple
 
 import jwt as pyjwt
 from passlib.context import CryptContext
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -101,6 +103,21 @@ def _unique_username(db: Session, base: str) -> str:
     candidate = base
     suffix = 0
     while db.query(User.id).filter(User.username == candidate).first() is not None:
+        suffix += 1
+        candidate = f"{base}_{suffix}"
+        if suffix > 50:  # defensive: bail rather than spin forever
+            candidate = f"{base}_{int(datetime.now(timezone.utc).timestamp())}"
+            break
+    return candidate
+
+
+async def _unique_username_async(db: AsyncSession, base: str) -> str:
+    """Async twin of `_unique_username`, used by resolve_or_invite_async."""
+    candidate = base
+    suffix = 0
+    while (
+        await db.scalar(select(User.id).where(User.username == candidate))
+    ) is not None:
         suffix += 1
         candidate = f"{base}_{suffix}"
         if suffix > 50:  # defensive: bail rather than spin forever
@@ -204,6 +221,98 @@ def resolve_or_invite(
     return pending.id, True, dev_token
 
 
+async def resolve_or_invite_async(
+    db: AsyncSession,
+    *,
+    client_id: int,
+    client_name: str,
+    inviter: User,
+    email: Optional[str] = None,
+    user_id: Optional[int] = None,
+    full_name: Optional[str] = None,
+) -> Tuple[int, bool, Optional[str]]:
+    """Async twin of `resolve_or_invite`, for AsyncSession callers.
+
+    `resolve_or_invite` above is left unchanged (sync/`Session`) because
+    app/compliance/services/client_service.py's onboard_client still calls
+    it from a sync Session and is out of scope for this migration slice.
+    Keep the two bodies in sync when this logic changes.
+    """
+    if not email and not user_id:
+        raise InvitationError("Either email or user_id is required")
+    if email and user_id:
+        # Be explicit rather than silently picking one — the frontend
+        # should send exactly one. Use email when both can be derived.
+        raise InvitationError("Specify either email or user_id, not both")
+
+    # Path A: user_id supplied -> verify it exists, no email side-effect.
+    if user_id is not None:
+        existing = await db.get(User, user_id)
+        if existing is None or existing.deleted_at is not None:
+            raise InvitationError(f"User {user_id} does not exist")
+        return existing.id, False, None
+
+    # Path B: email supplied -> find or pre-create.
+    assert email is not None  # for type-checkers
+    if not _EMAIL_RX.match(email):
+        raise InvitationError(f"Invalid email format: {email}")
+    email = email.strip().lower()
+
+    result = await db.execute(
+        select(User).where(User.email == email, User.deleted_at.is_(None))
+    )
+    existing = result.scalar_one_or_none()
+    if existing is not None:
+        # Real user, just attach the membership. The standard get_current_user
+        # path will reject them if is_active=False (e.g., they were invited
+        # once, never accepted, and are now being re-invited from another
+        # client). Re-send the invite so they can still complete signup.
+        if not existing.is_active and existing.hashed_password is None:
+            token = _generate_invite_token(
+                user_id=existing.id, email=existing.email, client_id=client_id
+            )
+            _send_invite(
+                existing.email,
+                full_name or existing.full_name or existing.email,
+                inviter,
+                client_name,
+                token,
+            )
+            dev_token = token if (not settings.SMTP_HOST and settings.DEBUG) else None
+            return existing.id, True, dev_token
+        return existing.id, False, None
+
+    # Pre-create a pending user. Username derived from local-part with
+    # collision-resolution suffix. hashed_password stays NULL until the
+    # invitee accepts.
+    username = await _unique_username_async(db, _email_to_username(email))
+    pending = User(
+        email=email,
+        username=username,
+        hashed_password=None,
+        full_name=(full_name or "").strip() or None,
+        role="editor",  # global role; compliance scope is on the membership
+        is_active=False,
+        auth_provider="local",
+    )
+    db.add(pending)
+    await db.flush()  # materialise pending.id without committing the wrapper
+
+    token = _generate_invite_token(
+        user_id=pending.id, email=pending.email, client_id=client_id
+    )
+    _send_invite(
+        pending.email,
+        full_name or pending.email,
+        inviter,
+        client_name,
+        token,
+    )
+
+    dev_token = token if (not settings.SMTP_HOST and settings.DEBUG) else None
+    return pending.id, True, dev_token
+
+
 def _send_invite(
     to_email: str,
     invitee_name: str,
@@ -271,6 +380,44 @@ def accept_invite(
     user.is_active = True
     db.commit()
     db.refresh(user)
+    logger.info(
+        "tenant_invite_accepted",
+        extra={"user_id": user.id, "email": user.email},
+    )
+    return user
+
+
+async def accept_invite_async(
+    db: AsyncSession, *, token: str, new_password: str
+) -> User:
+    """Async twin of `accept_invite`, used by the /accept-invite router.
+
+    `accept_invite` above is left unchanged (sync/`Session`) since it has
+    no other caller today, but is kept as the reference implementation;
+    keep the two bodies in sync when this logic changes.
+    """
+    payload = decode_invite_token(token)
+    user_id = int(payload["user_id"])
+    email = payload["email"]
+
+    user = await db.get(User, user_id)
+    if user is None or user.deleted_at is not None or user.email != email:
+        raise InvitationError("Invitation no longer valid")
+
+    if user.is_active and user.hashed_password is not None:
+        # Already accepted; signing in is the right next step. Do not
+        # silently overwrite the existing password.
+        raise InvitationError(
+            "This account is already active. Sign in with your existing password."
+        )
+
+    if not new_password or len(new_password) < 12:
+        raise InvitationError("Password must be at least 12 characters")
+
+    user.hashed_password = pwd_context.hash(new_password)
+    user.is_active = True
+    await db.commit()
+    await db.refresh(user)
     logger.info(
         "tenant_invite_accepted",
         extra={"user_id": user.id, "email": user.email},

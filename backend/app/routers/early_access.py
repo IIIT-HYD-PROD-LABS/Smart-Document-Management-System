@@ -3,11 +3,12 @@
 import jwt as pyjwt
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import get_db
+from app.database import get_async_db
 from app.models.early_access import EarlyAccessRequest
 from app.models.user import User
 from app.schemas.early_access import EarlyAccessSubmit
@@ -20,21 +21,21 @@ router = APIRouter(prefix="/api/early-access", tags=["Early Access"])
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 @limiter.limit("3/minute")
-def submit_early_access(
+async def submit_early_access(
     request: Request,
     response: Response,
     payload: EarlyAccessSubmit,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Submit an early access request (public, no auth required)."""
     existing = (
-        db.query(EarlyAccessRequest)
-        .filter(
-            EarlyAccessRequest.email == payload.email,
-            EarlyAccessRequest.status.in_(["pending", "approved"]),
+        await db.execute(
+            select(EarlyAccessRequest).where(
+                EarlyAccessRequest.email == payload.email,
+                EarlyAccessRequest.status.in_(["pending", "approved"]),
+            )
         )
-        .first()
-    )
+    ).scalar_one_or_none()
     if existing:
         if existing.status == "approved":
             raise HTTPException(
@@ -46,7 +47,9 @@ def submit_early_access(
             detail="An early access request for this email is already pending.",
         )
 
-    existing_user = db.query(User).filter(User.email == payload.email).first()
+    existing_user = (
+        await db.execute(select(User).where(User.email == payload.email))
+    ).scalar_one_or_none()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -61,9 +64,9 @@ def submit_early_access(
     )
     db.add(ea_request)
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to submit request. Please try again.",
@@ -78,11 +81,11 @@ def submit_early_access(
 
 @router.get("/validate-invite")
 @limiter.limit("10/minute")
-def validate_invitation(
+async def validate_invitation(
     request: Request,
     response: Response,
     token: str = Query(..., min_length=1),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Validate an invitation token and return pre-fill data for registration."""
     try:
@@ -108,20 +111,22 @@ def validate_invitation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid invitation link.")
 
     ea_request = (
-        db.query(EarlyAccessRequest)
-        .filter(
-            EarlyAccessRequest.id == ea_id,
-            EarlyAccessRequest.status == "approved",
+        await db.execute(
+            select(EarlyAccessRequest).where(
+                EarlyAccessRequest.id == ea_id,
+                EarlyAccessRequest.status == "approved",
+            )
         )
-        .first()
-    )
+    ).scalar_one_or_none()
     if not ea_request:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invitation is no longer valid.",
         )
 
-    existing_user = db.query(User).filter(User.email == email).first()
+    existing_user = (
+        await db.execute(select(User).where(User.email == email))
+    ).scalar_one_or_none()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
