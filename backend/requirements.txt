@@ -21,7 +21,7 @@ asyncpg==0.31.0
 greenlet==3.5.3
 
 # Authentication
-PyJWT==2.12.1
+PyJWT==2.13.0
 bcrypt==4.1.2
 passlib[bcrypt]==1.7.4
 pyotp==2.9.0          # TOTP MFA (RFC 6238)
