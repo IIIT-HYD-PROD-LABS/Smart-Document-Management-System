@@ -13,6 +13,12 @@ python-multipart==0.0.27  # CVE GHSA-: unbounded multipart part headers DoS, fix
 sqlalchemy==2.0.49
 psycopg2-binary==2.9.12
 alembic==1.18.4
+# Async engine (FastAPI request/WebSocket path only -- Celery/Alembic/scripts
+# stay on psycopg2 above, see backend/app/database.py). greenlet was already
+# present transitively via SQLAlchemy's async extras; pinned explicitly here
+# for reproducibility since the app now actually exercises the async path.
+asyncpg==0.31.0
+greenlet==3.5.3
 
 # Authentication
 PyJWT==2.12.1

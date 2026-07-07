@@ -1,6 +1,8 @@
 """SQLAlchemy database engine, session factory, and Base model."""
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.config import settings
 
@@ -14,6 +16,27 @@ def _connect_args_for(url: str) -> dict:
     args: dict = {"connect_timeout": 10}
     if url.startswith("postgresql") and not any(h in url for h in _LOCAL_HOSTS):
         args["sslmode"] = "require"
+    return args
+
+
+def _async_url_for(sync_url: str) -> str:
+    """Rewrite a sync (psycopg2-implied) DSN to the asyncpg dialect."""
+    return make_url(sync_url).set(drivername="postgresql+asyncpg").render_as_string(hide_password=False)
+
+
+def _async_connect_args_for(url: str) -> dict:
+    # asyncpg.connect() takes `timeout`/`ssl`, not psycopg2's `connect_timeout`/
+    # `sslmode` -- reusing _connect_args_for's dict verbatim would raise
+    # TypeError on first connect. `ssl=True` asks asyncpg to build a default
+    # SSLContext, which VERIFIES the server cert -- stricter than psycopg2's
+    # sslmode="require" (encrypt only, no cert validation). Not exercised by
+    # any current DSN (all local, see _LOCAL_HOSTS), but revisit this if a
+    # future remote host presents a cert that fails default verification --
+    # sslmode="require" parity would need an SSLContext with
+    # verify_mode=ssl.CERT_NONE instead of the bare `True` here.
+    args: dict = {"timeout": 10}
+    if url.startswith("postgresql") and not any(h in url for h in _LOCAL_HOSTS):
+        args["ssl"] = True
     return args
 
 
@@ -86,6 +109,81 @@ def get_bootstrap_db():
         db.close()
 
 
+# ---------------------------------------------------------------------------
+# Async engine -- FastAPI HTTP/WebSocket request path only. Celery, Alembic,
+# and CLI scripts stay on the sync engine/SessionLocal above permanently (see
+# app/tasks/__init__.py's worker_process_init: forked prefork workers can't
+# safely carry an asyncio event loop across fork, and there's no persistent
+# loop between task invocations to justify the async driver anyway).
+#
+# Same dual-engine split as the sync side, mirrored exactly: `async_engine`
+# is the RLS-subject app_runtime connection (or owner, when RLS disabled),
+# `owner_async_engine` is BYPASSRLS, single legitimate consumer is
+# get_bootstrap_async_db for first-client onboarding.
+_async_db_url = _async_url_for(_db_url)
+
+async_engine = create_async_engine(
+    _async_db_url,
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20,
+    pool_recycle=300,
+    pool_timeout=30,
+    echo=False,
+    connect_args=_async_connect_args_for(_async_db_url),
+)
+
+# expire_on_commit=False: after commit, a default AsyncSession expires all
+# ORM attributes so the next access re-fetches them -- but that re-fetch is
+# normally implicit/lazy, which needs an await and cannot happen inside plain
+# attribute access under async. Same underlying hazard as the unaudited
+# lazy-relationship-loading risk (MissingGreenlet); this specific case is the
+# documented, standard mitigation for it.
+AsyncSessionLocal = async_sessionmaker(
+    autocommit=False, autoflush=False, bind=async_engine, expire_on_commit=False
+)
+
+if _enforce_rls:
+    _async_owner_url = _async_url_for(settings.DATABASE_URL)
+    owner_async_engine = create_async_engine(
+        _async_owner_url,
+        pool_pre_ping=True,
+        pool_size=3,
+        max_overflow=2,
+        pool_recycle=300,
+        pool_timeout=30,
+        echo=False,
+        connect_args=_async_connect_args_for(_async_owner_url),
+    )
+else:
+    owner_async_engine = async_engine
+
+AsyncSessionBootstrap = async_sessionmaker(
+    autocommit=False, autoflush=False, bind=owner_async_engine, expire_on_commit=False
+)
+
+
+async def get_async_db():
+    """Async dependency that provides a database session per request."""
+    db = AsyncSessionLocal()
+    try:
+        yield db
+    finally:
+        await db.close()
+
+
+async def get_bootstrap_async_db():
+    """Async owner-role session for first-client onboarding ONLY (RLS-bypassing).
+
+    See `owner_async_engine` above. Do NOT use for tenant-scoped queries.
+    """
+    db = AsyncSessionBootstrap()
+    try:
+        yield db
+    finally:
+        await db.close()
+
+
 # Phase 9: Register tenant_context listener so every cursor.execute sets
 # app.current_client_id, app.cross_client_mode, app.user_id from ContextVars
 # (populated by TenantContextMiddleware). RLS policies on compliance_* tables
@@ -96,3 +194,12 @@ def get_bootstrap_db():
 from app.compliance.middleware.tenant_context import register_tenant_listener  # noqa: E402
 
 register_tenant_listener(engine)
+
+# AsyncEngine has no events of its own -- ConnectionEvents/PoolEvents are
+# registered on the real underlying Engine, exposed via `.sync_engine`. The
+# adapted DBAPI-level cursor/connection asyncpg hands to sync-style hooks
+# (like this listener) presents a synchronous-looking execute()/commit()
+# surface backed by SQLAlchemy's greenlet bridge, so the listener body itself
+# needs no changes. Same owner-engine exclusion as the sync registration
+# above.
+register_tenant_listener(async_engine.sync_engine)

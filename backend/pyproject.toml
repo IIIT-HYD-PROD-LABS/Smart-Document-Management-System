@@ -41,4 +41,16 @@ index-strategy = "unsafe-best-match"
 # in-memory transport. asyncio_mode="auto" lets pytest-asyncio pick up
 # `async def test_*` functions without per-test @pytest.mark.asyncio.
 asyncio_mode = "auto"
+# Async-migration Phase 1: app.database's async_engine/AsyncSessionLocal are
+# module-level singletons, created once at import time and expected to live
+# for one process's whole lifetime (true in production -- one Uvicorn event
+# loop for the process). pytest-asyncio's default is a FRESH event loop per
+# test FUNCTION (two separate ini options control this -- fixture scope and
+# test scope -- both need to be "session" or a later test reusing a pooled
+# connection established under an earlier test's loop hits
+# "Future attached to a different loop" during pool_pre_ping. Confirmed
+# empirically: setting only asyncio_default_fixture_loop_scope was not
+# sufficient on its own.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]

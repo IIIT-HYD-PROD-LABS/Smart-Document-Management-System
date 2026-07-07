@@ -26,30 +26,34 @@ fires on every SQL statement, idempotent, and survives intra-request commits.
 The cost is one ALTER-style call per cursor.execute — measured at sub-ms per
 call against a local Postgres.
 
-RLS STATUS — DEFENSE-IN-DEPTH, CURRENTLY INACTIVE AT RUNTIME
-------------------------------------------------------------
+RLS STATUS — ENFORCED AT RUNTIME (activated 2026-06-01, commit e54f356)
+------------------------------------------------------------------------
 This listener (`_set_tenant_before_each_statement`) ONLY calls `set_config(...)`
-to populate the `app.*` session variables. It does NOT issue `SET ROLE`. The
-production DATABASE_URL connects as the `postgres` role, which is a BYPASSRLS /
-table-owner role, so PostgreSQL skips every RLS policy regardless of the session
-variables we set. RLS (migrations 0015 + 0018) is therefore a defense-in-depth
-layer that is NOT enforced at runtime under the current DSN.
+to populate the `app.*` session variables. It does NOT issue `SET ROLE` -- RLS
+enforcement instead comes from which role DATABASE_URL_RUNTIME connects as.
+When `DB_ENFORCE_RLS` is true and `DATABASE_URL_RUNTIME` is set, the app engine
+(app/database.py's `engine`) connects as the non-BYPASSRLS `app_runtime` role,
+so PostgreSQL actually applies RLS policies (migrations 0015 + 0018 + 0037-0040)
+filtered by the session variables this listener sets. The `owner_engine` (and
+`owner_async_engine`) intentionally stay on the BYPASSRLS `postgres`/owner role
+and never get this listener registered -- see their bootstrap-only docstrings.
 
-The PRIMARY, currently-active tenant-isolation layer is the explicit per-endpoint
-`client_id` filtering in the routers/services (e.g. `get_active_membership` /
-`get_active_client_id` membership checks and explicit `WHERE client_id = ...`
-predicates). Do not rely on RLS to backstop a missing explicit check.
+RLS is a SECOND, independent isolation layer on top of the PRIMARY layer: the
+explicit per-endpoint `client_id` filtering in the routers/services (e.g.
+`get_active_membership` / `get_active_client_id` membership checks and explicit
+`WHERE client_id = ...` predicates). Do not remove an explicit check on the
+assumption RLS alone is sufficient -- keep both layers.
 
-To ACTIVATE RLS at runtime, ALL of the following are required:
-  (a) Connect as a non-BYPASSRLS role — set DATABASE_URL_RUNTIME to the
-      `app_runtime` user — OR add an explicit `SET ROLE app_runtime` in this
-      listener so each statement runs under a role RLS applies to.
+Toggle at deploy time via `docker-compose.override.yml`'s `DB_ENFORCE_RLS` env
+var (no code change, no migration needed to roll back to owner-role-only):
+  (a) Connect as a non-BYPASSRLS role — `DATABASE_URL_RUNTIME` pointed at the
+      `app_runtime` user, which is what's configured today.
   (b) `GRANT app_runtime TO <connecting_role>` WITH the ability to `SET ROLE
       app_runtime` on the database (the connecting role must be a member of
-      app_runtime).
+      app_runtime) -- done by migration 0017/0038.
   (c) `GRANT` the necessary privileges to `app_runtime` on all tables and
       sequences it must read/write (RLS only filters rows it is otherwise
-      allowed to touch).
+      allowed to touch) -- done by migration 0038.
 """
 
 import contextvars
@@ -94,6 +98,28 @@ def register_tenant_listener(engine) -> None:
         return
     setattr(engine, _LISTENER_REGISTERED_MARKER, True)
 
+    # asyncpg's native placeholder syntax is $1,$2,$3, not psycopg2's %s.
+    # SQLAlchemy's Core compiler normally handles that translation, but a
+    # raw cursor.execute() issued directly from an event listener (as
+    # below) bypasses the compile step entirely -- the SQL text has to
+    # already match the driver's native paramstyle. Confirmed empirically:
+    # %s against asyncpg sends the literal '%' character to Postgres,
+    # which rejects it with a syntax error that poisons the whole
+    # transaction -- surfacing as a misleading failure on the *next*
+    # statement, not the one that actually broke. Decided once per engine
+    # at registration time (not re-detected per statement).
+    _set_guc_sql = (
+        "SELECT "
+        "set_config('app.current_client_id', $1, false), "
+        "set_config('app.cross_client_mode', $2, false), "
+        "set_config('app.user_id', $3, false)"
+        if engine.dialect.driver == "asyncpg"
+        else "SELECT "
+        "set_config('app.current_client_id', %s, false), "
+        "set_config('app.cross_client_mode', %s, false), "
+        "set_config('app.user_id', %s, false)"
+    )
+
     @sa_event.listens_for(engine, "before_cursor_execute")
     def _set_tenant_before_each_statement(
         conn, cursor, statement, parameters, context, executemany
@@ -130,12 +156,20 @@ def register_tenant_listener(engine) -> None:
         # SET on this connection, skip the redundant round-trip. Cleared on
         # checkin so the next request starts blank.
         #
-        # IMPORTANT: this dedup assumes Supavisor SESSION-mode pooling
-        # (Supabase pooler port 5432). It is NOT safe under transaction-
-        # mode pooling (port 6543), where set_config(..., is_local=false)
-        # values do not persist across transactions and `_tenant_state`
-        # would falsely match. The override file enforces port 5432; if
-        # the deployment ever flips to 6543, this listener must change.
+        # IMPORTANT: this dedup assumes session-mode Postgres access -- no
+        # transaction-mode pooler (e.g. PgBouncer/Supavisor port 6543) in
+        # front of Postgres, where set_config(..., is_local=false) values
+        # do not persist across transactions and `_tenant_state` would
+        # falsely match. As of 2026-07-03 the DSN is a direct connection
+        # (moved off the Supabase Supavisor pooler to a local container,
+        # soon to move again to the IIIT server) -- currently moot, but
+        # revisit if a pooler is ever reintroduced in front of either
+        # engine. A second, independent reason the async engine specifically
+        # needs the same scrutiny: asyncpg uses server-side prepared
+        # statements with its own statement cache by default, which has a
+        # separately-documented bad interaction with transaction-mode
+        # poolers -- so a future pooler would need review against BOTH
+        # this dedup assumption and asyncpg's statement cache.
         # State on conn.connection.info (PoolProxiedConnection dict that
         # mirrors connection_record.info and persists across checkouts).
         # The previous attribute-on-psycopg2-conn approach raised
@@ -154,13 +188,7 @@ def register_tenant_listener(engine) -> None:
             # Combined into ONE round trip (was 3 separate executes).
             # set_config(name, value, is_local=false) → session-scoped,
             # cleaned up on checkin so the next request starts clean.
-            cursor.execute(
-                "SELECT "
-                "set_config('app.current_client_id', %s, false), "
-                "set_config('app.cross_client_mode', %s, false), "
-                "set_config('app.user_id', %s, false)",
-                new_state,
-            )
+            cursor.execute(_set_guc_sql, new_state)
             info["_tenant_state"] = new_state
         except Exception as exc:
             # Invalidate the cache so the next call cannot match the
