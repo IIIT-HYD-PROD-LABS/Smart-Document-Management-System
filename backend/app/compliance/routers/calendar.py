@@ -13,8 +13,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.calendar.adjust import adjust_deadline
 from app.compliance.dependencies import (
@@ -25,7 +25,7 @@ from app.compliance.models.membership import ClientMembership
 from app.compliance.models.notice import ComplianceNotice
 from app.compliance.models.regulatory_calendar import RegulatoryCalendar
 from app.compliance.services.permission_registry import CompliancePermission
-from app.database import get_db
+from app.database import get_async_db
 
 router = APIRouter(prefix="/calendar", tags=["compliance-calendar"])
 
@@ -66,7 +66,7 @@ class ComplianceScoreResponse(BaseModel):
     response_model=list[CalendarEntryOut],
     summary="List calendar entries (holidays + statutory deadlines)",
 )
-def list_calendar_entries(
+async def list_calendar_entries(
     year: int = Query(..., ge=2020, le=2050),
     month: Optional[int] = Query(None, ge=1, le=12),
     authority: Optional[str] = Query(None, pattern=r"^(GST|IT|MCA|RBI|SEBI)$"),
@@ -76,17 +76,19 @@ def list_calendar_entries(
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    q = db.query(RegulatoryCalendar).filter(RegulatoryCalendar.year == year)
+    q = select(RegulatoryCalendar).where(RegulatoryCalendar.year == year)
     if month:
         # PostgreSQL EXTRACT(MONTH FROM date) — use func
-        q = q.filter(func.extract("month", RegulatoryCalendar.date) == month)
+        q = q.where(func.extract("month", RegulatoryCalendar.date) == month)
     if authority:
-        q = q.filter(RegulatoryCalendar.authority == authority)
+        q = q.where(RegulatoryCalendar.authority == authority)
     if category:
-        q = q.filter(RegulatoryCalendar.category == category)
-    rows = q.order_by(RegulatoryCalendar.date).all()
+        q = q.where(RegulatoryCalendar.category == category)
+    q = q.order_by(RegulatoryCalendar.date)
+    result = await db.execute(q)
+    rows = result.scalars().all()
     return [CalendarEntryOut.model_validate(r, from_attributes=True) for r in rows]
 
 
@@ -114,12 +116,12 @@ def adjust_deadline_endpoint(
     response_model=ComplianceScoreResponse,
     summary="Rolling 90-day compliance score for the active client",
 )
-def compliance_score(
+async def compliance_score(
     window_days: int = Query(90, ge=7, le=365),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Phase 11 D-14 — % notices resolved within deadline over rolling window.
 
@@ -128,13 +130,12 @@ def compliance_score(
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(days=window_days)
 
-    base = db.query(ComplianceNotice).filter(
-        ComplianceNotice.created_at >= window_start
-    )
+    q = select(ComplianceNotice).where(ComplianceNotice.created_at >= window_start)
     if not is_cross_client_mode():
-        base = base.filter(ComplianceNotice.client_id == membership.client_id)
+        q = q.where(ComplianceNotice.client_id == membership.client_id)
 
-    notices = base.all()
+    result = await db.execute(q)
+    notices = result.scalars().all()
     total = len(notices)
     on_time = 0
     overdue = 0

@@ -26,6 +26,7 @@ import logging
 import time
 from typing import Optional
 
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.compliance.services import ai_service
@@ -56,6 +57,7 @@ __all__ = [
     "NoticeExtractionCredentialMissingError",
     "NoticeExtractionParseError",
     "extract_notice_fields",
+    "extract_notice_fields_async",
 ]
 
 
@@ -188,11 +190,10 @@ def extract_notice_fields(
     text: str,
     notice_id: int | None = None,
 ) -> dict:
-    """Run extraction and return the envelope.
+    """Run extraction and return the envelope (sync — Session).
 
-    Extraction uses EXTRACTION_SYSTEM_PROMPT (non-refusing), so it does NOT
-    raise AIOutOfScopeError — a non-notice degrades to an empty `{"fields": {}}`
-    envelope for graceful manual fill.
+    Stays sync: app/tasks/document_tasks.py (Celery) calls this with a sync
+    Session. Router callers use `extract_notice_fields_async` instead.
 
     Raises:
         NoticeExtractionCredentialMissingError: tenant has no AICredential.
@@ -207,6 +208,41 @@ def extract_notice_fields(
         )
 
     provider = ai_service._build_active_provider(db, cred)
+    return _extract_notice_fields_impl(
+        provider, cred, user_id=user_id, notice_id=notice_id, text=text
+    )
+
+
+async def extract_notice_fields_async(
+    db: AsyncSession,
+    *,
+    client_id: int,
+    user_id: int | None,
+    text: str,
+    notice_id: int | None = None,
+) -> dict:
+    """Async twin of `extract_notice_fields`, for the router call chain."""
+    cred = await ai_service.resolve_credential_async(db, client_id=client_id)
+    if cred is None:
+        raise NoticeExtractionCredentialMissingError(
+            "No AI credential configured for this tenant"
+        )
+
+    provider = await ai_service._build_active_provider_async(db, cred)
+    return _extract_notice_fields_impl(
+        provider, cred, user_id=user_id, notice_id=notice_id, text=text
+    )
+
+
+def _extract_notice_fields_impl(
+    provider,
+    cred,
+    *,
+    user_id: int | None,
+    notice_id: int | None,
+    text: str,
+) -> dict:
+    """Shared (no-db) extraction logic used by the sync/async entry points."""
     body_sha = _sha256_text(text or "")
     started = time.monotonic()
 

@@ -26,7 +26,7 @@ from __future__ import annotations
 from typing import Optional
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.models.notice import ComplianceNotice
 from app.compliance.models.response import (
@@ -55,25 +55,27 @@ class SegregationOfDutiesError(PermissionError):
     Routers map this to HTTP 403."""
 
 
-def _next_version_no(db: Session, response_id: int) -> int:
+async def _next_version_no(db: AsyncSession, response_id: int) -> int:
     """Return the next sequential version_no for a response."""
-    max_no = db.execute(
-        select(func.max(NoticeResponseVersion.version_no)).where(
-            NoticeResponseVersion.response_id == response_id
+    max_no = (
+        await db.execute(
+            select(func.max(NoticeResponseVersion.version_no)).where(
+                NoticeResponseVersion.response_id == response_id
+            )
         )
     ).scalar_one_or_none()
     return (max_no or 0) + 1
 
 
-def get_or_create_response(
-    db: Session, *, notice: ComplianceNotice, user_id: Optional[int]
+async def get_or_create_response(
+    db: AsyncSession, *, notice: ComplianceNotice, user_id: Optional[int]
 ) -> NoticeResponse:
     """Return existing response for the notice or create an empty draft."""
     existing = (
-        db.query(NoticeResponse)
-        .filter(NoticeResponse.notice_id == notice.id)
-        .first()
-    )
+        await db.execute(
+            select(NoticeResponse).where(NoticeResponse.notice_id == notice.id)
+        )
+    ).scalar_one_or_none()
     if existing is not None:
         return existing
 
@@ -84,7 +86,7 @@ def get_or_create_response(
         created_by_user_id=user_id,
     )
     db.add(resp)
-    db.flush()  # need resp.id before creating version
+    await db.flush()  # need resp.id before creating version
 
     # Seed initial empty version so callers always have current_version
     v0 = NoticeResponseVersion(
@@ -97,10 +99,10 @@ def get_or_create_response(
         created_by_user_id=user_id,
     )
     db.add(v0)
-    db.flush()
+    await db.flush()
     resp.current_version_id = v0.id
-    db.commit()
-    db.refresh(resp)
+    await db.commit()
+    await db.refresh(resp)
 
     log_activity(
         db,
@@ -109,7 +111,7 @@ def get_or_create_response(
         type="note_added",
         details={"source": "response_workflow", "event": "response_created"},
     )
-    db.commit()
+    await db.commit()
 
     log_audit_event(
         user_id=user_id,
@@ -121,8 +123,8 @@ def get_or_create_response(
     return resp
 
 
-def update_draft(
-    db: Session,
+async def update_draft(
+    db: AsyncSession,
     *,
     response: NoticeResponse,
     payload: dict,
@@ -138,7 +140,7 @@ def update_draft(
             f"Cannot edit response in status={response.status!r} — only 'draft' is editable"
         )
 
-    version_no = _next_version_no(db, response.id)
+    version_no = await _next_version_no(db, response.id)
     new_version = NoticeResponseVersion(
         response_id=response.id,
         client_id=response.client_id,
@@ -151,10 +153,10 @@ def update_draft(
         created_by_user_id=user_id,
     )
     db.add(new_version)
-    db.flush()
+    await db.flush()
     response.current_version_id = new_version.id
-    db.commit()
-    db.refresh(new_version)
+    await db.commit()
+    await db.refresh(new_version)
 
     log_activity(
         db,
@@ -167,7 +169,7 @@ def update_draft(
             "version_no": version_no,
         },
     )
-    db.commit()
+    await db.commit()
 
     log_audit_event(
         user_id=user_id,
@@ -183,8 +185,8 @@ def update_draft(
     return new_version
 
 
-def rollback_to_version(
-    db: Session,
+async def rollback_to_version(
+    db: AsyncSession,
     *,
     response: NoticeResponse,
     target_version_id: int,
@@ -197,11 +199,12 @@ def rollback_to_version(
     # Re-read the row under a write lock so the can_edit_draft check below
     # cannot race with submit_for_review changing the status concurrently.
     locked = (
-        db.query(NoticeResponse)
-        .filter(NoticeResponse.id == response.id)
-        .with_for_update()
-        .first()
-    )
+        await db.execute(
+            select(NoticeResponse)
+            .where(NoticeResponse.id == response.id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
     if locked is not None:
         response = locked
 
@@ -211,11 +214,11 @@ def rollback_to_version(
             f"Cannot rollback in status={response.status!r}; revert to draft via withdraw first"
         )
 
-    target = db.get(NoticeResponseVersion, target_version_id)
+    target = await db.get(NoticeResponseVersion, target_version_id)
     if target is None or target.response_id != response.id:
         raise ValueError(f"Version {target_version_id} not found for response {response.id}")
 
-    version_no = _next_version_no(db, response.id)
+    version_no = await _next_version_no(db, response.id)
     new_version = NoticeResponseVersion(
         response_id=response.id,
         client_id=response.client_id,
@@ -229,10 +232,10 @@ def rollback_to_version(
         created_by_user_id=user_id,
     )
     db.add(new_version)
-    db.flush()
+    await db.flush()
     response.current_version_id = new_version.id
-    db.commit()
-    db.refresh(new_version)
+    await db.commit()
+    await db.refresh(new_version)
 
     log_activity(
         db,
@@ -247,7 +250,7 @@ def rollback_to_version(
             "new_version_no": version_no,
         },
     )
-    db.commit()
+    await db.commit()
 
     log_audit_event(
         user_id=user_id,
@@ -263,8 +266,8 @@ def rollback_to_version(
     return new_version
 
 
-def submit_for_review(
-    db: Session, *, response: NoticeResponse, user_id: Optional[int]
+async def submit_for_review(
+    db: AsyncSession, *, response: NoticeResponse, user_id: Optional[int]
 ) -> NoticeResponse:
     current = ResponseStatus(response.status)
     if not can_submit_for_review(current):
@@ -272,8 +275,8 @@ def submit_for_review(
             f"Cannot submit response in status={response.status!r}; only 'draft' may be submitted"
         )
     response.status = ResponseStatus.REVIEWER_PENDING.value
-    db.commit()
-    db.refresh(response)
+    await db.commit()
+    await db.refresh(response)
 
     log_activity(
         db,
@@ -285,7 +288,7 @@ def submit_for_review(
             "event": "submitted_for_review",
         },
     )
-    db.commit()
+    await db.commit()
 
     log_audit_event(
         user_id=user_id,
@@ -300,8 +303,8 @@ def submit_for_review(
     return response
 
 
-def withdraw(
-    db: Session, *, response: NoticeResponse, user_id: Optional[int]
+async def withdraw(
+    db: AsyncSession, *, response: NoticeResponse, user_id: Optional[int]
 ) -> NoticeResponse:
     current = ResponseStatus(response.status)
     if not can_withdraw(current):
@@ -310,8 +313,8 @@ def withdraw(
         )
     before = response.status
     response.status = ResponseStatus.WITHDRAWN.value
-    db.commit()
-    db.refresh(response)
+    await db.commit()
+    await db.refresh(response)
 
     log_activity(
         db,
@@ -320,7 +323,7 @@ def withdraw(
         type="note_added",
         details={"source": "response_workflow", "event": "withdrawn"},
     )
-    db.commit()
+    await db.commit()
 
     log_audit_event(
         user_id=user_id,
@@ -332,8 +335,8 @@ def withdraw(
     return response
 
 
-def apply_approval(
-    db: Session,
+async def apply_approval(
+    db: AsyncSession,
     *,
     response: NoticeResponse,
     stage: ApprovalStage,
@@ -362,11 +365,12 @@ def apply_approval(
     # as a compare-and-set: a racing approval on the same stage must wait,
     # then fail the stage/status validation instead of double-advancing.
     locked = (
-        db.query(NoticeResponse)
-        .filter(NoticeResponse.id == response.id)
-        .with_for_update()
-        .first()
-    )
+        await db.execute(
+            select(NoticeResponse)
+            .where(NoticeResponse.id == response.id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
     if locked is not None:
         response = locked
 
@@ -390,13 +394,13 @@ def apply_approval(
     # could approve their own content (maker == checker bypass).
     if user_id is not None:
         authored_version = (
-            db.query(NoticeResponseVersion.id)
-            .filter(
-                NoticeResponseVersion.response_id == response.id,
-                NoticeResponseVersion.created_by_user_id == user_id,
+            await db.execute(
+                select(NoticeResponseVersion.id).where(
+                    NoticeResponseVersion.response_id == response.id,
+                    NoticeResponseVersion.created_by_user_id == user_id,
+                )
             )
-            .first()
-        )
+        ).scalar_one_or_none()
         if authored_version is not None:
             raise SegregationOfDutiesError(
                 "A user who authored any version of this response draft "
@@ -420,14 +424,14 @@ def apply_approval(
     # row by this actor is enough to disqualify them from a second stage.
     if user_id is not None:
         prior = (
-            db.query(NoticeResponseApproval)
-            .filter(
-                NoticeResponseApproval.response_id == response.id,
-                NoticeResponseApproval.version_id == response.current_version_id,
-                NoticeResponseApproval.actor_user_id == user_id,
+            await db.execute(
+                select(NoticeResponseApproval).where(
+                    NoticeResponseApproval.response_id == response.id,
+                    NoticeResponseApproval.version_id == response.current_version_id,
+                    NoticeResponseApproval.actor_user_id == user_id,
+                )
             )
-            .first()
-        )
+        ).scalar_one_or_none()
         if prior is not None:
             raise SegregationOfDutiesError(
                 "This user already approved a prior stage of this response "
@@ -453,9 +457,9 @@ def apply_approval(
     )
     db.add(approval)
     response.status = next_status.value
-    db.commit()
-    db.refresh(approval)
-    db.refresh(response)
+    await db.commit()
+    await db.refresh(approval)
+    await db.refresh(response)
 
     log_activity(
         db,
@@ -472,7 +476,7 @@ def apply_approval(
             "reason": reason,
         },
     )
-    db.commit()
+    await db.commit()
 
     log_audit_event(
         user_id=user_id,
@@ -493,8 +497,8 @@ def apply_approval(
     return approval
 
 
-def is_response_approved(
-    db: Session, *, notice_id: int, lock_for_update: bool = False
+async def is_response_approved(
+    db: AsyncSession, *, notice_id: int, lock_for_update: bool = False
 ) -> bool:
     """Returns True iff the notice has an approved response.
 
@@ -510,8 +514,8 @@ def is_response_approved(
     (allowing a notice to transition to submitted with a since-rejected
     response).
     """
-    q = db.query(NoticeResponse).filter(NoticeResponse.notice_id == notice_id)
+    q = select(NoticeResponse).where(NoticeResponse.notice_id == notice_id)
     if lock_for_update:
         q = q.with_for_update()
-    resp = q.first()
+    resp = (await db.execute(q)).scalar_one_or_none()
     return resp is not None and resp.status == ResponseStatus.APPROVED.value

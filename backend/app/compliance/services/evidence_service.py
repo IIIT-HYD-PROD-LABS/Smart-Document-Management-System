@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.models.notice import ComplianceNotice
 from app.compliance.models.response import NoticeEvidenceAttachment
@@ -27,8 +28,8 @@ class DocumentAccessDenied(PermissionError):
     document. Routers map this to HTTP 403."""
 
 
-def attach_document(
-    db: Session,
+async def attach_document(
+    db: AsyncSession,
     *,
     notice: ComplianceNotice,
     document_id: int,
@@ -44,7 +45,7 @@ def attach_document(
     H-C second hardening — verifies caller owns the document or has a
     DocumentPermission row. Raises DocumentAccessDenied otherwise.
     """
-    document = db.get(Document, document_id)
+    document = await db.get(Document, document_id)
     if document is None:
         raise ValueError(f"Document {document_id} not found")
 
@@ -53,13 +54,13 @@ def attach_document(
         if not is_owner:
             from app.models.document_permission import DocumentPermission
             shared = (
-                db.query(DocumentPermission)
-                .filter(
-                    DocumentPermission.document_id == document_id,
-                    DocumentPermission.user_id == user_id,
+                await db.execute(
+                    select(DocumentPermission).where(
+                        DocumentPermission.document_id == document_id,
+                        DocumentPermission.user_id == user_id,
+                    )
                 )
-                .first()
-            )
+            ).scalar_one_or_none()
             if shared is None:
                 raise DocumentAccessDenied(
                     f"User {user_id} cannot attach document {document_id} as "
@@ -67,13 +68,13 @@ def attach_document(
                 )
 
     existing = (
-        db.query(NoticeEvidenceAttachment)
-        .filter(
-            NoticeEvidenceAttachment.notice_id == notice.id,
-            NoticeEvidenceAttachment.document_id == document_id,
+        await db.execute(
+            select(NoticeEvidenceAttachment).where(
+                NoticeEvidenceAttachment.notice_id == notice.id,
+                NoticeEvidenceAttachment.document_id == document_id,
+            )
         )
-        .first()
-    )
+    ).scalar_one_or_none()
     if existing is not None:
         return existing
 
@@ -86,8 +87,8 @@ def attach_document(
         added_by_user_id=user_id,
     )
     db.add(row)
-    db.commit()
-    db.refresh(row)
+    await db.commit()
+    await db.refresh(row)
 
     log_activity(
         db,
@@ -100,7 +101,7 @@ def attach_document(
             "description": description,
         },
     )
-    db.commit()
+    await db.commit()
 
     log_audit_event(
         user_id=user_id,
@@ -115,8 +116,8 @@ def attach_document(
     return row
 
 
-def detach_document(
-    db: Session,
+async def detach_document(
+    db: AsyncSession,
     *,
     notice: ComplianceNotice,
     document_id: int,
@@ -130,17 +131,17 @@ def detach_document(
     of NOTICE_ATTACH_EVIDENCE strip another user's document off a notice.
     """
     if user_id is not None:
-        document = db.get(Document, document_id)
+        document = await db.get(Document, document_id)
         if document is not None and int(document.user_id) != int(user_id):
             from app.models.document_permission import DocumentPermission
             shared = (
-                db.query(DocumentPermission)
-                .filter(
-                    DocumentPermission.document_id == document_id,
-                    DocumentPermission.user_id == user_id,
+                await db.execute(
+                    select(DocumentPermission).where(
+                        DocumentPermission.document_id == document_id,
+                        DocumentPermission.user_id == user_id,
+                    )
                 )
-                .first()
-            )
+            ).scalar_one_or_none()
             if shared is None:
                 raise DocumentAccessDenied(
                     f"User {user_id} cannot detach document {document_id} from "
@@ -148,19 +149,19 @@ def detach_document(
                 )
 
     existing = (
-        db.query(NoticeEvidenceAttachment)
-        .filter(
-            NoticeEvidenceAttachment.notice_id == notice.id,
-            NoticeEvidenceAttachment.document_id == document_id,
+        await db.execute(
+            select(NoticeEvidenceAttachment).where(
+                NoticeEvidenceAttachment.notice_id == notice.id,
+                NoticeEvidenceAttachment.document_id == document_id,
+            )
         )
-        .first()
-    )
+    ).scalar_one_or_none()
     if existing is None:
         return False
 
     attachment_id = existing.id
-    db.delete(existing)
-    db.commit()
+    await db.delete(existing)
+    await db.commit()
 
     log_audit_event(
         user_id=user_id,
@@ -172,8 +173,8 @@ def detach_document(
     return True
 
 
-def list_attachments(
-    db: Session, *, notice_id: int, client_id: Optional[int] = None
+async def list_attachments(
+    db: AsyncSession, *, notice_id: int, client_id: Optional[int] = None
 ) -> list[NoticeEvidenceAttachment]:
     """List evidence rows for a notice.
 
@@ -182,12 +183,13 @@ def list_attachments(
     defense-in-depth filter so an RLS regression cannot surface another
     tenant's attachment rows. Defaults to None for RLS-bypassed callers.
     """
-    q = db.query(NoticeEvidenceAttachment).filter(
+    q = select(NoticeEvidenceAttachment).where(
         NoticeEvidenceAttachment.notice_id == notice_id
     )
     if client_id is not None:
-        q = q.filter(NoticeEvidenceAttachment.client_id == client_id)
-    return q.order_by(
+        q = q.where(NoticeEvidenceAttachment.client_id == client_id)
+    q = q.order_by(
         NoticeEvidenceAttachment.display_order,
         NoticeEvidenceAttachment.created_at,
-    ).all()
+    )
+    return (await db.execute(q)).scalars().all()

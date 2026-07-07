@@ -17,15 +17,15 @@ tabs on the reports page.
 import html
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import extract, func, text
-from sqlalchemy.orm import Session
+from sqlalchemy import extract, func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.models.client import Client
 from app.compliance.models.notice import ComplianceNotice
 
 
-def generate_health_summary(
-    db: Session, client_id: int, month: str
+async def generate_health_summary(
+    db: AsyncSession, client_id: int, month: str
 ) -> dict:
     """Generate a monthly compliance health summary.
 
@@ -56,32 +56,30 @@ def generate_health_summary(
             f"Invalid month format: {month}. Use 'YYYY-MM'."
         ) from exc
 
-    client = db.query(Client).filter(Client.id == client_id).first()
+    client = (
+        await db.execute(select(Client).where(Client.id == client_id))
+    ).scalar_one_or_none()
     if client is None:
         raise ValueError(f"Client {client_id} not found")
 
     # Notices created in the month
-    notices_in_month = (
-        db.query(ComplianceNotice)
-        .filter(
+    notices_in_month = await db.scalar(
+        select(func.count()).select_from(ComplianceNotice).where(
             ComplianceNotice.client_id == client_id,
             extract("year", ComplianceNotice.created_at) == year,
             extract("month", ComplianceNotice.created_at) == month_num,
         )
-        .count()
     )
 
     # Notices resolved in the month (status_changed_at within window)
-    resolved = (
-        db.query(ComplianceNotice)
-        .filter(
+    resolved = await db.scalar(
+        select(func.count()).select_from(ComplianceNotice).where(
             ComplianceNotice.client_id == client_id,
             ComplianceNotice.status == "resolved",
             extract("year", ComplianceNotice.status_changed_at) == year,
             extract("month", ComplianceNotice.status_changed_at)
             == month_num,
         )
-        .count()
     )
 
     metrics = {
@@ -123,8 +121,8 @@ def _window_start(window_days: int) -> datetime:
     return datetime.now(timezone.utc) - timedelta(days=window_days)
 
 
-def penalty_by_authority(
-    db: Session, *, client_id: int, window_days: int = 90
+async def penalty_by_authority(
+    db: AsyncSession, *, client_id: int, window_days: int = 90
 ) -> list[dict]:
     """Sum + count of notices grouped by authority over the rolling window.
 
@@ -135,8 +133,8 @@ def penalty_by_authority(
     analytics displays).
     """
     cutoff = _window_start(window_days)
-    rows = (
-        db.query(
+    result = await db.execute(
+        select(
             ComplianceNotice.authority,
             func.count(ComplianceNotice.id).label("count"),
             func.coalesce(
@@ -146,14 +144,14 @@ def penalty_by_authority(
                 func.sum(ComplianceNotice.tax_demand), 0
             ).label("total_tax_demand"),
         )
-        .filter(
+        .where(
             ComplianceNotice.client_id == client_id,
             ComplianceNotice.created_at >= cutoff,
         )
         .group_by(ComplianceNotice.authority)
         .order_by(func.sum(ComplianceNotice.penalty).desc().nulls_last())
-        .all()
     )
+    rows = result.all()
     return [
         {
             "authority": r.authority,
@@ -165,28 +163,28 @@ def penalty_by_authority(
     ]
 
 
-def notice_volume_by_status(
-    db: Session, *, client_id: int, window_days: int = 90
+async def notice_volume_by_status(
+    db: AsyncSession, *, client_id: int, window_days: int = 90
 ) -> list[dict]:
     """Notice counts grouped by status over the rolling window."""
     cutoff = _window_start(window_days)
-    rows = (
-        db.query(
+    result = await db.execute(
+        select(
             ComplianceNotice.status,
             func.count(ComplianceNotice.id).label("count"),
         )
-        .filter(
+        .where(
             ComplianceNotice.client_id == client_id,
             ComplianceNotice.created_at >= cutoff,
         )
         .group_by(ComplianceNotice.status)
-        .all()
     )
+    rows = result.all()
     return [{"status": r.status, "count": int(r.count)} for r in rows]
 
 
-def response_time_distribution(
-    db: Session, *, client_id: int, window_days: int = 90
+async def response_time_distribution(
+    db: AsyncSession, *, client_id: int, window_days: int = 90
 ) -> dict:
     """Response time distribution for resolved/submitted notices in window.
 
@@ -215,7 +213,7 @@ def response_time_distribution(
         FROM durations
         """
     )
-    row = db.execute(sql, {"cid": client_id, "cutoff": cutoff}).fetchone()
+    row = (await db.execute(sql, {"cid": client_id, "cutoff": cutoff})).fetchone()
     if row is None or row.count == 0:
         return {"p50": 0.0, "p90": 0.0, "p95": 0.0, "mean": 0.0, "count": 0}
     return {

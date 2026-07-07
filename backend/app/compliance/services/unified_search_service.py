@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Iterable, Literal, Optional
 
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 EntityType = Literal["notice", "document"]
@@ -57,8 +57,8 @@ def _normalize_query(q: str) -> Optional[str]:
     return " & ".join(t.lower() for t in tokens)
 
 
-def search(
-    db: Session,
+async def search(
+    db: AsyncSession,
     *,
     query: str,
     user_id: int,
@@ -159,14 +159,16 @@ def search(
         " UNION ALL ".join(parts)
         + " ORDER BY rank DESC LIMIT :limit OFFSET :offset"
     )
-    rows = db.execute(
-        text(sql),
-        {
-            "tsquery": tsquery,
-            "user_id": user_id,
-            "limit": page_size,
-            "offset": offset,
-        },
+    rows = (
+        await db.execute(
+            text(sql),
+            {
+                "tsquery": tsquery,
+                "user_id": user_id,
+                "limit": page_size,
+                "offset": offset,
+            },
+        )
     ).fetchall()
 
     return [

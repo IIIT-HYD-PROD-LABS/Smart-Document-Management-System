@@ -10,7 +10,8 @@ All routes RLS-scoped via X-Client-Id header (Phase 9 TenantContextMiddleware).
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import (
     is_cross_client_mode,
@@ -31,7 +32,7 @@ from app.compliance.services.review_queue_service import (
     enqueue_manual,
     list_pending,
 )
-from app.database import get_db
+from app.database import get_async_db
 
 router = APIRouter(prefix="/review", tags=["compliance-review-queue"])
 
@@ -41,13 +42,13 @@ router = APIRouter(prefix="/review", tags=["compliance-review-queue"])
     response_model=ReviewQueueListResponse,
     summary="List pending notice review queue items",
 )
-def list_pending_review(
+async def list_pending_review(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List notices awaiting human review.
 
@@ -56,7 +57,7 @@ def list_pending_review(
     is queued without being able to assign labels.
     """
     client_id = None if is_cross_client_mode() else membership.client_id
-    items, total = list_pending(
+    items, total = await list_pending(
         db, client_id=client_id, page=page, page_size=page_size
     )
     return ReviewQueueListResponse(
@@ -72,18 +73,18 @@ def list_pending_review(
     response_model=ReviewQueueOut,
     summary="Get a single review queue row",
 )
-def get_review(
+async def get_review(
     review_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     # Defense-in-depth: explicit client_id filter on top of RLS.
-    q = db.query(NoticeReviewQueue).filter(NoticeReviewQueue.id == review_id)
+    stmt = select(NoticeReviewQueue).where(NoticeReviewQueue.id == review_id)
     if not is_cross_client_mode():
-        q = q.filter(NoticeReviewQueue.client_id == membership.client_id)
-    row = q.first()
+        stmt = stmt.where(NoticeReviewQueue.client_id == membership.client_id)
+    row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -98,13 +99,13 @@ def get_review(
     status_code=status.HTTP_201_CREATED,
     summary="Operator flags a notice for human review",
 )
-def manual_enqueue(
+async def manual_enqueue(
     notice_id: int,
     body: dict | None = None,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Flag a notice for human re-classification.
 
@@ -121,20 +122,20 @@ def manual_enqueue(
     # Defense-in-depth: explicit client_id filter on top of RLS so a
     # tenant A user cannot enqueue tenant B's notice into the review queue.
     notice = (
-        db.query(ComplianceNotice)
-        .filter(
-            ComplianceNotice.id == notice_id,
-            ComplianceNotice.client_id == membership.client_id,
+        await db.execute(
+            select(ComplianceNotice).where(
+                ComplianceNotice.id == notice_id,
+                ComplianceNotice.client_id == membership.client_id,
+            )
         )
-        .first()
-    )
+    ).scalar_one_or_none()
     if notice is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Notice {notice_id} not found",
         )
     reason_note = (body or {}).get("reason") if isinstance(body, dict) else None
-    row = enqueue_manual(
+    row = await enqueue_manual(
         db,
         notice=notice,
         flagged_by_user_id=membership.user_id,
@@ -148,28 +149,29 @@ def manual_enqueue(
     response_model=ReviewQueueAssignResponse,
     summary="Reviewer assigns authoritative classification",
 )
-def assign_review(
+async def assign_review(
     review_id: int,
     body: ReviewQueueAssignRequest,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_REVIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     # Defense-in-depth: explicit client_id filter on top of RLS so a tenant A
     # user cannot assign labels on tenant B's review row (the service does an
     # unscoped db.get on review_id).
-    q = db.query(NoticeReviewQueue).filter(NoticeReviewQueue.id == review_id)
+    stmt = select(NoticeReviewQueue).where(NoticeReviewQueue.id == review_id)
     if not is_cross_client_mode():
-        q = q.filter(NoticeReviewQueue.client_id == membership.client_id)
-    if q.first() is None:
+        stmt = stmt.where(NoticeReviewQueue.client_id == membership.client_id)
+    existing = (await db.execute(stmt)).scalar_one_or_none()
+    if existing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Review queue row {review_id} not found",
         )
 
     try:
-        row = assign_reviewer_label(
+        row = await assign_reviewer_label(
             db,
             review_id=review_id,
             user_id=membership.user_id,

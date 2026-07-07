@@ -13,7 +13,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import require_compliance_permission
 from app.compliance.models.membership import ClientMembership
@@ -22,7 +22,7 @@ from app.compliance.services.unified_search_service import (
     UnifiedSearchHit,
     search,
 )
-from app.database import get_db
+from app.database import get_async_db
 from app.models.user import User
 from app.utils.security import get_current_user
 
@@ -53,7 +53,7 @@ class UnifiedSearchResponse(BaseModel):
     response_model=UnifiedSearchResponse,
     summary="Cross-entity search across compliance_notices + documents",
 )
-def unified_search(
+async def unified_search(
     # min_length=2: PostgreSQL FTS with 1-char tokens (e.g. "a") falls back
     # to a sequential scan because GIN indexes don't store single-char
     # lexemes by default. 2 is the minimum that reliably uses the index.
@@ -68,7 +68,7 @@ def unified_search(
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     types_list = [
         t.strip()
@@ -76,7 +76,7 @@ def unified_search(
         if t.strip() in ("notice", "document")
     ]
     try:
-        hits: list[UnifiedSearchHit] = search(
+        hits: list[UnifiedSearchHit] = await search(
             db,
             query=q,
             user_id=int(current_user.id),

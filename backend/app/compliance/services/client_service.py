@@ -26,8 +26,8 @@ commit succeeds, so a transient audit failure cannot abort onboarding.
 """
 from datetime import datetime, timezone
 
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.models.client import Client, ClientRegistration
 from app.compliance.models.membership import ClientMembership
@@ -36,8 +36,8 @@ from app.models.user import User
 from app.services.audit_service import log_audit_event
 
 
-def onboard_client(
-    db: Session,
+async def onboard_client(
+    db: AsyncSession,
     details: dict,
     registrations: list[dict],
     team: list[dict],
@@ -67,9 +67,11 @@ def onboard_client(
     if candidate_ids:
         existing_ids = {
             uid
-            for (uid,) in db.query(User.id)
-            .filter(User.id.in_(candidate_ids))
-            .all()
+            for (uid,) in (
+                await db.execute(
+                    select(User.id).where(User.id.in_(candidate_ids))
+                )
+            ).all()
         }
     else:
         existing_ids = set()
@@ -97,7 +99,7 @@ def onboard_client(
 
     from app.services.invitation_service import (
         InvitationError,
-        resolve_or_invite,
+        resolve_or_invite_async,
     )
 
     try:
@@ -108,7 +110,7 @@ def onboard_client(
             primary_contact_email=details.get("primary_contact_email"),
         )
         db.add(client)
-        db.flush()  # materialise client.id without committing
+        await db.flush()  # materialise client.id without committing
 
         for reg in registrations:
             db.add(
@@ -138,7 +140,7 @@ def onboard_client(
         # because the wrapper commit must still go through.
         for member in email_team:
             try:
-                uid, _invited, _dev_token = resolve_or_invite(
+                uid, _invited, _dev_token = await resolve_or_invite_async(
                     db,
                     client_id=client.id,
                     client_name=client.name,
@@ -163,10 +165,10 @@ def onboard_client(
                 )
             )
 
-        db.commit()
-        db.refresh(client)
+        await db.commit()
+        await db.refresh(client)
     except Exception:
-        db.rollback()
+        await db.rollback()
         raise
 
     # AUDIT-02 — write after the business commit so audit issues
@@ -186,7 +188,7 @@ def onboard_client(
     return client
 
 
-def get_dashboard_aggregates(db: Session, client_id: int) -> dict:
+async def get_dashboard_aggregates(db: AsyncSession, client_id: int) -> dict:
     """Per-client dashboard aggregates — CLIENT-03 / D-18.
 
     Real-time aggregation; no pre-computed table at Phase 9 scale.
@@ -206,56 +208,52 @@ def get_dashboard_aggregates(db: Session, client_id: int) -> dict:
     scoring is a Phase 10 BERT classifier (D-06). The shape is preserved
     so the UI's five-color contract from 09-UI-SPEC works unchanged.
     """
-    base = db.query(ComplianceNotice).filter(
-        ComplianceNotice.client_id == client_id
+    total = await db.scalar(
+        select(func.count(ComplianceNotice.id)).where(
+            ComplianceNotice.client_id == client_id
+        )
     )
-    total = base.count()
 
     status_rows = (
-        db.query(
-            ComplianceNotice.status, func.count(ComplianceNotice.id)
+        await db.execute(
+            select(ComplianceNotice.status, func.count(ComplianceNotice.id))
+            .where(ComplianceNotice.client_id == client_id)
+            .group_by(ComplianceNotice.status)
         )
-        .filter(ComplianceNotice.client_id == client_id)
-        .group_by(ComplianceNotice.status)
-        .all()
-    )
+    ).all()
     by_status = {st: cnt for st, cnt in status_rows}
 
     auth_rows = (
-        db.query(
-            ComplianceNotice.authority, func.count(ComplianceNotice.id)
+        await db.execute(
+            select(ComplianceNotice.authority, func.count(ComplianceNotice.id))
+            .where(ComplianceNotice.client_id == client_id)
+            .group_by(ComplianceNotice.authority)
         )
-        .filter(ComplianceNotice.client_id == client_id)
-        .group_by(ComplianceNotice.authority)
-        .all()
-    )
+    ).all()
     by_authority = {a: cnt for a, cnt in auth_rows}
 
     # Real GROUP BY on the risk_tier column. NULL (rule-based output that
     # didn't run the classifier, manual entries pre-Phase 10) buckets as
     # "unscored" so the five-color contract from 09-UI-SPEC stays stable.
     risk_rows = (
-        db.query(
-            ComplianceNotice.risk_tier, func.count(ComplianceNotice.id)
+        await db.execute(
+            select(ComplianceNotice.risk_tier, func.count(ComplianceNotice.id))
+            .where(ComplianceNotice.client_id == client_id)
+            .group_by(ComplianceNotice.risk_tier)
         )
-        .filter(ComplianceNotice.client_id == client_id)
-        .group_by(ComplianceNotice.risk_tier)
-        .all()
-    )
+    ).all()
     by_risk_tier = {"unscored": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
     for tier, cnt in risk_rows:
         key = tier if tier in ("critical", "high", "medium", "low") else "unscored"
         by_risk_tier[key] = by_risk_tier[key] + cnt
 
     today = datetime.now(timezone.utc).date()
-    overdue = (
-        db.query(ComplianceNotice)
-        .filter(
+    overdue = await db.scalar(
+        select(func.count(ComplianceNotice.id)).where(
             ComplianceNotice.client_id == client_id,
             ComplianceNotice.response_deadline < today,
             ComplianceNotice.status.notin_(("resolved", "dismissed")),
         )
-        .count()
     )
 
     return {

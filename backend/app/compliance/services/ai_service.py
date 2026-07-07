@@ -28,7 +28,9 @@ from typing import Any, Dict, List, Optional
 
 from dataclasses import dataclass
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -68,9 +70,11 @@ __all__ = [
     "chat_with_assistant",
     "delete_credential",
     "get_credential",
+    "get_credential_async",
     "recommend_invoice_actions",
     "recommend_notice_actions",
     "resolve_credential",
+    "resolve_credential_async",
     "set_credential",
     "summarize_invoice",
     "summarize_notice",
@@ -138,8 +142,17 @@ def get_credential(db: Session, client_id: int) -> Optional[AICredential]:
     )
 
 
-def set_credential(
-    db: Session,
+async def get_credential_async(
+    db: AsyncSession, client_id: int
+) -> Optional[AICredential]:
+    result = await db.execute(
+        select(AICredential).where(AICredential.client_id == client_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def set_credential(
+    db: AsyncSession,
     client_id: int,
     provider: str,
     model: str,
@@ -157,13 +170,13 @@ def set_credential(
     if enc is None:  # encrypt_field returns None only when input is None
         raise ValueError("api_key encryption produced None")
 
-    existing = get_credential(db, client_id)
+    existing = await get_credential_async(db, client_id)
     if existing:
         existing.provider = provider
         existing.model = model
         existing.api_key_enc = enc
-        db.commit()
-        db.refresh(existing)
+        await db.commit()
+        await db.refresh(existing)
         return existing
 
     row = AICredential(
@@ -174,12 +187,12 @@ def set_credential(
     )
     db.add(row)
     try:
-        db.commit()
+        await db.commit()
     except IntegrityError:
-        db.rollback()
+        await db.rollback()
         # Another concurrent request just created the row; treat this
         # as an update on the now-existing record.
-        existing = get_credential(db, client_id)
+        existing = await get_credential_async(db, client_id)
         if existing is None:
             # Highly unlikely (constraint fired but row not visible) —
             # bubble the original error semantics so the caller sees a
@@ -188,19 +201,19 @@ def set_credential(
         existing.provider = provider
         existing.model = model
         existing.api_key_enc = enc
-        db.commit()
-        db.refresh(existing)
+        await db.commit()
+        await db.refresh(existing)
         return existing
-    db.refresh(row)
+    await db.refresh(row)
     return row
 
 
-def delete_credential(db: Session, client_id: int) -> bool:
-    row = get_credential(db, client_id)
+async def delete_credential(db: AsyncSession, client_id: int) -> bool:
+    row = await get_credential_async(db, client_id)
     if not row:
         return False
-    db.delete(row)
-    db.commit()
+    await db.delete(row)
+    await db.commit()
     return True
 
 
@@ -295,6 +308,21 @@ def resolve_credential(db: Session, client_id: int):
     )
 
 
+async def resolve_credential_async(db: AsyncSession, client_id: int):
+    """Async twin of `resolve_credential` — same BYOK-first resolution,
+    used by the async router/service call chain."""
+    cred = await get_credential_async(db, client_id)
+    if cred is not None:
+        return cred
+    server = _server_default_config()
+    if server is None:
+        return None
+    provider, model, api_key = server
+    return _ServerCredential(
+        provider=provider, model=model, api_key=api_key, client_id=client_id
+    )
+
+
 def _build_active_provider(db: Session, cred) -> AIProvider:
     """Decrypt + materialise a provider client for this credential.
 
@@ -310,6 +338,22 @@ def _build_active_provider(db: Session, cred) -> AIProvider:
         raise AIAuthError("stored api key could not be decrypted")
     cred.last_used_at = datetime.now(timezone.utc)
     db.commit()
+    return build_provider(cred.provider, plaintext, cred.model)
+
+
+async def _build_active_provider_async(db: AsyncSession, cred) -> AIProvider:
+    """Async twin of `_build_active_provider`.
+
+    The sync original stays untouched: `notice_extractor_service.py` (Phase
+    17 extraction) still calls it with a sync Session.
+    """
+    if getattr(cred, "is_server_default", False):
+        return build_provider(cred.provider, cred.api_key, cred.model)
+    plaintext = decrypt_field(cred.api_key_enc)
+    if plaintext is None:
+        raise AIAuthError("stored api key could not be decrypted")
+    cred.last_used_at = datetime.now(timezone.utc)
+    await db.commit()
     return build_provider(cred.provider, plaintext, cred.model)
 
 
@@ -412,19 +456,19 @@ def _invoice_context(bill: Bill) -> str:
     )
 
 
-def _recent_invoice_history(db: Session, bill: Bill, limit: int = 6) -> str:
+async def _recent_invoice_history(db: AsyncSession, bill: Bill, limit: int = 6) -> str:
     """Last N invoices from the same biller (for anomaly detection)."""
-    rows = (
-        db.query(Bill)
-        .filter(
+    result = await db.execute(
+        select(Bill)
+        .where(
             Bill.client_id == bill.client_id,
             Bill.biller_name_normalized == bill.biller_name_normalized,
             Bill.id != bill.id,
         )
         .order_by(Bill.due_date.desc().nullslast())
         .limit(limit)
-        .all()
     )
+    rows = result.scalars().all()
     return json.dumps(
         [
             {
@@ -444,10 +488,10 @@ def _recent_invoice_history(db: Session, bill: Bill, limit: int = 6) -> str:
 # ─────────────────────────────────────────────────────────────────────
 
 
-def summarize_notice(
-    db: Session, cred: AICredential, notice: ComplianceNotice
+async def summarize_notice(
+    db: AsyncSession, cred: AICredential, notice: ComplianceNotice
 ) -> Dict[str, Any]:
-    p = _build_active_provider(db, cred)
+    p = await _build_active_provider_async(db, cred)
     user = (
         "Summarise this regulatory notice for a CA in 4-6 short bullet points "
         "covering: (a) authority + notice subject in plain language, "
@@ -472,10 +516,10 @@ def summarize_notice(
     }
 
 
-def recommend_notice_actions(
-    db: Session, cred: AICredential, notice: ComplianceNotice
+async def recommend_notice_actions(
+    db: AsyncSession, cred: AICredential, notice: ComplianceNotice
 ) -> List[Dict[str, Any]]:
-    p = _build_active_provider(db, cred)
+    p = await _build_active_provider_async(db, cred)
     user = (
         "Suggest 3-5 concrete next actions for the compliance team handling "
         "this notice. Each action must be specific (a button the team would "
@@ -504,11 +548,11 @@ def recommend_notice_actions(
     ]
 
 
-def summarize_invoice(
-    db: Session, cred: AICredential, bill: Bill
+async def summarize_invoice(
+    db: AsyncSession, cred: AICredential, bill: Bill
 ) -> Dict[str, Any]:
-    p = _build_active_provider(db, cred)
-    history = _recent_invoice_history(db, bill)
+    p = await _build_active_provider_async(db, cred)
+    history = await _recent_invoice_history(db, bill)
     user = (
         "Summarise this vendor invoice for a finance reviewer in 2-3 lines, "
         "then list any anomalies. Anomaly examples: amount unusually higher "
@@ -529,10 +573,10 @@ def summarize_invoice(
     }
 
 
-def recommend_invoice_actions(
-    db: Session, cred: AICredential, bill: Bill
+async def recommend_invoice_actions(
+    db: AsyncSession, cred: AICredential, bill: Bill
 ) -> List[Dict[str, Any]]:
-    p = _build_active_provider(db, cred)
+    p = await _build_active_provider_async(db, cred)
     user = (
         "Suggest 2-4 concrete next actions for a finance reviewer handling "
         "this vendor invoice within TaxSync. Examples: 'Mark paid', "
@@ -560,8 +604,8 @@ def recommend_invoice_actions(
     ]
 
 
-def chat_with_assistant(
-    db: Session, cred: AICredential, messages: list[dict]
+async def chat_with_assistant(
+    db: AsyncSession, cred: AICredential, messages: list[dict]
 ) -> dict:
     """Multi-turn chat with the scope-locked TaxSync assistant.
 
@@ -572,7 +616,7 @@ def chat_with_assistant(
     `out_of_scope=True` so the frontend can style the bubble distinctly
     (a 422 round-trip would defeat the chat UX).
     """
-    p = _build_active_provider(db, cred)
+    p = await _build_active_provider_async(db, cred)
     raw = p.chat(SCOPE_LOCK_SYSTEM, messages, max_tokens=1024)
     cleaned = (raw or "").strip()
     if cleaned == OUT_OF_SCOPE_SENTINEL:
@@ -586,11 +630,11 @@ def chat_with_assistant(
     return {"reply": cleaned, "out_of_scope": False}
 
 
-def suggest_invoice_payment_timing(
-    db: Session, cred: AICredential, bill: Bill
+async def suggest_invoice_payment_timing(
+    db: AsyncSession, cred: AICredential, bill: Bill
 ) -> Dict[str, Any]:
-    p = _build_active_provider(db, cred)
-    history = _recent_invoice_history(db, bill)
+    p = await _build_active_provider_async(db, cred)
+    history = await _recent_invoice_history(db, bill)
     user = (
         "When should this vendor invoice be paid? Use the recent history to "
         "infer typical payment timing patterns. Output a one-line "

@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import (
     is_cross_client_mode,
@@ -36,7 +36,7 @@ from app.compliance.services.report_service import (
     penalty_by_authority,
     response_time_distribution,
 )
-from app.database import get_db
+from app.database import get_async_db
 
 
 def _csv_stream(headers: list[str], rows: list[dict]) -> io.StringIO:
@@ -107,9 +107,9 @@ class HealthSummaryResponse(BaseModel):
 
 
 @router.post("/health-summary", response_model=HealthSummaryResponse)
-def health_summary(
+async def health_summary(
     payload: HealthSummaryRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_EXPORT)
     ),
@@ -125,7 +125,7 @@ def health_summary(
             detail="Cannot generate a report for a non-active client",
         )
     try:
-        return generate_health_summary(
+        return await generate_health_summary(
             db=db,
             client_id=payload.client_id,
             month=payload.month,
@@ -166,15 +166,15 @@ class ResponseTimeStats(BaseModel):
     response_model=list[AuthorityPenaltyRow],
     summary="Penalty + tax-demand totals grouped by authority",
 )
-def penalty_by_authority_endpoint(
+async def penalty_by_authority_endpoint(
     window_days: int = Query(90, ge=1, le=3660),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     _reject_cross_client_mode()
-    rows = penalty_by_authority(
+    rows = await penalty_by_authority(
         db, client_id=membership.client_id, window_days=window_days
     )
     return [AuthorityPenaltyRow(**r) for r in rows]
@@ -185,15 +185,15 @@ def penalty_by_authority_endpoint(
     response_model=list[StatusVolumeRow],
     summary="Notice counts grouped by status",
 )
-def notice_volume_by_status_endpoint(
+async def notice_volume_by_status_endpoint(
     window_days: int = Query(90, ge=1, le=3660),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     _reject_cross_client_mode()
-    rows = notice_volume_by_status(
+    rows = await notice_volume_by_status(
         db, client_id=membership.client_id, window_days=window_days
     )
     return [StatusVolumeRow(**r) for r in rows]
@@ -204,16 +204,16 @@ def notice_volume_by_status_endpoint(
     response_model=ResponseTimeStats,
     summary="Response time percentile distribution (resolved/submitted notices)",
 )
-def response_time_endpoint(
+async def response_time_endpoint(
     window_days: int = Query(90, ge=1, le=3660),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     _reject_cross_client_mode()
     return ResponseTimeStats(
-        **response_time_distribution(
+        **await response_time_distribution(
             db, client_id=membership.client_id, window_days=window_days
         )
     )
@@ -233,15 +233,15 @@ def response_time_endpoint(
     "/penalty-by-authority/export",
     summary="Download penalty-by-authority aggregation as CSV",
 )
-def export_penalty_by_authority(
+async def export_penalty_by_authority(
     window_days: int = Query(90, ge=1, le=3660),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_EXPORT)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     _reject_cross_client_mode()
-    rows = penalty_by_authority(
+    rows = await penalty_by_authority(
         db, client_id=membership.client_id, window_days=window_days
     )
     buf = _csv_stream(
@@ -255,15 +255,15 @@ def export_penalty_by_authority(
     "/notice-volume-by-status/export",
     summary="Download notice-volume-by-status aggregation as CSV",
 )
-def export_notice_volume_by_status(
+async def export_notice_volume_by_status(
     window_days: int = Query(90, ge=1, le=3660),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_EXPORT)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     _reject_cross_client_mode()
-    rows = notice_volume_by_status(
+    rows = await notice_volume_by_status(
         db, client_id=membership.client_id, window_days=window_days
     )
     buf = _csv_stream(headers=["status", "count"], rows=rows)
@@ -274,15 +274,15 @@ def export_notice_volume_by_status(
     "/response-time/export",
     summary="Download response-time percentile stats as CSV",
 )
-def export_response_time(
+async def export_response_time(
     window_days: int = Query(90, ge=1, le=3660),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_EXPORT)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     _reject_cross_client_mode()
-    stats = response_time_distribution(
+    stats = await response_time_distribution(
         db, client_id=membership.client_id, window_days=window_days
     )
     # Three columns so units are explicit. Earlier shape mixed `days` (float
@@ -305,9 +305,9 @@ def export_response_time(
     "/health-summary/export",
     summary="Download monthly health summary as CSV",
 )
-def export_health_summary(
+async def export_health_summary(
     payload: HealthSummaryRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.REPORT_EXPORT)
     ),
@@ -320,7 +320,7 @@ def export_health_summary(
             detail="Cannot generate a report for a non-active client",
         )
     try:
-        result = generate_health_summary(
+        result = await generate_health_summary(
             db=db,
             client_id=payload.client_id,
             month=payload.month,

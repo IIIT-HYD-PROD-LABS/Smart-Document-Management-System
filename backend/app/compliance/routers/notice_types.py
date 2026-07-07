@@ -13,13 +13,14 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import require_compliance_permission
 from app.compliance.models.membership import ClientMembership
 from app.compliance.models.notice_type import NoticeType
 from app.compliance.services.permission_registry import CompliancePermission
-from app.database import get_db
+from app.database import get_async_db
 
 
 router = APIRouter(prefix="/notice-types", tags=["compliance-lookups"])
@@ -37,15 +38,17 @@ class NoticeTypeOut(BaseModel):
 
 
 @router.get("", response_model=List[NoticeTypeOut])
-def list_notice_types(
+async def list_notice_types(
     authority: Optional[str] = Query(None),
     _gate: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Enumerate active notice types, optionally filtered by authority."""
-    q = db.query(NoticeType).filter(NoticeType.is_active.is_(True))
+    q = select(NoticeType).where(NoticeType.is_active.is_(True))
     if authority:
-        q = q.filter(NoticeType.authority == authority)
-    return q.order_by(NoticeType.authority, NoticeType.code).all()
+        q = q.where(NoticeType.authority == authority)
+    q = q.order_by(NoticeType.authority, NoticeType.code)
+    result = await db.execute(q)
+    return result.scalars().all()

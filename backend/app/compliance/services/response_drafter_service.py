@@ -23,7 +23,7 @@ import logging
 import time
 from typing import Any
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.models.notice import ComplianceNotice
 from app.compliance.services import ai_service
@@ -97,8 +97,8 @@ def _write_audit(
     )
 
 
-def draft_response_for_notice(
-    db: Session,
+async def draft_response_for_notice(
+    db: AsyncSession,
     *,
     notice: ComplianceNotice,
     user_id: int | None,
@@ -128,13 +128,13 @@ def draft_response_for_notice(
     guidance = (user_guidance or "")[:MAX_GUIDANCE_CHARS]
     guidance_sha = _sha256_text(guidance)
 
-    cred = ai_service.resolve_credential(db, client_id=notice.client_id)
+    cred = await ai_service.resolve_credential_async(db, client_id=notice.client_id)
     if cred is None:
         raise ResponseDraftCredentialMissingError(
             "No AI credential configured for this tenant"
         )
 
-    provider = ai_service._build_active_provider(db, cred)
+    provider = await ai_service._build_active_provider_async(db, cred)
     started = time.monotonic()
 
     extracted_fields = notice.extracted_fields or {}

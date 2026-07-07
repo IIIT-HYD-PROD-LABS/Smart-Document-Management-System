@@ -21,13 +21,14 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.middleware.auditor_expiry import is_membership_active
 from app.compliance.middleware.tenant_context import current_user_id_var
 from app.compliance.models.membership import ClientMembership
 from app.compliance.websocket.manager import get_manager
-from app.database import SessionLocal
+from app.database import AsyncSessionLocal
 from app.models.user import User
 from app.utils.security import decode_access_token
 
@@ -40,10 +41,10 @@ router = APIRouter()
 MEMBERSHIP_RECHECK_SECONDS = 60.0
 
 
-def _validate_session(token: str, client_id: int) -> Optional[tuple[int, ClientMembership]]:
+async def _validate_session(token: str, client_id: int) -> Optional[tuple[int, ClientMembership]]:
     """One-shot validation in a short-lived DB session. Returns
     (user_id, membership) on success, or None on auth failure."""
-    db: Session = SessionLocal()
+    db: AsyncSession = AsyncSessionLocal()
     try:
         try:
             payload = decode_access_token(token)
@@ -60,18 +61,17 @@ def _validate_session(token: str, client_id: int) -> Optional[tuple[int, ClientM
         # user to read their own membership row.
         current_user_id_var.set(user_id)
 
-        user = db.get(User, user_id)
+        user = await db.get(User, user_id)
         if user is None:
             return None
 
-        membership = (
-            db.query(ClientMembership)
-            .filter(
+        result = await db.execute(
+            select(ClientMembership).where(
                 ClientMembership.user_id == user_id,
                 ClientMembership.client_id == client_id,
             )
-            .first()
         )
+        membership = result.scalar_one_or_none()
         if membership is None or not is_membership_active(membership):
             return None
 
@@ -81,28 +81,27 @@ def _validate_session(token: str, client_id: int) -> Optional[tuple[int, ClientM
         db.expunge(membership)
         return user_id, membership
     finally:
-        db.close()
+        await db.close()
 
 
-def _membership_still_active(user_id: int, client_id: int) -> bool:
+async def _membership_still_active(user_id: int, client_id: int) -> bool:
     """Re-check on a fresh DB session; True iff membership still active."""
-    db: Session = SessionLocal()
+    db: AsyncSession = AsyncSessionLocal()
     try:
         # See _validate_session: set app.user_id so the self_membership_view
         # RLS policy authorizes this lookup under app_runtime (WS has no
         # middleware-set tenant context).
         current_user_id_var.set(user_id)
-        m = (
-            db.query(ClientMembership)
-            .filter(
+        result = await db.execute(
+            select(ClientMembership).where(
                 ClientMembership.user_id == user_id,
                 ClientMembership.client_id == client_id,
             )
-            .first()
         )
+        m = result.scalar_one_or_none()
         return m is not None and is_membership_active(m)
     finally:
-        db.close()
+        await db.close()
 
 
 @router.websocket("/ws/notifications")
@@ -112,7 +111,7 @@ async def notifications_websocket(
     client_id: int = Query(...),
 ):
     """JWT-authenticated WebSocket per-client subscription."""
-    auth = _validate_session(token, client_id)
+    auth = await _validate_session(token, client_id)
     if auth is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
@@ -124,7 +123,7 @@ async def notifications_websocket(
 
     async def _recheck_or_close() -> bool:
         """Returns True if connection should stay open, False if closed."""
-        if not _membership_still_active(user_id, client_id):
+        if not await _membership_still_active(user_id, client_id):
             logger.info(
                 "WebSocket membership inactive for user_id=%d "
                 "client_id=%d — closing",

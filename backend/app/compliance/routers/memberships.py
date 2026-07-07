@@ -1,22 +1,23 @@
 """Client membership management router — Phase 9 CLIENT-05, RBAC-04.
 
-POST   /clients/{client_id}/memberships                  — add team member
-DELETE /clients/{client_id}/memberships/{membership_id}  — revoke membership
+POST   /clients/{client_id}/memberships              — add a team member
+DELETE /clients/{client_id}/memberships/{membership_id} — revoke membership
 
-Both endpoints require CLIENT_MANAGE_TEAM. Per the registry that's
+Both endpoints require CLIENT_MANAGE_TEAM, which per the registry is
 compliance_head + ca_consultant only.
 
 Audit logging:
-  - membership_added   on successful POST
+  - membership_added on successful POST
   - membership_removed on successful DELETE
 
-These are written to the immutable system audit_log via log_audit_event
-(separate session — failures cannot roll back business operations).
+Both are written to the immutable system audit_log via log_audit_event
+(separate session so failures cannot roll back the business operation).
 """
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import require_compliance_permission
 from app.compliance.models.client import Client
@@ -24,12 +25,12 @@ from app.compliance.models.membership import ClientMembership
 from app.compliance.schemas.client import MembershipCreate, MembershipOut
 from app.compliance.services.permission_registry import CompliancePermission
 from app.config import settings
-from app.database import get_db
+from app.database import get_async_db
 from app.models.user import User
 from app.services.audit_service import log_audit_event
 from app.services.invitation_service import (
     InvitationError,
-    resolve_or_invite,
+    resolve_or_invite_async,
 )
 from app.utils.security import get_current_user
 
@@ -47,11 +48,11 @@ router = APIRouter(
     response_model=MembershipOut,
     status_code=status.HTTP_201_CREATED,
 )
-def add_member(
+async def add_member(
     client_id: int,
     payload: MembershipCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     _gate: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.CLIENT_MANAGE_TEAM)
     ),
@@ -68,7 +69,7 @@ def add_member(
     first asking them to self-register. The invitee completes signup via
     POST /api/auth/accept-invite (set password + auto-login).
     """
-    client = db.get(Client, client_id)
+    client = await db.get(Client, client_id)
     if client is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -76,7 +77,7 @@ def add_member(
         )
 
     try:
-        resolved_user_id, invited, dev_token = resolve_or_invite(
+        resolved_user_id, invited, dev_token = await resolve_or_invite_async(
             db,
             client_id=client_id,
             client_name=client.name,
@@ -91,20 +92,20 @@ def add_member(
         )
 
     existing = (
-        db.query(ClientMembership)
-        .filter(
-            ClientMembership.user_id == resolved_user_id,
-            ClientMembership.client_id == client_id,
+        await db.execute(
+            select(ClientMembership).where(
+                ClientMembership.user_id == resolved_user_id,
+                ClientMembership.client_id == client_id,
+            )
         )
-        .first()
-    )
+    ).scalar_one_or_none()
     if existing:
-        # Roll back the pending-User write done by resolve_or_invite; the
-        # caller asked to add an existing member, which is a no-op.
-        db.rollback()
+        # Roll back the pending-User write done by resolve_or_invite_async;
+        # the caller asked to add an existing member, this is a no-op.
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="User already has a membership for this client",
+            detail="User already has a membership on this client",
         )
     m = ClientMembership(
         user_id=resolved_user_id,
@@ -115,14 +116,14 @@ def add_member(
     )
     db.add(m)
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Failed to create membership",
+            detail="Failed to add membership",
         )
-    db.refresh(m)
+    await db.refresh(m)
     log_audit_event(
         user_id=current_user.id,
         action="membership_added",
@@ -136,7 +137,7 @@ def add_member(
             "invited": invited,
         },
     )
-    # Attach the invited flag for the UI. The dev_token MUST NOT travel
+    # invited flag surfaces in the UI. dev_token MUST NOT travel
     # in the API response: it is a replayable JWT that grants tenant
     # access. We log it server-side instead so a developer running
     # DEBUG can still pluck it from structured logs.
@@ -156,24 +157,24 @@ def add_member(
     "/{membership_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def remove_member(
+async def remove_member(
     client_id: int,
     membership_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     _gate: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.CLIENT_MANAGE_TEAM)
     ),
 ):
     """Revoke a team member's access (CLIENT-05 / RBAC-04)."""
     m = (
-        db.query(ClientMembership)
-        .filter(
-            ClientMembership.id == membership_id,
-            ClientMembership.client_id == client_id,
+        await db.execute(
+            select(ClientMembership).where(
+                ClientMembership.id == membership_id,
+                ClientMembership.client_id == client_id,
+            )
         )
-        .first()
-    )
+    ).scalar_one_or_none()
     if not m:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -181,11 +182,11 @@ def remove_member(
         )
     revoked_user = m.user_id
     revoked_role = m.compliance_role
-    db.delete(m)
+    await db.delete(m)
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to revoke membership",

@@ -15,12 +15,13 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import require_compliance_permission
 from app.compliance.models.membership import ClientMembership
 from app.compliance.services.permission_registry import CompliancePermission
-from app.database import get_db
+from app.database import get_async_db
 from app.models.audit_log import AuditLog
 
 
@@ -41,7 +42,7 @@ class AuditLogOut(BaseModel):
 
 
 @router.get("", response_model=List[AuditLogOut])
-def list_audit(
+async def list_audit(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
     actor_user_id: Optional[int] = Query(None),
@@ -52,28 +53,25 @@ def list_audit(
     _gate: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.AUDIT_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Read-only audit log viewer — AUDIT-01.
 
     DB-level immutability (trigger + REVOKE) ensures rows cannot be edited
     via UI or API regardless of any future code change in this layer.
     """
-    q = db.query(AuditLog)
+    q = select(AuditLog)
     if date_from is not None:
-        q = q.filter(AuditLog.created_at >= date_from)
+        q = q.where(AuditLog.created_at >= date_from)
     if date_to is not None:
-        q = q.filter(AuditLog.created_at <= date_to)
+        q = q.where(AuditLog.created_at <= date_to)
     if actor_user_id is not None:
-        q = q.filter(AuditLog.user_id == actor_user_id)
+        q = q.where(AuditLog.user_id == actor_user_id)
     if action:
-        q = q.filter(AuditLog.action == action)
+        q = q.where(AuditLog.action == action)
     if resource_type:
-        q = q.filter(AuditLog.resource_type == resource_type)
+        q = q.where(AuditLog.resource_type == resource_type)
     offset = (page - 1) * page_size
-    return (
-        q.order_by(AuditLog.created_at.desc())
-        .offset(offset)
-        .limit(page_size)
-        .all()
-    )
+    q = q.order_by(AuditLog.created_at.desc()).offset(offset).limit(page_size)
+    result = await db.execute(q)
+    return result.scalars().all()

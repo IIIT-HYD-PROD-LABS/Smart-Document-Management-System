@@ -37,13 +37,14 @@ from fastapi import (
     UploadFile,
     status,
 )
+from sqlalchemy import func, select
 from sqlalchemy.exc import (
     DataError,
     IntegrityError,
     OperationalError,
     StatementError,
 )
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import (
     get_active_membership,
@@ -92,7 +93,7 @@ from app.compliance.services.extraction_coercion import (
     CoercionError,
     FIELD_COERCERS,
 )
-from app.database import get_db
+from app.database import get_async_db
 from app.models.document import Document, DocumentStatus
 from app.models.user import User
 from app.services.audit_service import log_audit_event
@@ -215,7 +216,7 @@ def _permissions_for_target_status(target: NoticeStatus) -> tuple[CompliancePerm
 
 
 @router.get("", response_model=dict)
-def list_notices(
+async def list_notices(
     authority: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
     notice_type_id: Optional[int] = Query(None),
@@ -228,7 +229,7 @@ def list_notices(
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List/filter notices for the active client — LIFE-07.
 
@@ -261,7 +262,7 @@ def list_notices(
             detail="Invalid gstin_or_pan",
         )
 
-    items = filter_notices(
+    items = await filter_notices(
         db=db,
         client_id=membership.client_id,
         authority=authority,
@@ -276,10 +277,10 @@ def list_notices(
     )
     # RLS-respecting count query for pagination metadata. Same client_id
     # filter so the count matches what the user can actually see.
-    total = (
-        db.query(ComplianceNotice)
-        .filter(ComplianceNotice.client_id == membership.client_id)
-        .count()
+    total = await db.scalar(
+        select(func.count())
+        .select_from(ComplianceNotice)
+        .where(ComplianceNotice.client_id == membership.client_id)
     )
     return {
         "items": [NoticeOut.model_validate(n).model_dump(mode="json") for n in items],
@@ -294,10 +295,10 @@ def list_notices(
     response_model=NoticeOut,
     status_code=status.HTTP_201_CREATED,
 )
-def create_notice(
+async def create_notice(
     payload: NoticeCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_CREATE)
     ),
@@ -337,18 +338,18 @@ def create_notice(
         created_by_user_id=current_user.id,
     )
     db.add(n)
-    db.flush()  # need n.id for tag rows
+    await db.flush()  # need n.id for tag rows
     for tag in payload.tags:
         db.add(NoticeTag(notice_id=n.id, tag=tag))
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to create notice",
         )
-    db.refresh(n)
+    await db.refresh(n)
     log_audit_event(
         user_id=current_user.id,
         action="notice_created",
@@ -369,19 +370,19 @@ def create_notice(
 
 
 @router.get("/{notice_id}", response_model=NoticeOut)
-def get_notice(
+async def get_notice(
     notice_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     # Defense-in-depth: explicit client_id filter on top of RLS so an
     # accidental policy regression cannot leak cross-tenant rows.
-    q = db.query(ComplianceNotice).filter(ComplianceNotice.id == notice_id)
+    q = select(ComplianceNotice).where(ComplianceNotice.id == notice_id)
     if not is_cross_client_mode():
-        q = q.filter(ComplianceNotice.client_id == membership.client_id)
-    n = q.first()
+        q = q.where(ComplianceNotice.client_id == membership.client_id)
+    n = (await db.execute(q)).scalar_one_or_none()
     if not n:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -391,11 +392,11 @@ def get_notice(
 
 
 @router.patch("/{notice_id}", response_model=NoticeOut)
-def update_notice(
+async def update_notice(
     notice_id: int,
     payload: NoticeUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_CREATE)
     ),
@@ -409,11 +410,11 @@ def update_notice(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Metadata edits require a specific X-Client-Id",
         )
-    q = db.query(ComplianceNotice).filter(
+    q = select(ComplianceNotice).where(
         ComplianceNotice.id == notice_id,
         ComplianceNotice.client_id == membership.client_id,
     )
-    n = q.first()
+    n = (await db.execute(q)).scalar_one_or_none()
     if not n:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -428,14 +429,14 @@ def update_notice(
     for key, value in diff.items():
         setattr(n, key, value)
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to update notice",
         )
-    db.refresh(n)
+    await db.refresh(n)
 
     # Phase 11 hardening — when response_deadline changes, cancel old
     # T-7/T-3/T-1/overdue jobs and reschedule against the new deadline so
@@ -520,11 +521,11 @@ def _notify_notice_assigned(
 
 
 @router.post("/{notice_id}/assign", response_model=NoticeOut)
-def assign_notice(
+async def assign_notice(
     notice_id: int,
     payload: dict,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_CREATE)
     ),
@@ -545,11 +546,15 @@ def assign_notice(
     # accidental policy regression cannot let tenant A reassign tenant B's
     # notice.
     n = (
-        db.query(ComplianceNotice)
-        .filter(
-            ComplianceNotice.id == notice_id,
-            ComplianceNotice.client_id == membership.client_id,
+        (
+            await db.execute(
+                select(ComplianceNotice).where(
+                    ComplianceNotice.id == notice_id,
+                    ComplianceNotice.client_id == membership.client_id,
+                )
+            )
         )
+        .scalars()
         .first()
     )
     if not n:
@@ -567,11 +572,15 @@ def assign_notice(
 
     if new_assignee_id is not None:
         member = (
-            db.query(ClientMembership)
-            .filter(
-                ClientMembership.user_id == new_assignee_id,
-                ClientMembership.client_id == n.client_id,
+            (
+                await db.execute(
+                    select(ClientMembership).where(
+                        ClientMembership.user_id == new_assignee_id,
+                        ClientMembership.client_id == n.client_id,
+                    )
+                )
             )
+            .scalars()
             .first()
         )
         if member is None:
@@ -587,14 +596,14 @@ def assign_notice(
     before = n.assigned_user_id
     n.assigned_user_id = new_assignee_id
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to assign notice",
         )
-    db.refresh(n)
+    await db.refresh(n)
 
     # log_activity's param is `type` and the only assignment value accepted by
     # VALID_ACTIVITY_TYPES + the DB CHECK is "assigned". The audit row below
@@ -633,12 +642,12 @@ def assign_notice(
 
 
 @router.patch("/{notice_id}/status", response_model=NoticeOut)
-def transition_status(
+async def transition_status(
     notice_id: int,
     payload: NoticeStatusTransition,
     current_user: User = Depends(get_current_user),
     membership: ClientMembership = Depends(get_active_membership),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Transition notice through state machine — LIFE-04.
 
@@ -674,7 +683,7 @@ def transition_status(
             ),
         )
     try:
-        n = transition_notice_status(
+        n = await transition_notice_status(
             db=db,
             notice_id=notice_id,
             new_status=target,
@@ -687,14 +696,14 @@ def transition_status(
         # rolled back so the row is unchanged. Use a fresh query so the
         # session is clean. Scope to the caller's client_id so a foreign
         # notice's status cannot be probed as an oracle via this path.
-        status_q = db.query(ComplianceNotice.status).filter(
+        status_q = select(ComplianceNotice.status).where(
             ComplianceNotice.id == notice_id
         )
         if not is_cross_client_mode():
-            status_q = status_q.filter(
+            status_q = status_q.where(
                 ComplianceNotice.client_id == membership.client_id
             )
-        current = status_q.scalar()
+        current = await db.scalar(status_q)
         valid: List[str] = []
         if current:
             valid = sorted(
@@ -723,10 +732,10 @@ def transition_status(
 
 
 @router.post("/bulk", response_model=BulkUpdateResponse)
-def bulk_update(
+async def bulk_update(
     payload: BulkUpdateRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_BULK_UPDATE)
     ),
@@ -758,7 +767,7 @@ def bulk_update(
                 f"for bulk transition to '{target.value}'"
             ),
         )
-    return bulk_update_status(
+    return await bulk_update_status(
         db=db,
         notice_ids=payload.notice_ids,
         new_status=target,
@@ -769,13 +778,13 @@ def bulk_update(
 
 
 @router.get("/{notice_id}/chain")
-def notice_chain(
+async def notice_chain(
     notice_id: int,
     max_depth: int = Query(10, ge=1, le=20),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Recursive CTE notice chain (ancestors + descendants) — LIFE-05.
 
@@ -790,7 +799,7 @@ def notice_chain(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Notice chain requires a specific X-Client-Id (not '*')",
         )
-    return get_notice_chain(
+    return await get_notice_chain(
         db,
         notice_id=notice_id,
         max_depth=max_depth,
@@ -799,11 +808,11 @@ def notice_chain(
 
 
 @router.post("/{notice_id}/upload", response_model=NoticeOut)
-def upload_notice_file(
+async def upload_notice_file(
     notice_id: int,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_CREATE)
     ),
@@ -823,11 +832,15 @@ def upload_notice_file(
     # accidental policy regression cannot let tenant A attach a document to
     # tenant B's notice.
     n = (
-        db.query(ComplianceNotice)
-        .filter(
-            ComplianceNotice.id == notice_id,
-            ComplianceNotice.client_id == membership.client_id,
+        (
+            await db.execute(
+                select(ComplianceNotice).where(
+                    ComplianceNotice.id == notice_id,
+                    ComplianceNotice.client_id == membership.client_id,
+                )
+            )
         )
+        .scalars()
         .first()
     )
     if not n:
@@ -853,14 +866,14 @@ def upload_notice_file(
     )
     db.add(d)
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to record uploaded document",
         )
-    db.refresh(d)
+    await db.refresh(d)
     # Dispatch async OCR + classification (mirrors v1.0 documents router).
     # Failure is non-fatal: the file is saved and re-processing can be
     # re-dispatched later; raising would lose the audit trail and force
@@ -869,7 +882,7 @@ def upload_notice_file(
         from app.tasks.document_tasks import process_document_task
         task = process_document_task.delay(d.id)
         d.celery_task_id = task.id
-        db.commit()
+        await db.commit()
     except Exception as e:  # pragma: no cover - depends on broker availability
         import structlog
         structlog.get_logger().error(
@@ -878,24 +891,24 @@ def upload_notice_file(
             document_id=d.id,
             error=str(e),
         )
-        # The Document row is ALREADY committed (line 500 above); rolling back
-        # here only undoes the in-memory celery_task_id assignment. Do not
-        # call db.rollback() — it would leave the session in an unclear
-        # state for the subsequent first-upload-wins commit.
+        # The Document row is ALREADY committed above; rolling back here only
+        # undoes the in-memory celery_task_id assignment. Do not call
+        # db.rollback() — it would leave the session in an unclear state for
+        # the subsequent first-upload-wins commit.
     # First upload becomes the notice's primary file so the detail page
     # has somewhere to link the "View original" button.
     if n.document_id is None:
         n.document_id = d.id
         try:
-            db.commit()
+            await db.commit()
         except (IntegrityError, OperationalError):
-            db.rollback()
-        db.refresh(n)
+            await db.rollback()
+        await db.refresh(n)
     # Auto-extract notice fields from the uploaded file so a detail-page upload
     # fills the form (not just attaches it), matching the new-notice page. Best
     # effort: only when the notice has no extraction yet and is not frozen; any
     # failure leaves the file attached and the notice untouched.
-    _maybe_autoextract_from_upload(
+    await _maybe_autoextract_from_upload(
         db,
         n,
         contents=contents,
@@ -915,34 +928,33 @@ def upload_notice_file(
             "size": d.file_size,
         },
     )
-    db.commit()
+    await db.commit()
     return n
 
 
 @router.get("/{notice_id}/activity", response_model=List[ActivityOut])
-def list_activity(
+async def list_activity(
     notice_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List the user-facing activity timeline for a notice (D-09)."""
     # Defense-in-depth: join through ComplianceNotice and filter on the
     # caller's client_id so an RLS regression cannot leak cross-tenant
     # activity rows. NoticeActivity has no client_id of its own; the
     # parent notice is the canonical tenant anchor.
-    rows = (
-        db.query(NoticeActivity)
+    result = await db.execute(
+        select(NoticeActivity)
         .join(ComplianceNotice, NoticeActivity.notice_id == ComplianceNotice.id)
-        .filter(
+        .where(
             NoticeActivity.notice_id == notice_id,
             ComplianceNotice.client_id == membership.client_id,
         )
         .order_by(NoticeActivity.created_at.desc())
-        .all()
     )
-    return rows
+    return result.scalars().all()
 
 
 @router.post(
@@ -950,11 +962,11 @@ def list_activity(
     response_model=ActivityOut,
     status_code=status.HTTP_201_CREATED,
 )
-def add_note(
+async def add_note(
     notice_id: int,
     payload: NoteAddRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(get_active_membership),
 ):
     """Add a note to the notice activity timeline (D-09).
@@ -980,10 +992,10 @@ def add_note(
     # Defense-in-depth: explicit client_id filter on top of RLS so an
     # accidental policy regression cannot let one tenant write notes onto
     # another tenant's notice. log_activity takes no client_id of its own.
-    q = db.query(ComplianceNotice).filter(ComplianceNotice.id == notice_id)
+    q = select(ComplianceNotice).where(ComplianceNotice.id == notice_id)
     if not is_cross_client_mode():
-        q = q.filter(ComplianceNotice.client_id == membership.client_id)
-    if q.first() is None:
+        q = q.where(ComplianceNotice.client_id == membership.client_id)
+    if (await db.execute(q)).scalars().first() is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notice not found",
@@ -996,14 +1008,14 @@ def add_note(
         details={"note": payload.note},
     )
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError):
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to save note",
         )
-    db.refresh(row)
+    await db.refresh(row)
     return row
 
 
@@ -1019,23 +1031,23 @@ def _ocr_extract_text(file_bytes: bytes, file_ext: str) -> str:
     return text or ""
 
 
-def _maybe_autoextract_from_upload(
-    db, notice, *, contents: bytes, ext: str, client_id: int, user_id: int
+async def _maybe_autoextract_from_upload(
+    db: AsyncSession, notice, *, contents: bytes, ext: str, client_id: int, user_id: int
 ) -> None:
     """Run notice AI extraction on a freshly-uploaded file and apply it, so a
     detail-page upload populates the form instead of leaving it "Manual entry".
 
     No-op when the notice already has extraction or is frozen (accepted /
     superseded), or when extraction fails for any reason — the file stays
-    attached and the notice is left untouched. Synchronous on purpose so the
+    attached and the notice is left untouched. Awaited on purpose so the
     caller returns the populated notice (the upload client uses a long timeout).
     """
     from app.compliance.services.extraction_routing_service import (
-        apply_extraction_to_notice,
+        apply_extraction_to_notice_async,
         route_or_apply,
         should_skip_extraction,
     )
-    from app.compliance.services.notice_extractor_service import extract_notice_fields
+    from app.compliance.services.notice_extractor_service import extract_notice_fields_async
 
     if should_skip_extraction(notice) or notice.extracted_fields:
         return
@@ -1043,15 +1055,15 @@ def _maybe_autoextract_from_upload(
         text = _ocr_extract_text(contents, ext)
         if not text.strip():
             return
-        envelope = extract_notice_fields(
+        envelope = await extract_notice_fields_async(
             db, client_id=client_id, user_id=user_id, text=text, notice_id=notice.id
         )
         decision = route_or_apply(envelope)
-        apply_extraction_to_notice(db, notice, envelope, decision, fill_columns=True)
-        db.commit()
-        db.refresh(notice)
+        await apply_extraction_to_notice_async(db, notice, envelope, decision, fill_columns=True)
+        await db.commit()
+        await db.refresh(notice)
     except Exception as exc:  # noqa: BLE001 — best-effort; file stays attached
-        db.rollback()
+        await db.rollback()
         import structlog
 
         structlog.get_logger().warning(
@@ -1065,12 +1077,12 @@ def _maybe_autoextract_from_upload(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit("12/minute")
-def extract_preview(
+async def extract_preview(
     request: Request,
     response: Response,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_AI_EXTRACT)
     ),
@@ -1090,7 +1102,7 @@ def extract_preview(
     from app.compliance.services.notice_extractor_service import (
         NoticeExtractionCredentialMissingError,
         NoticeExtractionParseError,
-        extract_notice_fields,
+        extract_notice_fields_async,
     )
     from app.compliance.services import ai_service
 
@@ -1111,7 +1123,7 @@ def extract_preview(
         )
 
     try:
-        envelope = extract_notice_fields(
+        envelope = await extract_notice_fields_async(
             db,
             client_id=membership.client_id,
             user_id=current_user.id,
@@ -1181,10 +1193,10 @@ def extract_preview(
     "/{notice_id}/extraction",
     response_model=ExtractionResponse,
 )
-def get_extraction(
+async def get_extraction(
     notice_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
@@ -1193,11 +1205,15 @@ def get_extraction(
     # Defense-in-depth: explicit client_id filter on top of RLS so an
     # accidental policy regression cannot leak cross-tenant rows.
     notice = (
-        db.query(ComplianceNotice)
-        .filter(
-            ComplianceNotice.id == notice_id,
-            ComplianceNotice.client_id == membership.client_id,
+        (
+            await db.execute(
+                select(ComplianceNotice).where(
+                    ComplianceNotice.id == notice_id,
+                    ComplianceNotice.client_id == membership.client_id,
+                )
+            )
         )
+        .scalars()
         .first()
     )
     if not notice:
@@ -1220,11 +1236,11 @@ def get_extraction(
     "/{notice_id}/accept-extraction",
     response_model=NoticeOut,
 )
-def accept_extraction(
+async def accept_extraction(
     notice_id: int,
     payload: AcceptExtractionPayload,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_AI_EXTRACT)
     ),
@@ -1260,11 +1276,15 @@ def accept_extraction(
     # accidental policy regression cannot let one tenant accept extracted
     # fields onto another tenant's notice.
     notice = (
-        db.query(ComplianceNotice)
-        .filter(
-            ComplianceNotice.id == notice_id,
-            ComplianceNotice.client_id == membership.client_id,
+        (
+            await db.execute(
+                select(ComplianceNotice).where(
+                    ComplianceNotice.id == notice_id,
+                    ComplianceNotice.client_id == membership.client_id,
+                )
+            )
         )
+        .scalars()
         .first()
     )
     if not notice:
@@ -1284,13 +1304,13 @@ def accept_extraction(
         and payload.envelope is not None
     ):
         from app.compliance.services.extraction_routing_service import (
-            apply_extraction_to_notice,
+            apply_extraction_to_notice_async,
         )
 
         # Persist the replayed envelope for provenance only; the reviewed
         # `items` below are the sole authority on which columns get written,
         # so do NOT auto-fill (it would resurrect fields the user discarded).
-        apply_extraction_to_notice(
+        await apply_extraction_to_notice_async(
             db,
             notice,
             payload.envelope.model_dump(),
@@ -1356,15 +1376,15 @@ def accept_extraction(
 
     notice.extraction_status = "accepted"
     try:
-        db.commit()
+        await db.commit()
     except (IntegrityError, OperationalError, DataError, StatementError):
         # DataError/StatementError are the defense-in-depth backstop: coercion
         # above should already have rejected bad values with a 422, so a DB
         # type error here means an unforeseen edge — fail clean, never 500.
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to apply accepted extraction fields",
         )
-    db.refresh(notice)
+    await db.refresh(notice)
     return notice

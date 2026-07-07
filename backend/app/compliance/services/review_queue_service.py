@@ -21,6 +21,7 @@ from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.compliance.models.notice import ComplianceNotice
@@ -108,8 +109,8 @@ def compute_heuristic_confidence(
     return auth_conf, type_conf
 
 
-def enqueue_manual(
-    db: Session,
+async def enqueue_manual(
+    db: AsyncSession,
     *,
     notice: ComplianceNotice,
     flagged_by_user_id: int,
@@ -155,8 +156,9 @@ def enqueue_manual(
         )
         .returning(NoticeReviewQueue.id)
     )
-    row_id = db.execute(stmt).scalar_one()
-    db.commit()
+    result = await db.execute(stmt)
+    row_id = result.scalar_one()
+    await db.commit()
 
     log_audit_event(
         user_id=flagged_by_user_id,
@@ -165,9 +167,13 @@ def enqueue_manual(
         resource_id=notice.id,
         details={"reason_note": reason_note, "review_id": row_id},
     )
-    return db.get(NoticeReviewQueue, row_id)
+    return await db.get(NoticeReviewQueue, row_id)
 
 
+# Stays synchronous: shared with the Celery ingestion pipeline
+# (app/tasks/compliance_tasks.py, app/email/services/ingestion_service.py,
+# app/compliance/services/extraction_routing_service.py), none of which are
+# in scope for the async migration. Not called from the review_queue router.
 def enqueue_low_confidence(
     db: Session,
     *,
@@ -236,8 +242,8 @@ def enqueue_low_confidence(
     return db.get(NoticeReviewQueue, row_id)
 
 
-def list_pending(
-    db: Session,
+async def list_pending(
+    db: AsyncSession,
     *,
     client_id: Optional[int],
     page: int = 1,
@@ -267,13 +273,14 @@ def list_pending(
         .offset((page - 1) * page_size)
     )
 
-    items = list(db.execute(base).scalars().all())
-    total = db.execute(count_base).scalar_one()
+    result = await db.execute(base)
+    items = list(result.scalars().all())
+    total = await db.scalar(count_base)
     return items, int(total)
 
 
-def assign_reviewer_label(
-    db: Session,
+async def assign_reviewer_label(
+    db: AsyncSession,
     *,
     review_id: int,
     user_id: int,
@@ -299,11 +306,11 @@ def assign_reviewer_label(
             "At least one of authority or notice_type_id must be supplied"
         )
 
-    review = db.get(NoticeReviewQueue, review_id)
+    review = await db.get(NoticeReviewQueue, review_id)
     if review is None:
         raise ValueError(f"Review queue row {review_id} not found")
 
-    notice = db.get(ComplianceNotice, review.notice_id)
+    notice = await db.get(ComplianceNotice, review.notice_id)
     if notice is None:
         raise ValueError(
             f"Parent notice {review.notice_id} not found for review {review_id}"
@@ -311,7 +318,7 @@ def assign_reviewer_label(
 
     # Validate notice_type_id belongs to the assigned authority if both supplied.
     if notice_type_id is not None:
-        nt = db.get(NoticeType, notice_type_id)
+        nt = await db.get(NoticeType, notice_type_id)
         if nt is None:
             raise ValueError(f"NoticeType {notice_type_id} not found")
         target_authority = authority or notice.authority
@@ -371,9 +378,9 @@ def assign_reviewer_label(
         },
     )
 
-    db.commit()
-    db.refresh(review)
-    db.refresh(notice)
+    await db.commit()
+    await db.refresh(review)
+    await db.refresh(notice)
 
     # 4. Immutable audit (separate session)
     log_audit_event(

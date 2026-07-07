@@ -25,7 +25,8 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import (
     require_any_compliance_permission,
@@ -75,7 +76,7 @@ from app.compliance.services.response_state_machine import (
     PENDING_STAGE_FOR_STATUS,
     ResponseStatus,
 )
-from app.database import get_db
+from app.database import get_async_db
 from app.models.user import User
 from app.services.audit_service import log_audit_event
 from app.utils.security import get_current_user
@@ -84,8 +85,8 @@ from app.utils.security import get_current_user
 router = APIRouter(prefix="/notices/{notice_id}", tags=["compliance-responses"])
 
 
-def _get_notice(
-    db: Session,
+async def _get_notice(
+    db: AsyncSession,
     notice_id: int,
     membership: Optional[ClientMembership] = None,
 ) -> ComplianceNotice:
@@ -97,10 +98,10 @@ def _get_notice(
     H-B second hardening: prior code relied solely on RLS. Now mirrors
     the notices.py router pattern.
     """
-    q = db.query(ComplianceNotice).filter(ComplianceNotice.id == notice_id)
+    q = select(ComplianceNotice).where(ComplianceNotice.id == notice_id)
     if membership is not None:
-        q = q.filter(ComplianceNotice.client_id == membership.client_id)
-    notice = q.first()
+        q = q.where(ComplianceNotice.client_id == membership.client_id)
+    notice = (await db.execute(q)).scalar_one_or_none()
     if notice is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -109,21 +110,16 @@ def _get_notice(
     return notice
 
 
-def _build_detail(db: Session, response: NoticeResponse) -> ResponseDetailOut:
-    versions = (
-        db.query(NoticeResponseVersion)
-        .filter(NoticeResponseVersion.response_id == response.id)
-        .order_by(NoticeResponseVersion.version_no.desc())
-        .all()
-    )
-    approvals = (
-        db.query(NoticeResponseApproval)
-        .filter(NoticeResponseApproval.response_id == response.id)
-        .order_by(NoticeResponseApproval.created_at.asc())
-        .all()
-    )
-    current_version = response.current_version
-    return ResponseDetailOut(
+async def _response_fields(db: AsyncSession, response: NoticeResponse) -> dict:
+    """Shared field dict for ResponseOut/ResponseDetailOut. Fetches
+    `current_version` explicitly by id instead of touching the ORM
+    relationship — relationship attribute access would trigger an
+    implicit lazy load, which raises MissingGreenlet under AsyncSession.
+    """
+    current_version = None
+    if response.current_version_id is not None:
+        current_version = await db.get(NoticeResponseVersion, response.current_version_id)
+    return dict(
         id=response.id,
         notice_id=response.notice_id,
         client_id=response.client_id,
@@ -137,9 +133,33 @@ def _build_detail(db: Session, response: NoticeResponse) -> ResponseDetailOut:
             if current_version is not None
             else None
         ),
+    )
+
+
+async def _build_detail(db: AsyncSession, response: NoticeResponse) -> ResponseDetailOut:
+    versions = (
+        await db.execute(
+            select(NoticeResponseVersion)
+            .where(NoticeResponseVersion.response_id == response.id)
+            .order_by(NoticeResponseVersion.version_no.desc())
+        )
+    ).scalars().all()
+    approvals = (
+        await db.execute(
+            select(NoticeResponseApproval)
+            .where(NoticeResponseApproval.response_id == response.id)
+            .order_by(NoticeResponseApproval.created_at.asc())
+        )
+    ).scalars().all()
+    return ResponseDetailOut(
+        **(await _response_fields(db, response)),
         versions=[ResponseVersionOut.model_validate(v) for v in versions],
         approvals=[ResponseApprovalOut.model_validate(a) for a in approvals],
     )
+
+
+async def _response_out(db: AsyncSession, response: NoticeResponse) -> ResponseOut:
+    return ResponseOut(**(await _response_fields(db, response)))
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -147,98 +167,100 @@ def _build_detail(db: Session, response: NoticeResponse) -> ResponseDetailOut:
 # ──────────────────────────────────────────────────────────────────────
 
 @router.get("/responses", response_model=ResponseDetailOut)
-def get_response(
+async def get_response(
     notice_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    notice = _get_notice(db, notice_id, membership=membership)
+    notice = await _get_notice(db, notice_id, membership=membership)
     response = (
-        db.query(NoticeResponse)
-        .filter(NoticeResponse.notice_id == notice.id)
-        .filter(NoticeResponse.client_id == membership.client_id)
-        .first()
-    )
+        await db.execute(
+            select(NoticeResponse)
+            .where(NoticeResponse.notice_id == notice.id)
+            .where(NoticeResponse.client_id == membership.client_id)
+        )
+    ).scalar_one_or_none()
     if response is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No response draft yet — POST /responses to create one",
         )
-    return _build_detail(db, response)
+    return await _build_detail(db, response)
 
 
 @router.post("/responses", response_model=ResponseDetailOut)
-def create_or_update_draft(
+async def create_or_update_draft(
     notice_id: int,
     payload: ResponseDraftPayload,
     current_user: User = Depends(get_current_user),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_DRAFT_RESPONSE)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Create the response shell + first version on first call. On
     subsequent calls behaves like PATCH — appends a new version with the
     supplied fields."""
-    notice = _get_notice(db, notice_id, membership=membership)
-    response = get_or_create_response(db, notice=notice, user_id=current_user.id)
+    notice = await _get_notice(db, notice_id, membership=membership)
+    response = await get_or_create_response(db, notice=notice, user_id=current_user.id)
 
     payload_dict = payload.model_dump(exclude_unset=True)
     if payload_dict:
         try:
-            update_draft(
+            await update_draft(
                 db,
                 response=response,
                 payload=payload_dict,
                 user_id=current_user.id,
             )
-            db.refresh(response)
+            await db.refresh(response)
         except InvalidResponseTransitionError as e:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=str(e),
             )
 
-    return _build_detail(db, response)
+    return await _build_detail(db, response)
 
 
 @router.patch("/responses", response_model=ResponseDetailOut)
-def update_response_draft(
+async def update_response_draft(
     notice_id: int,
     payload: ResponseDraftPayload,
     current_user: User = Depends(get_current_user),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_DRAFT_RESPONSE)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    notice = _get_notice(db, notice_id, membership=membership)
+    notice = await _get_notice(db, notice_id, membership=membership)
     response = (
-        db.query(NoticeResponse)
-        .filter(NoticeResponse.notice_id == notice.id)
-        .filter(NoticeResponse.client_id == membership.client_id)
-        .first()
-    )
+        await db.execute(
+            select(NoticeResponse)
+            .where(NoticeResponse.notice_id == notice.id)
+            .where(NoticeResponse.client_id == membership.client_id)
+        )
+    ).scalar_one_or_none()
     if response is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No response draft to update — POST /responses first",
         )
     try:
-        update_draft(
+        await update_draft(
             db,
             response=response,
             payload=payload.model_dump(exclude_unset=True),
             user_id=current_user.id,
         )
-        db.refresh(response)
+        await db.refresh(response)
     except InvalidResponseTransitionError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(e)
         )
-    return _build_detail(db, response)
+    return await _build_detail(db, response)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -246,51 +268,53 @@ def update_response_draft(
 # ──────────────────────────────────────────────────────────────────────
 
 @router.post("/responses/submit", response_model=ResponseOut)
-def submit_response(
+async def submit_response(
     notice_id: int,
     current_user: User = Depends(get_current_user),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_DRAFT_RESPONSE)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    notice = _get_notice(db, notice_id, membership=membership)
+    notice = await _get_notice(db, notice_id, membership=membership)
     response = (
-        db.query(NoticeResponse)
-        .filter(NoticeResponse.notice_id == notice.id)
-        .filter(NoticeResponse.client_id == membership.client_id)
-        .first()
-    )
+        await db.execute(
+            select(NoticeResponse)
+            .where(NoticeResponse.notice_id == notice.id)
+            .where(NoticeResponse.client_id == membership.client_id)
+        )
+    ).scalar_one_or_none()
     if response is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No response draft to submit",
         )
     try:
-        submit_for_review(db, response=response, user_id=current_user.id)
+        await submit_for_review(db, response=response, user_id=current_user.id)
     except InvalidResponseTransitionError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(e)
         )
-    return ResponseOut.model_validate(response)
+    return await _response_out(db, response)
 
 
 @router.post("/responses/withdraw", response_model=ResponseOut)
-def withdraw_response(
+async def withdraw_response(
     notice_id: int,
     current_user: User = Depends(get_current_user),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_DRAFT_RESPONSE)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    notice = _get_notice(db, notice_id, membership=membership)
+    notice = await _get_notice(db, notice_id, membership=membership)
     response = (
-        db.query(NoticeResponse)
-        .filter(NoticeResponse.notice_id == notice.id)
-        .filter(NoticeResponse.client_id == membership.client_id)
-        .first()
-    )
+        await db.execute(
+            select(NoticeResponse)
+            .where(NoticeResponse.notice_id == notice.id)
+            .where(NoticeResponse.client_id == membership.client_id)
+        )
+    ).scalar_one_or_none()
     if response is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="No response to withdraw"
@@ -306,7 +330,7 @@ def withdraw_response(
             detail="Only the draft author or a supervisor may withdraw this response",
         )
     try:
-        withdraw(db, response=response, user_id=current_user.id)
+        await withdraw(db, response=response, user_id=current_user.id)
         if is_supervisor and not is_author:
             log_audit_event(
                 user_id=current_user.id,
@@ -322,32 +346,33 @@ def withdraw_response(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(e)
         )
-    return ResponseOut.model_validate(response)
+    return await _response_out(db, response)
 
 
 @router.post("/responses/rollback", response_model=ResponseDetailOut)
-def rollback_response(
+async def rollback_response(
     notice_id: int,
     payload: ResponseRollbackRequest,
     current_user: User = Depends(get_current_user),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_DRAFT_RESPONSE)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    notice = _get_notice(db, notice_id, membership=membership)
+    notice = await _get_notice(db, notice_id, membership=membership)
     response = (
-        db.query(NoticeResponse)
-        .filter(NoticeResponse.notice_id == notice.id)
-        .filter(NoticeResponse.client_id == membership.client_id)
-        .first()
-    )
+        await db.execute(
+            select(NoticeResponse)
+            .where(NoticeResponse.notice_id == notice.id)
+            .where(NoticeResponse.client_id == membership.client_id)
+        )
+    ).scalar_one_or_none()
     if response is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="No response to rollback"
         )
     try:
-        rollback_to_version(
+        await rollback_to_version(
             db,
             response=response,
             target_version_id=payload.target_version_id,
@@ -361,8 +386,8 @@ def rollback_response(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
         )
-    db.refresh(response)
-    return _build_detail(db, response)
+    await db.refresh(response)
+    return await _build_detail(db, response)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -392,21 +417,22 @@ def _resolve_pending_stage(response: NoticeResponse) -> ApprovalStage:
     return stage
 
 
-def _decide(
+async def _decide(
     notice_id: int,
     decision: str,
     payload: ApprovalActionRequest,
     current_user: User,
     membership: ClientMembership,
-    db: Session,
+    db: AsyncSession,
 ) -> ResponseApprovalOut:
-    notice = _get_notice(db, notice_id, membership=membership)
+    notice = await _get_notice(db, notice_id, membership=membership)
     response = (
-        db.query(NoticeResponse)
-        .filter(NoticeResponse.notice_id == notice.id)
-        .filter(NoticeResponse.client_id == membership.client_id)
-        .first()
-    )
+        await db.execute(
+            select(NoticeResponse)
+            .where(NoticeResponse.notice_id == notice.id)
+            .where(NoticeResponse.client_id == membership.client_id)
+        )
+    ).scalar_one_or_none()
     if response is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="No response to act on"
@@ -430,7 +456,7 @@ def _decide(
         )
 
     try:
-        approval = apply_approval(
+        approval = await apply_approval(
             db,
             response=response,
             stage=stage,
@@ -450,11 +476,11 @@ def _decide(
 
 
 @router.post("/responses/approve", response_model=ResponseApprovalOut)
-def approve_response(
+async def approve_response(
     notice_id: int,
     payload: ApprovalActionRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_any_compliance_permission(
             CompliancePermission.NOTICE_APPROVE,
@@ -480,17 +506,17 @@ def approve_response(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="POST /approve must use decision='approved'",
         )
-    return _decide(
+    return await _decide(
         notice_id, "approved", payload, current_user, membership, db
     )
 
 
 @router.post("/responses/reject", response_model=ResponseApprovalOut)
-def reject_response(
+async def reject_response(
     notice_id: int,
     payload: ApprovalActionRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_any_compliance_permission(
             CompliancePermission.NOTICE_APPROVE,
@@ -504,7 +530,7 @@ def reject_response(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="POST /reject must use decision='rejected'",
         )
-    return _decide(
+    return await _decide(
         notice_id, "rejected", payload, current_user, membership, db
     )
 
@@ -514,31 +540,31 @@ def reject_response(
 # ──────────────────────────────────────────────────────────────────────
 
 @router.get("/evidence", response_model=list[EvidenceAttachOut])
-def list_evidence(
+async def list_evidence(
     notice_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    notice = _get_notice(db, notice_id, membership=membership)
-    rows = list_attachments(db, notice_id=notice_id, client_id=notice.client_id)
+    notice = await _get_notice(db, notice_id, membership=membership)
+    rows = await list_attachments(db, notice_id=notice_id, client_id=notice.client_id)
     return [EvidenceAttachOut.model_validate(r) for r in rows]
 
 
 @router.post("/evidence", response_model=EvidenceAttachOut)
-def add_evidence(
+async def add_evidence(
     notice_id: int,
     payload: EvidenceAttachRequest,
     current_user: User = Depends(get_current_user),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_ATTACH_EVIDENCE)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    notice = _get_notice(db, notice_id, membership=membership)
+    notice = await _get_notice(db, notice_id, membership=membership)
     try:
-        row = attach_document(
+        row = await attach_document(
             db,
             notice=notice,
             document_id=payload.document_id,
@@ -558,18 +584,18 @@ def add_evidence(
 
 
 @router.delete("/evidence/{document_id}")
-def remove_evidence(
+async def remove_evidence(
     notice_id: int,
     document_id: int,
     current_user: User = Depends(get_current_user),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_ATTACH_EVIDENCE)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    notice = _get_notice(db, notice_id, membership=membership)
+    notice = await _get_notice(db, notice_id, membership=membership)
     try:
-        removed = detach_document(
+        removed = await detach_document(
             db, notice=notice, document_id=document_id, user_id=current_user.id
         )
     except DocumentAccessDenied as e:

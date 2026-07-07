@@ -19,7 +19,8 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import (
     is_cross_client_mode,
@@ -29,7 +30,7 @@ from app.compliance.models.alert import NoticeAlertRule
 from app.compliance.models.membership import ClientMembership
 from app.compliance.services.alert_service import list_pending_alerts
 from app.compliance.services.permission_registry import CompliancePermission
-from app.database import get_db
+from app.database import get_async_db
 
 router = APIRouter(prefix="/alerts", tags=["compliance-alerts"])
 
@@ -67,16 +68,16 @@ class AlertRulePayload(BaseModel):
     "/pending",
     summary="List queued or failed alerts for the active client",
 )
-def get_pending_alerts(
+async def get_pending_alerts(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     client_id = None if is_cross_client_mode() else membership.client_id
-    items, total = list_pending_alerts(
+    items, total = await list_pending_alerts(
         db, client_id=client_id, page=page, page_size=page_size
     )
     return {
@@ -108,17 +109,18 @@ def get_pending_alerts(
     response_model=list[AlertRuleOut],
     summary="List alert rules for the active client",
 )
-def list_rules(
+async def list_rules(
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    rows = (
-        db.query(NoticeAlertRule)
-        .filter(NoticeAlertRule.client_id == membership.client_id)
-        .all()
+    result = await db.execute(
+        select(NoticeAlertRule).where(
+            NoticeAlertRule.client_id == membership.client_id
+        )
     )
+    rows = result.scalars().all()
     return [
         AlertRuleOut(
             id=r.id,
@@ -136,21 +138,20 @@ def list_rules(
     response_model=AlertRuleOut,
     summary="Create or update an alert rule for the active client",
 )
-def upsert_rule(
+async def upsert_rule(
     body: AlertRulePayload,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_REVIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    existing = (
-        db.query(NoticeAlertRule)
-        .filter(
+    result = await db.execute(
+        select(NoticeAlertRule).where(
             NoticeAlertRule.client_id == membership.client_id,
             NoticeAlertRule.notice_type_id == body.notice_type_id,
         )
-        .first()
     )
+    existing = result.scalar_one_or_none()
     if existing is None:
         existing = NoticeAlertRule(
             client_id=membership.client_id,
@@ -163,8 +164,8 @@ def upsert_rule(
         existing.rules = body.rules
         existing.is_active = body.is_active
 
-    db.commit()
-    db.refresh(existing)
+    await db.commit()
+    await db.refresh(existing)
     return AlertRuleOut(
         id=existing.id,
         client_id=existing.client_id,

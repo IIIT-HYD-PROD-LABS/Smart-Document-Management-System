@@ -22,6 +22,7 @@ from typing import Any, Iterable, Optional
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.compliance.middleware.auditor_expiry import is_membership_active
@@ -251,8 +252,8 @@ def dispatch_non_notice_alert(
     return counters
 
 
-def list_pending_alerts(
-    db: Session, *, client_id: Optional[int], page: int = 1, page_size: int = 50
+async def list_pending_alerts(
+    db: AsyncSession, *, client_id: Optional[int], page: int = 1, page_size: int = 50
 ) -> tuple[list[NoticeAlertLog], int]:
     """List queued/failed alerts for retry surfaces. Auditor surface."""
     from sqlalchemy import func
@@ -272,6 +273,7 @@ def list_pending_alerts(
         .limit(page_size)
         .offset((page - 1) * page_size)
     )
-    items = list(db.execute(base).scalars().all())
-    total = int(db.execute(count_q).scalar_one())
+    result = await db.execute(base)
+    items = list(result.scalars().all())
+    total = int(await db.scalar(count_q))
     return items, total

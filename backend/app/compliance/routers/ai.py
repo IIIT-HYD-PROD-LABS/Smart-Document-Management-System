@@ -30,7 +30,8 @@ import logging
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import require_compliance_permission
 from app.utils.rate_limiter import limiter
@@ -56,7 +57,7 @@ from app.compliance.services.ai_service import (
     AIRateLimitError,
 )
 from app.compliance.services.permission_registry import CompliancePermission
-from app.database import get_db
+from app.database import get_async_db
 from app.email.models.bill import Bill
 
 logger = logging.getLogger(__name__)
@@ -121,12 +122,12 @@ def _map_ai_error(e: Exception) -> HTTPException:
     )
 
 
-def _require_credential(db: Session, client_id: int):
+async def _require_credential(db: AsyncSession, client_id: int):
     """Resolve the AI credential for this tenant: per-tenant BYOK first, then
     the server-default provider (settings.LLM_PROVIDER, e.g. Ollama). Only 412
     when neither is available — with a server default configured this rarely
     fires, so AI features work out of the box without a tenant key."""
-    cred = ai_service.resolve_credential(db, client_id)
+    cred = await ai_service.resolve_credential_async(db, client_id)
     if not cred:
         raise HTTPException(
             status_code=status.HTTP_412_PRECONDITION_FAILED,
@@ -138,15 +139,16 @@ def _require_credential(db: Session, client_id: int):
     return cred
 
 
-def _require_notice(db: Session, notice_id: int, client_id: int) -> ComplianceNotice:
-    notice = (
-        db.query(ComplianceNotice)
-        .filter(
+async def _require_notice(
+    db: AsyncSession, notice_id: int, client_id: int
+) -> ComplianceNotice:
+    result = await db.execute(
+        select(ComplianceNotice).where(
             ComplianceNotice.id == notice_id,
             ComplianceNotice.client_id == client_id,
         )
-        .first()
     )
+    notice = result.scalar_one_or_none()
     if not notice:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Notice not found"
@@ -154,12 +156,11 @@ def _require_notice(db: Session, notice_id: int, client_id: int) -> ComplianceNo
     return notice
 
 
-def _require_bill(db: Session, bill_id: int, client_id: int) -> Bill:
-    bill = (
-        db.query(Bill)
-        .filter(Bill.id == bill_id, Bill.client_id == client_id)
-        .first()
+async def _require_bill(db: AsyncSession, bill_id: int, client_id: int) -> Bill:
+    result = await db.execute(
+        select(Bill).where(Bill.id == bill_id, Bill.client_id == client_id)
     )
+    bill = result.scalar_one_or_none()
     if not bill:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
@@ -173,15 +174,15 @@ def _require_bill(db: Session, bill_id: int, client_id: int) -> Bill:
 
 
 @router.get("/credentials", response_model=AICredentialOut | None)
-def get_credential(
+async def get_credential(
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Read-only — anyone in the tenant can see WHICH AI is connected;
     only admins can change it."""
-    cred = ai_service.get_credential(db, membership.client_id)
+    cred = await ai_service.get_credential_async(db, membership.client_id)
     if not cred:
         return None
     return cred
@@ -192,14 +193,14 @@ def get_credential(
     response_model=AICredentialOut,
     status_code=status.HTTP_200_OK,
 )
-def set_credential(
+async def set_credential(
     payload: AICredentialCreate,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.CLIENT_MANAGE_TEAM)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    cred = ai_service.set_credential(
+    cred = await ai_service.set_credential(
         db,
         client_id=membership.client_id,
         provider=payload.provider,
@@ -210,13 +211,13 @@ def set_credential(
 
 
 @router.delete("/credentials", status_code=status.HTTP_204_NO_CONTENT)
-def delete_credential(
+async def delete_credential(
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.CLIENT_MANAGE_TEAM)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    ai_service.delete_credential(db, client_id=membership.client_id)
+    await ai_service.delete_credential(db, client_id=membership.client_id)
     return None
 
 
@@ -280,19 +281,19 @@ def test_credential(
     "/notice-summary/{notice_id}", response_model=NoticeSummaryResponse
 )
 @limiter.limit("20/minute")
-def notice_summary(
+async def notice_summary(
     request: Request,
     response: Response,
     notice_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    cred = _require_credential(db, membership.client_id)
-    notice = _require_notice(db, notice_id, membership.client_id)
+    cred = await _require_credential(db, membership.client_id)
+    notice = await _require_notice(db, notice_id, membership.client_id)
     try:
-        return ai_service.summarize_notice(db, cred, notice)
+        return await ai_service.summarize_notice(db, cred, notice)
     except (
         AIOutOfScopeError,
         AIAuthError,
@@ -306,19 +307,19 @@ def notice_summary(
     "/notice-actions/{notice_id}", response_model=NoticeActionsResponse
 )
 @limiter.limit("20/minute")
-def notice_actions(
+async def notice_actions(
     request: Request,
     response: Response,
     notice_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    cred = _require_credential(db, membership.client_id)
-    notice = _require_notice(db, notice_id, membership.client_id)
+    cred = await _require_credential(db, membership.client_id)
+    notice = await _require_notice(db, notice_id, membership.client_id)
     try:
-        return {"actions": ai_service.recommend_notice_actions(db, cred, notice)}
+        return {"actions": await ai_service.recommend_notice_actions(db, cred, notice)}
     except (
         AIOutOfScopeError,
         AIAuthError,
@@ -353,7 +354,7 @@ class NoticeResponseDraftRequest(BaseModel):
     "/notice-response-draft/{notice_id}",
 )
 @limiter.limit("12/minute")
-def notice_response_draft(
+async def notice_response_draft(
     request: Request,
     response: Response,
     notice_id: int,
@@ -361,7 +362,7 @@ def notice_response_draft(
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_DRAFT_RESPONSE)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Phase 18: generate an AI-assisted draft reply for the notice.
 
@@ -378,11 +379,11 @@ def notice_response_draft(
         draft_response_for_notice,
     )
 
-    _require_credential(db, membership.client_id)
-    notice = _require_notice(db, notice_id, membership.client_id)
+    await _require_credential(db, membership.client_id)
+    notice = await _require_notice(db, notice_id, membership.client_id)
 
     try:
-        return draft_response_for_notice(
+        return await draft_response_for_notice(
             db,
             notice=notice,
             user_id=membership.user_id,
@@ -414,19 +415,19 @@ def notice_response_draft(
     "/invoice-summary/{bill_id}", response_model=InvoiceSummaryResponse
 )
 @limiter.limit("20/minute")
-def invoice_summary(
+async def invoice_summary(
     request: Request,
     response: Response,
     bill_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    cred = _require_credential(db, membership.client_id)
-    bill = _require_bill(db, bill_id, membership.client_id)
+    cred = await _require_credential(db, membership.client_id)
+    bill = await _require_bill(db, bill_id, membership.client_id)
     try:
-        return ai_service.summarize_invoice(db, cred, bill)
+        return await ai_service.summarize_invoice(db, cred, bill)
     except (
         AIOutOfScopeError,
         AIAuthError,
@@ -440,19 +441,19 @@ def invoice_summary(
     "/invoice-actions/{bill_id}", response_model=InvoiceActionsResponse
 )
 @limiter.limit("20/minute")
-def invoice_actions(
+async def invoice_actions(
     request: Request,
     response: Response,
     bill_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    cred = _require_credential(db, membership.client_id)
-    bill = _require_bill(db, bill_id, membership.client_id)
+    cred = await _require_credential(db, membership.client_id)
+    bill = await _require_bill(db, bill_id, membership.client_id)
     try:
-        return {"actions": ai_service.recommend_invoice_actions(db, cred, bill)}
+        return {"actions": await ai_service.recommend_invoice_actions(db, cred, bill)}
     except (
         AIOutOfScopeError,
         AIAuthError,
@@ -464,14 +465,14 @@ def invoice_actions(
 
 @router.post("/chat", response_model=ChatResponse)
 @limiter.limit("15/minute")
-def chat(
+async def chat(
     request: Request,
     response: Response,
     payload: ChatRequest = Body(...),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Multi-turn chat with the BYOK assistant.
 
@@ -491,7 +492,7 @@ def chat(
             detail="The last message must be from the user.",
         )
 
-    cred = _require_credential(db, membership.client_id)
+    cred = await _require_credential(db, membership.client_id)
     # No substring scrubbing of history: dropping any message merely CONTAINING
     # "OUT_OF_SCOPE"/"ignore previous instructions" corrupted legitimate content
     # (e.g. a user asking ABOUT those phrases) and was trivially bypassed. The
@@ -499,7 +500,7 @@ def chat(
     msgs = [m.model_dump() for m in payload.messages]
 
     try:
-        return ai_service.chat_with_assistant(db, cred, msgs)
+        return await ai_service.chat_with_assistant(db, cred, msgs)
     except (
         AIOutOfScopeError,
         AIAuthError,
@@ -513,19 +514,19 @@ def chat(
     "/invoice-timing/{bill_id}", response_model=InvoiceTimingResponse
 )
 @limiter.limit("20/minute")
-def invoice_timing(
+async def invoice_timing(
     request: Request,
     response: Response,
     bill_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    cred = _require_credential(db, membership.client_id)
-    bill = _require_bill(db, bill_id, membership.client_id)
+    cred = await _require_credential(db, membership.client_id)
+    bill = await _require_bill(db, bill_id, membership.client_id)
     try:
-        return ai_service.suggest_invoice_payment_timing(db, cred, bill)
+        return await ai_service.suggest_invoice_payment_timing(db, cred, bill)
     except (
         AIOutOfScopeError,
         AIAuthError,

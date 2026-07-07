@@ -26,8 +26,8 @@ a failure on one notice does not block subsequent notices.
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.models.notice import ComplianceNotice
 from app.compliance.services.activity_service import log_activity
@@ -71,8 +71,8 @@ def process_notice_intake(notice_id: int, response_deadline=None) -> None:
             )
 
 
-def transition_notice_status(
-    db: Session,
+async def transition_notice_status(
+    db: AsyncSession,
     notice_id: int,
     new_status: NoticeStatus,
     user: User,
@@ -103,10 +103,10 @@ def transition_notice_status(
     another tenant's notice. Defaults to None so existing service-layer
     callers/tests that run RLS-bypassed keep their behaviour.
     """
-    q = db.query(ComplianceNotice).filter(ComplianceNotice.id == notice_id)
+    q = select(ComplianceNotice).where(ComplianceNotice.id == notice_id)
     if client_id is not None:
-        q = q.filter(ComplianceNotice.client_id == client_id)
-    notice = q.with_for_update().one()
+        q = q.where(ComplianceNotice.client_id == client_id)
+    notice = (await db.execute(q.with_for_update())).scalar_one()
     old_status_str = notice.status
     old_status = NoticeStatus(old_status_str)
     # Raises InvalidTransitionError if not allowed; caller catches in bulk path
@@ -122,7 +122,7 @@ def transition_notice_status(
     # commits or rolls back.
     if new_status == NoticeStatus.SUBMITTED and old_status != NoticeStatus.SUBMITTED:
         from app.compliance.services.response_service import is_response_approved
-        if not is_response_approved(db, notice_id=notice.id, lock_for_update=True):
+        if not await is_response_approved(db, notice_id=notice.id, lock_for_update=True):
             raise InvalidTransitionError(
                 f"Cannot transition notice {notice.id} to 'submitted' — "
                 "response is not approved. Complete the Drafter → Reviewer "
@@ -145,8 +145,8 @@ def transition_notice_status(
             "reason": reason,
         },
     )
-    db.commit()
-    db.refresh(notice)
+    await db.commit()
+    await db.refresh(notice)
 
     # Immutable system audit (AUDIT-02). Synchronous so the test contract
     # in test_audit_capture::test_status_change_captures_diff observes the
@@ -213,8 +213,8 @@ def transition_notice_status(
     return notice
 
 
-def get_notice_chain(
-    db: Session,
+async def get_notice_chain(
+    db: AsyncSession,
     notice_id: int,
     max_depth: int = 10,
     client_id: Optional[int] = None,
@@ -246,28 +246,28 @@ def get_notice_chain(
                    0 AS depth
               FROM compliance_notices
              WHERE id = :nid
-               AND (:cid IS NULL OR client_id = :cid)
+               AND (CAST(:cid AS integer) IS NULL OR client_id = CAST(:cid AS integer))
             UNION ALL
             SELECT n.id, n.parent_notice_id, n.notice_number, n.status,
                    n.authority, a.depth - 1
               FROM compliance_notices n
               JOIN ancestors a ON n.id = a.parent_notice_id
-             WHERE a.depth > -:max_depth
-               AND (:cid IS NULL OR n.client_id = :cid)
+             WHERE a.depth > -CAST(:max_depth AS integer)
+               AND (CAST(:cid AS integer) IS NULL OR n.client_id = CAST(:cid AS integer))
         ),
         descendants AS (
             SELECT id, parent_notice_id, notice_number, status, authority,
                    0 AS depth
               FROM compliance_notices
              WHERE id = :nid
-               AND (:cid IS NULL OR client_id = :cid)
+               AND (CAST(:cid AS integer) IS NULL OR client_id = CAST(:cid AS integer))
             UNION ALL
             SELECT n.id, n.parent_notice_id, n.notice_number, n.status,
                    n.authority, d.depth + 1
               FROM compliance_notices n
               JOIN descendants d ON n.parent_notice_id = d.id
              WHERE d.depth < :max_depth
-               AND (:cid IS NULL OR n.client_id = :cid)
+               AND (CAST(:cid AS integer) IS NULL OR n.client_id = CAST(:cid AS integer))
         )
         SELECT id, parent_notice_id, notice_number, status, authority, depth
           FROM ancestors WHERE depth < 0
@@ -277,14 +277,14 @@ def get_notice_chain(
         ORDER BY depth;
         """
     )
-    result = db.execute(
+    result = await db.execute(
         sql, {"nid": notice_id, "max_depth": max_depth, "cid": client_id}
     )
     return [dict(row._mapping) for row in result]
 
 
-def bulk_update_status(
-    db: Session,
+async def bulk_update_status(
+    db: AsyncSession,
     notice_ids: list[int],
     new_status: NoticeStatus,
     user: User,
@@ -312,25 +312,25 @@ def bulk_update_status(
         # no-op success. This prevents spurious failures when the UI sends a
         # bulk request after a single-row transition already moved the notice
         # to the desired state (stale selection / concurrent edit).
-        status_q = db.query(ComplianceNotice.status).filter(
+        status_q = select(ComplianceNotice.status).where(
             ComplianceNotice.id == nid
         )
         if client_id is not None:
-            status_q = status_q.filter(ComplianceNotice.client_id == client_id)
-        current_status = status_q.scalar()
+            status_q = status_q.where(ComplianceNotice.client_id == client_id)
+        current_status = (await db.execute(status_q)).scalar()
         if current_status is not None and current_status == new_status.value:
             results.append({"id": nid, "success": True, "error": None})
             continue
         try:
-            transition_notice_status(
+            await transition_notice_status(
                 db, nid, new_status, user, reason, client_id=client_id
             )
         except InvalidTransitionError as exc:
-            db.rollback()
+            await db.rollback()
             results.append({"id": nid, "success": False, "error": str(exc)})
             continue
         except Exception:  # pragma: no cover - defensive
-            db.rollback()
+            await db.rollback()
             results.append(
                 {"id": nid, "success": False, "error": "Internal error"}
             )
@@ -343,8 +343,8 @@ def bulk_update_status(
     }
 
 
-def filter_notices(
-    db: Session,
+async def filter_notices(
+    db: AsyncSession,
     client_id: int,
     authority: Optional[str] = None,
     status: Optional[str] = None,
@@ -363,25 +363,25 @@ def filter_notices(
     `?page=1` query strings. Result ordering is created_at DESC so the
     most recently captured notices land at the top of the list view.
     """
-    q = db.query(ComplianceNotice).filter(
+    q = select(ComplianceNotice).where(
         ComplianceNotice.client_id == client_id
     )
     if authority:
-        q = q.filter(ComplianceNotice.authority == authority)
+        q = q.where(ComplianceNotice.authority == authority)
     if status:
-        q = q.filter(ComplianceNotice.status == status)
+        q = q.where(ComplianceNotice.status == status)
     if notice_type_id is not None:
-        q = q.filter(ComplianceNotice.notice_type_id == notice_type_id)
+        q = q.where(ComplianceNotice.notice_type_id == notice_type_id)
     if response_deadline_before:
-        q = q.filter(
+        q = q.where(
             ComplianceNotice.response_deadline <= response_deadline_before
         )
     if response_deadline_after:
-        q = q.filter(
+        q = q.where(
             ComplianceNotice.response_deadline >= response_deadline_after
         )
     if assigned_user_id is not None:
-        q = q.filter(ComplianceNotice.assigned_user_id == assigned_user_id)
+        q = q.where(ComplianceNotice.assigned_user_id == assigned_user_id)
     if gstin_or_pan:
         # Local import to avoid a cycle through models/__init__ at module load
         from app.compliance.models.client import ClientRegistration
@@ -389,13 +389,13 @@ def filter_notices(
         q = q.join(
             ClientRegistration,
             ComplianceNotice.registration_id == ClientRegistration.id,
-        ).filter(
+        ).where(
             ClientRegistration.value.ilike(f"%{gstin_or_pan}%")
         )
     offset = (page - 1) * page_size
-    return (
+    result = await db.execute(
         q.order_by(ComplianceNotice.created_at.desc())
         .offset(offset)
         .limit(page_size)
-        .all()
     )
+    return result.scalars().all()

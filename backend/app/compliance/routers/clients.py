@@ -32,7 +32,9 @@ import base64
 from typing import List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.compliance.dependencies import (
     require_client_create_or_first_onboard,
@@ -53,7 +55,7 @@ from app.compliance.services.client_service import (
     onboard_client,
 )
 from app.compliance.services.permission_registry import CompliancePermission
-from app.database import get_bootstrap_db, get_db
+from app.database import get_async_db, get_bootstrap_async_db
 from app.models.user import User
 from app.services.audit_service import log_audit_event
 from app.utils.security import get_current_user
@@ -94,9 +96,9 @@ router = APIRouter(prefix="/clients", tags=["compliance-clients"])
 
 
 @router.get("/me", response_model=List[MembershipOut])
-def list_my_memberships(
+async def list_my_memberships(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List the requesting user's compliance memberships across all clients.
 
@@ -107,12 +109,12 @@ def list_my_memberships(
     The query bypasses the get_active_membership dep entirely so users can
     discover their tenancies before sending an X-Client-Id header.
     """
-    rows = (
-        db.query(ClientMembership)
-        .filter(ClientMembership.user_id == current_user.id)
-        .all()
+    result = await db.execute(
+        select(ClientMembership).where(
+            ClientMembership.user_id == current_user.id
+        )
     )
-    return rows
+    return result.scalars().all()
 
 
 @router.post(
@@ -120,7 +122,7 @@ def list_my_memberships(
     response_model=ClientDetailOut,
     status_code=status.HTTP_201_CREATED,
 )
-def onboard(
+async def onboard(
     payload: ClientOnboardRequest,
     current_user: User = Depends(get_current_user),
     # Onboarding inserts Client + Registrations + Memberships for a brand-new
@@ -128,7 +130,7 @@ def onboard(
     # WITH CHECK on those tables is unsatisfiable. Run it under the owner
     # bootstrap session (RLS-bypassing); the require_client_create_or_first_onboard
     # gate above already authorizes the actor.
-    db: Session = Depends(get_bootstrap_db),
+    db: AsyncSession = Depends(get_bootstrap_async_db),
     # CLIENT_CREATE gate with bootstrap exemption: a user with zero
     # memberships may self-service create their first client (the team
     # payload self-grants their role). After that, only ca_consultant
@@ -141,7 +143,7 @@ def onboard(
     Service-layer wrapper handles Client + N Registrations + M Memberships in
     a single transaction. Audit log emitted by the service after commit.
     """
-    client = onboard_client(
+    client = await onboard_client(
         db=db,
         details=payload.details.model_dump(),
         registrations=[r.model_dump() for r in payload.registrations],
@@ -149,20 +151,35 @@ def onboard(
         actor=current_user,
     )
     # Eager-load relationships for the detail response.
-    db.refresh(client)
-    return client
+    result = await db.execute(
+        select(Client)
+        .options(
+            selectinload(Client.registrations),
+            selectinload(Client.memberships),
+        )
+        .where(Client.id == client.id)
+    )
+    return result.scalar_one()
 
 
 @router.get("/{client_id}", response_model=ClientDetailOut)
-def get_client(
+async def get_client(
     client_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Fetch a single client (RLS-filtered by membership)."""
-    client = db.query(Client).filter(Client.id == client_id).first()
+    result = await db.execute(
+        select(Client)
+        .options(
+            selectinload(Client.registrations),
+            selectinload(Client.memberships),
+        )
+        .where(Client.id == client_id)
+    )
+    client = result.scalar_one_or_none()
     if not client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -175,15 +192,15 @@ def get_client(
     "/{client_id}/dashboard",
     response_model=DashboardAggregates,
 )
-def client_dashboard(
+async def client_dashboard(
     client_id: int,
     _membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.NOTICE_VIEW)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Real-time per-client dashboard aggregates — CLIENT-03 / D-18."""
-    return get_dashboard_aggregates(db, client_id=client_id)
+    return await get_dashboard_aggregates(db, client_id=client_id)
 
 
 def _assert_path_matches_membership(
@@ -203,17 +220,17 @@ def _assert_path_matches_membership(
 
 
 @router.patch("/{client_id}/branding", response_model=ClientOut)
-def update_branding(
+async def update_branding(
     client_id: int,
     payload: ClientBrandingUpdate,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.CLIENT_MANAGE_TEAM)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update website + address for a client (logo has its own endpoint)."""
     _assert_path_matches_membership(client_id, membership)
-    client = db.query(Client).filter(Client.id == client_id).first()
+    client = await db.get(Client, client_id)
     if not client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -226,8 +243,8 @@ def update_branding(
     if "address" in data:
         client.address = data["address"] or None
 
-    db.commit()
-    db.refresh(client)
+    await db.commit()
+    await db.refresh(client)
 
     log_audit_event(
         user_id=membership.user_id,
@@ -246,7 +263,7 @@ async def upload_logo(
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.CLIENT_MANAGE_TEAM)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Upload (or replace) a client's logo. Stored as a base64 data URL
     in compliance_clients.logo_url. PNG/JPEG/WEBP only; SVG rejected
@@ -288,7 +305,7 @@ async def upload_logo(
             ),
         )
 
-    client = db.query(Client).filter(Client.id == client_id).first()
+    client = await db.get(Client, client_id)
     if not client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -298,8 +315,8 @@ async def upload_logo(
     encoded = base64.b64encode(blob).decode("ascii")
     client.logo_url = f"data:{mime};base64,{encoded}"
 
-    db.commit()
-    db.refresh(client)
+    await db.commit()
+    await db.refresh(client)
 
     log_audit_event(
         user_id=membership.user_id,
@@ -312,16 +329,16 @@ async def upload_logo(
 
 
 @router.delete("/{client_id}/logo", response_model=ClientOut)
-def delete_logo(
+async def delete_logo(
     client_id: int,
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.CLIENT_MANAGE_TEAM)
     ),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Clear the client's logo (sets logo_url to NULL)."""
     _assert_path_matches_membership(client_id, membership)
-    client = db.query(Client).filter(Client.id == client_id).first()
+    client = await db.get(Client, client_id)
     if not client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -331,8 +348,8 @@ def delete_logo(
         return client
 
     client.logo_url = None
-    db.commit()
-    db.refresh(client)
+    await db.commit()
+    await db.refresh(client)
 
     log_audit_event(
         user_id=membership.user_id,

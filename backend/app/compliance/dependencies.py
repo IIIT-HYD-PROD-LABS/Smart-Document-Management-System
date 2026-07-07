@@ -25,6 +25,8 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.compliance.middleware.auditor_expiry import (
@@ -41,7 +43,7 @@ from app.compliance.services.permission_registry import (
     ComplianceRole,
     has_permission,
 )
-from app.database import get_db
+from app.database import get_async_db, get_db
 from app.models.user import User
 from app.utils.security import get_current_user
 
@@ -77,10 +79,10 @@ def is_cross_client_mode() -> bool:
     return cross_client_mode_var.get()
 
 
-def get_active_membership(
+async def get_active_membership(
     current_user: User = Depends(get_current_user),
     client_id: Optional[int] = Depends(get_active_client_id),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ) -> ClientMembership:
     """Looks up (user, client) → ClientMembership. Rejects if missing or expired.
 
@@ -103,14 +105,13 @@ def get_active_membership(
                 detail="Cross-client mode requires platform admin role",
             )
         now = datetime.now(timezone.utc)
-        candidates = (
-            db.query(ClientMembership)
-            .filter(
+        result = await db.execute(
+            select(ClientMembership).where(
                 ClientMembership.user_id == current_user.id,
                 ClientMembership.compliance_role.in_(_CROSS_CLIENT_ELIGIBLE_ROLES),
             )
-            .all()
         )
+        candidates = result.scalars().all()
         active = [m for m in candidates if is_membership_active(m, now)]
         if not active:
             raise HTTPException(
@@ -122,14 +123,13 @@ def get_active_membership(
             )
         return active[0]
 
-    membership = (
-        db.query(ClientMembership)
-        .filter(
+    result = await db.execute(
+        select(ClientMembership).where(
             ClientMembership.user_id == current_user.id,
             ClientMembership.client_id == client_id,
         )
-        .first()
     )
+    membership = result.scalar_one_or_none()
     if not membership:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
