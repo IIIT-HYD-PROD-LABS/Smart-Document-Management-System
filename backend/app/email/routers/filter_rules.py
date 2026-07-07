@@ -13,12 +13,13 @@ break by id ASC (oldest rule wins).
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import require_compliance_permission
 from app.compliance.models.membership import ClientMembership
 from app.compliance.services.permission_registry import CompliancePermission
-from app.database import get_db
+from app.database import get_async_db
 from app.email.models.credential import GmailCredential
 from app.email.models.filter_rule import GmailFilterRule
 from app.email.schemas.filter_rule import (
@@ -30,12 +31,12 @@ from app.email.schemas.filter_rule import (
 router = APIRouter(tags=["gmail-filter-rules"])
 
 
-def _require_credential(db: Session, credential_id: int) -> GmailCredential:
+async def _require_credential(db: AsyncSession, credential_id: int) -> GmailCredential:
     cred = (
-        db.query(GmailCredential)
-        .filter(GmailCredential.id == credential_id)
-        .first()
-    )
+        await db.execute(
+            select(GmailCredential).where(GmailCredential.id == credential_id)
+        )
+    ).scalar_one_or_none()
     if cred is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -48,21 +49,21 @@ def _require_credential(db: Session, credential_id: int) -> GmailCredential:
     "/credentials/{credential_id}/filter-rules",
     response_model=list[GmailFilterRuleResponse],
 )
-def list_filter_rules(
+async def list_filter_rules(
     credential_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
 ):
     """List filter rules ordered by priority ASC (open question #5)."""
-    _require_credential(db, credential_id)
-    return (
-        db.query(GmailFilterRule)
-        .filter(GmailFilterRule.credential_id == credential_id)
+    await _require_credential(db, credential_id)
+    result = await db.execute(
+        select(GmailFilterRule)
+        .where(GmailFilterRule.credential_id == credential_id)
         .order_by(GmailFilterRule.priority.asc(), GmailFilterRule.id.asc())
-        .all()
     )
+    return result.scalars().all()
 
 
 @router.post(
@@ -70,23 +71,23 @@ def list_filter_rules(
     response_model=GmailFilterRuleResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_filter_rule(
+async def create_filter_rule(
     credential_id: int,
     body: GmailFilterRuleCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
 ):
     """Create a new filter rule for the credential."""
-    _require_credential(db, credential_id)
+    await _require_credential(db, credential_id)
     rule = GmailFilterRule(
         credential_id=credential_id,
         **body.model_dump(),
     )
     db.add(rule)
-    db.commit()
-    db.refresh(rule)
+    await db.commit()
+    await db.refresh(rule)
     return rule
 
 
@@ -94,10 +95,10 @@ def create_filter_rule(
     "/filter-rules/{rule_id}",
     response_model=GmailFilterRuleResponse,
 )
-def update_filter_rule(
+async def update_filter_rule(
     rule_id: int,
     body: GmailFilterRuleUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
@@ -107,14 +108,15 @@ def update_filter_rule(
     # credential's client_id (join) in addition to RLS so a rule belonging to
     # another tenant cannot be mutated if the RLS context is misset.
     rule = (
-        db.query(GmailFilterRule)
-        .join(GmailCredential, GmailFilterRule.credential_id == GmailCredential.id)
-        .filter(
-            GmailFilterRule.id == rule_id,
-            GmailCredential.client_id == membership.client_id,
+        await db.execute(
+            select(GmailFilterRule)
+            .join(GmailCredential, GmailFilterRule.credential_id == GmailCredential.id)
+            .where(
+                GmailFilterRule.id == rule_id,
+                GmailCredential.client_id == membership.client_id,
+            )
         )
-        .first()
-    )
+    ).scalar_one_or_none()
     if rule is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -122,8 +124,8 @@ def update_filter_rule(
         )
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(rule, field, value)
-    db.commit()
-    db.refresh(rule)
+    await db.commit()
+    await db.refresh(rule)
     return rule
 
 
@@ -131,9 +133,9 @@ def update_filter_rule(
     "/filter-rules/{rule_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_filter_rule(
+async def delete_filter_rule(
     rule_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
@@ -144,19 +146,20 @@ def delete_filter_rule(
     RLS — GmailFilterRule has no client_id of its own.
     """
     rule = (
-        db.query(GmailFilterRule)
-        .join(GmailCredential, GmailFilterRule.credential_id == GmailCredential.id)
-        .filter(
-            GmailFilterRule.id == rule_id,
-            GmailCredential.client_id == membership.client_id,
+        await db.execute(
+            select(GmailFilterRule)
+            .join(GmailCredential, GmailFilterRule.credential_id == GmailCredential.id)
+            .where(
+                GmailFilterRule.id == rule_id,
+                GmailCredential.client_id == membership.client_id,
+            )
         )
-        .first()
-    )
+    ).scalar_one_or_none()
     if rule is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Filter rule not found",
         )
-    db.delete(rule)
-    db.commit()
+    await db.delete(rule)
+    await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

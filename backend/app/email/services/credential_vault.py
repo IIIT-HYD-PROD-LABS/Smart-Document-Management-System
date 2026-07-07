@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.compliance.utils.pii_encryption import decrypt_field, encrypt_field
@@ -19,8 +21,8 @@ from app.email.models.credential import GmailCredential
 logger = logging.getLogger(__name__)
 
 
-def save_credential(
-    db: Session,
+async def save_credential(
+    db: AsyncSession,
     *,
     user_id: int,
     client_id: int,
@@ -31,13 +33,13 @@ def save_credential(
     if not refresh_token:
         raise ValueError("refresh_token is required")
     existing = (
-        db.query(GmailCredential)
-        .filter(
-            GmailCredential.user_id == user_id,
-            GmailCredential.client_id == client_id,
+        await db.execute(
+            select(GmailCredential).where(
+                GmailCredential.user_id == user_id,
+                GmailCredential.client_id == client_id,
+            )
         )
-        .first()
-    )
+    ).scalar_one_or_none()
     encrypted = encrypt_field(refresh_token)
     if existing:
         existing.refresh_token_enc = encrypted
@@ -55,8 +57,8 @@ def save_credential(
             status=GmailCredential.STATUS_ACTIVE,
         )
         db.add(cred)
-    db.commit()
-    db.refresh(cred)
+    await db.commit()
+    await db.refresh(cred)
     return cred
 
 

@@ -23,6 +23,8 @@ from decimal import Decimal
 from typing import Optional
 
 from apscheduler.triggers.date import DateTrigger
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.compliance.services.scheduler import get_scheduler
@@ -107,8 +109,8 @@ def upsert_bill(
     return bill
 
 
-def mark_paid(
-    db: Session,
+async def mark_paid(
+    db: AsyncSession,
     *,
     bill_id: int,
     payment_date: date,
@@ -120,10 +122,10 @@ def mark_paid(
     # SEC1: explicit client_id scope in addition to RLS — defence-in-depth so
     # mark_paid cannot mutate a bill belonging to another tenant.
     bill = (
-        db.query(Bill)
-        .filter(Bill.id == bill_id, Bill.client_id == client_id)
-        .first()
-    )
+        await db.execute(
+            select(Bill).where(Bill.id == bill_id, Bill.client_id == client_id)
+        )
+    ).scalar_one_or_none()
     if bill is None:
         raise ValueError(f"Bill {bill_id} not found")
     if payment_method not in Bill.PAYMENT_METHODS:
@@ -135,8 +137,8 @@ def mark_paid(
     bill.payment_date = payment_date
     bill.payment_reference = payment_reference
     bill.payment_method = payment_method
-    db.commit()
-    db.refresh(bill)
+    await db.commit()
+    await db.refresh(bill)
     log_audit_event_strict(
         user_id=user_id,
         action="BILL_MARK_PAID",
@@ -202,8 +204,8 @@ def fire_bill_reminder(bill_id: int, tier: str) -> None:
     _delegate(bill_id=bill_id, tier=tier)
 
 
-def list_bills(
-    db: Session,
+async def list_bills(
+    db: AsyncSession,
     *,
     client_id: int,
     status: Optional[str] = None,
@@ -212,35 +214,36 @@ def list_bills(
     due_after: Optional[date] = None,
     is_recurring: Optional[bool] = None,
 ) -> list[Bill]:
-    q = db.query(Bill).filter(Bill.client_id == client_id)
+    q = select(Bill).where(Bill.client_id == client_id)
     today = date.today()
     if status == "upcoming":
-        q = q.filter(
+        q = q.where(
             Bill.due_date > today + timedelta(days=7),
             Bill.payment_status != Bill.STATUS_PAID,
         )
     elif status == "due_soon":
-        q = q.filter(
+        q = q.where(
             Bill.due_date > today,
             Bill.due_date <= today + timedelta(days=7),
             Bill.payment_status != Bill.STATUS_PAID,
         )
     elif status == "overdue":
-        q = q.filter(
+        q = q.where(
             Bill.due_date < today,
             Bill.payment_status != Bill.STATUS_PAID,
         )
     elif status == "paid":
-        q = q.filter(Bill.payment_status == Bill.STATUS_PAID)
+        q = q.where(Bill.payment_status == Bill.STATUS_PAID)
     if biller_category:
-        q = q.filter(Bill.biller_category == biller_category)
+        q = q.where(Bill.biller_category == biller_category)
     if due_before:
-        q = q.filter(Bill.due_date <= due_before)
+        q = q.where(Bill.due_date <= due_before)
     if due_after:
-        q = q.filter(Bill.due_date >= due_after)
+        q = q.where(Bill.due_date >= due_after)
     if is_recurring is not None:
-        q = q.filter(Bill.is_recurring == is_recurring)
-    return q.order_by(
+        q = q.where(Bill.is_recurring == is_recurring)
+    q = q.order_by(
         Bill.due_date.asc().nulls_last(),
         Bill.created_at.desc(),
-    ).all()
+    )
+    return (await db.execute(q)).scalars().all()

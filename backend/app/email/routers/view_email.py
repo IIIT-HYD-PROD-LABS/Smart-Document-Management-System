@@ -16,12 +16,13 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import require_compliance_permission
 from app.compliance.models.membership import ClientMembership
 from app.compliance.services.permission_registry import CompliancePermission
-from app.database import get_db
+from app.database import get_async_db
 from app.email.mcp.client import call_gmail_tool
 from app.email.models.credential import GmailCredential
 from app.email.models.message_log import GmailMessageLog
@@ -34,7 +35,7 @@ router = APIRouter(tags=["gmail-view"])
 @router.get("/messages/{message_log_id}/view")
 async def view_email(
     message_log_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
@@ -46,20 +47,20 @@ async def view_email(
     and the compliance notice detail page deep-link.
     """
     log = (
-        db.query(GmailMessageLog)
-        .filter(GmailMessageLog.id == message_log_id)
-        .first()
-    )
+        await db.execute(
+            select(GmailMessageLog).where(GmailMessageLog.id == message_log_id)
+        )
+    ).scalar_one_or_none()
     if log is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Message log not found",
         )
     cred = (
-        db.query(GmailCredential)
-        .filter(GmailCredential.id == log.credential_id)
-        .first()
-    )
+        await db.execute(
+            select(GmailCredential).where(GmailCredential.id == log.credential_id)
+        )
+    ).scalar_one_or_none()
     if cred is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

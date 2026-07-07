@@ -21,12 +21,13 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import require_compliance_permission
 from app.compliance.models.membership import ClientMembership
 from app.compliance.services.permission_registry import CompliancePermission
-from app.database import get_db
+from app.database import get_async_db
 from app.email.models.bill import Bill
 from app.email.schemas.bill import (
     BillMarkPaidRequest,
@@ -44,13 +45,13 @@ _VALID_STATUS = {"upcoming", "due_soon", "overdue", "paid"}
 
 
 @router.get("/bills", response_model=list[BillResponse])
-def get_bills(
+async def get_bills(
     status_filter: Optional[str] = Query(default=None, alias="status"),
     biller_category: Optional[str] = Query(default=None),
     due_before: Optional[date] = Query(default=None),
     due_after: Optional[date] = Query(default=None),
     is_recurring: Optional[bool] = Query(default=None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
@@ -68,7 +69,7 @@ def get_bills(
                 f"Allowed: {sorted(_VALID_STATUS)}"
             ),
         )
-    return list_bills(
+    return await list_bills(
         db,
         client_id=membership.client_id,
         status=status_filter,
@@ -80,9 +81,9 @@ def get_bills(
 
 
 @router.get("/bills/{bill_id}", response_model=BillResponse)
-def get_bill(
+async def get_bill(
     bill_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
@@ -93,10 +94,12 @@ def get_bill(
     bill belonging to another tenant cannot leak if RLS context is misset.
     """
     bill = (
-        db.query(Bill)
-        .filter(Bill.id == bill_id, Bill.client_id == membership.client_id)
-        .first()
-    )
+        await db.execute(
+            select(Bill).where(
+                Bill.id == bill_id, Bill.client_id == membership.client_id
+            )
+        )
+    ).scalar_one_or_none()
     if bill is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -106,10 +109,10 @@ def get_bill(
 
 
 @router.post("/bills/{bill_id}/mark-paid", response_model=BillResponse)
-def mark_bill_paid(
+async def mark_bill_paid(
     bill_id: int,
     body: BillMarkPaidRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
@@ -120,7 +123,7 @@ def mark_bill_paid(
     row and cancels pending APScheduler reminder jobs.
     """
     try:
-        return mark_paid(
+        return await mark_paid(
             db,
             bill_id=bill_id,
             payment_date=body.payment_date,
@@ -137,12 +140,12 @@ def mark_bill_paid(
 
 
 @router.post("/bills/bulk-mark-paid")
-def bulk_mark_bills_paid(
+async def bulk_mark_bills_paid(
     ids: list[int] = Body(..., embed=True),
     payment_date: date = Body(..., embed=True),
     payment_reference: str = Body(..., embed=True),
     payment_method: PaymentMethod = Body(..., embed=True),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
@@ -169,7 +172,7 @@ def bulk_mark_bills_paid(
     failed = 0
     for bid in ids:
         try:
-            mark_paid(
+            await mark_paid(
                 db,
                 bill_id=bid,
                 payment_date=payment_date,
@@ -181,7 +184,7 @@ def bulk_mark_bills_paid(
             results.append({"id": bid, "status": "ok"})
             ok += 1
         except Exception as e:  # noqa: BLE001 — partial-failure semantics
-            db.rollback()
+            await db.rollback()
             # Expire all ORM identity-map entries after rollback so a stale
             # Bill object from a prior successful iteration cannot resurface
             # as expired-but-still-cached state in the next loop iteration.

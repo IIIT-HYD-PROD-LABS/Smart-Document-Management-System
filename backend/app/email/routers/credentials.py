@@ -14,12 +14,13 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import require_compliance_permission
 from app.compliance.models.membership import ClientMembership
 from app.compliance.services.permission_registry import CompliancePermission
-from app.database import get_db
+from app.database import get_async_db
 from app.email.models.credential import GmailCredential
 from app.email.schemas.credential import (
     GmailCredentialResponse,
@@ -33,8 +34,8 @@ router = APIRouter(tags=["gmail-credentials"])
 
 
 @router.get("/credentials", response_model=list[GmailCredentialResponse])
-def list_credentials(
-    db: Session = Depends(get_db),
+async def list_credentials(
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
@@ -45,21 +46,20 @@ def list_credentials(
     no explicit client_id filter is needed here. The order surfaces the
     most-recently-connected credential first.
     """
-    return (
-        db.query(GmailCredential)
-        .order_by(GmailCredential.created_at.desc())
-        .all()
+    result = await db.execute(
+        select(GmailCredential).order_by(GmailCredential.created_at.desc())
     )
+    return result.scalars().all()
 
 
 @router.patch(
     "/credentials/{credential_id}",
     response_model=GmailCredentialResponse,
 )
-def update_credential(
+async def update_credential(
     credential_id: int,
     body: GmailCredentialUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
@@ -67,14 +67,13 @@ def update_credential(
     """Update credential cadence_minutes (5..1440 enforced by Pydantic)."""
     # SEC2: explicit client_id ownership check in addition to RLS — prevents a
     # cross-tenant credential mutation if the RLS context is misset.
-    cred = (
-        db.query(GmailCredential)
-        .filter(
+    result = await db.execute(
+        select(GmailCredential).where(
             GmailCredential.id == credential_id,
             GmailCredential.client_id == membership.client_id,
         )
-        .first()
     )
+    cred = result.scalar_one_or_none()
     if cred is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -85,8 +84,8 @@ def update_credential(
         and body.cadence_minutes != cred.cadence_minutes
     ):
         cred.cadence_minutes = body.cadence_minutes
-        db.commit()
-        db.refresh(cred)
+        await db.commit()
+        await db.refresh(cred)
         # Reschedule existing APScheduler job at the new interval.
         # replace_existing=True is set inside schedule_gmail_scan so this
         # is safe to call without first removing the old job.
@@ -106,9 +105,9 @@ def update_credential(
     "/credentials/{credential_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_credential(
+async def delete_credential(
     credential_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     membership: ClientMembership = Depends(
         require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
     ),
@@ -120,21 +119,20 @@ def delete_credential(
     Documents/ComplianceNotices.
     """
     # SEC2: explicit client_id ownership check in addition to RLS.
-    cred = (
-        db.query(GmailCredential)
-        .filter(
+    result = await db.execute(
+        select(GmailCredential).where(
             GmailCredential.id == credential_id,
             GmailCredential.client_id == membership.client_id,
         )
-        .first()
     )
+    cred = result.scalar_one_or_none()
     if cred is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Credential not found",
         )
     cred.status = GmailCredential.STATUS_DISABLED
-    db.commit()
+    await db.commit()
     # Remove the APScheduler job so further polls don't run.
     try:
         from app.compliance.services.scheduler import get_scheduler

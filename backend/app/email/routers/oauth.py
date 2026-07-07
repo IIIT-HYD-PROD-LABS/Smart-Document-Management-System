@@ -20,7 +20,8 @@ from datetime import datetime, timedelta, timezone
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import require_compliance_permission
 from app.compliance.models.membership import ClientMembership
@@ -30,7 +31,7 @@ from app.compliance.services.permission_registry import (
     has_permission,
 )
 from app.config import settings
-from app.database import get_db
+from app.database import get_async_db
 from app.email.services.credential_vault import save_credential
 from app.email.services.oauth_service import GmailOAuth
 from app.email.services.scanner_service import schedule_gmail_scan
@@ -89,7 +90,7 @@ async def gmail_callback(
     code: str | None = Query(default=None),
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Validate state JWT, exchange code, persist refresh_token, schedule scanner.
 
@@ -142,13 +143,13 @@ async def gmail_callback(
     # callback time — the state JWT was minted at /authorize but membership
     # could have been revoked while the user was on Google's consent screen.
     membership = (
-        db.query(ClientMembership)
-        .filter(
-            ClientMembership.user_id == int(state_user_id),
-            ClientMembership.client_id == int(state_client_id),
+        await db.execute(
+            select(ClientMembership).where(
+                ClientMembership.user_id == int(state_user_id),
+                ClientMembership.client_id == int(state_client_id),
+            )
         )
-        .first()
-    )
+    ).scalar_one_or_none()
     if membership is None:
         return RedirectResponse(
             url=f"{frontend}/dashboard/email/connect?error=membership_revoked"
@@ -187,7 +188,7 @@ async def gmail_callback(
             )
         )
 
-    cred = save_credential(
+    cred = await save_credential(
         db,
         user_id=membership.user_id,
         client_id=membership.client_id,
