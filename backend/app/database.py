@@ -1,5 +1,7 @@
 """SQLAlchemy database engine, session factory, and Base model."""
 
+import ssl
+
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -27,16 +29,18 @@ def _async_url_for(sync_url: str) -> str:
 def _async_connect_args_for(url: str) -> dict:
     # asyncpg.connect() takes `timeout`/`ssl`, not psycopg2's `connect_timeout`/
     # `sslmode` -- reusing _connect_args_for's dict verbatim would raise
-    # TypeError on first connect. `ssl=True` asks asyncpg to build a default
-    # SSLContext, which VERIFIES the server cert -- stricter than psycopg2's
-    # sslmode="require" (encrypt only, no cert validation). Not exercised by
-    # any current DSN (all local, see _LOCAL_HOSTS), but revisit this if a
-    # future remote host presents a cert that fails default verification --
-    # sslmode="require" parity would need an SSLContext with
-    # verify_mode=ssl.CERT_NONE instead of the bare `True` here.
+    # TypeError on first connect. Match the sync engine's psycopg2 sslmode="require"
+    # (encrypt, do NOT verify the server cert) rather than asyncpg's default
+    # ssl=True, which builds a cert-VERIFYING SSLContext. The campus deployment
+    # Postgres (10.2.8.73) presents a self-signed cert, so ssl=True fails with
+    # SSLCertVerificationError while psycopg2 sslmode="require" connects fine --
+    # this kept the async request path from reaching that host at all.
     args: dict = {"timeout": 10}
     if url.startswith("postgresql") and not any(h in url for h in _LOCAL_HOSTS):
-        args["ssl"] = True
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        args["ssl"] = ctx
     return args
 
 

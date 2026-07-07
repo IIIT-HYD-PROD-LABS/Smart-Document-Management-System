@@ -46,7 +46,11 @@ def upgrade() -> None:
           END IF;
         END $$;
     """)
-    op.execute("GRANT CONNECT ON DATABASE postgres TO app_runtime;")
+    # Grant CONNECT on the ACTUAL database (named `postgres` locally, `taxsync`
+    # on the campus deployment) via current_database() rather than a hardcoded name.
+    op.execute(
+        "DO $$ BEGIN EXECUTE format('GRANT CONNECT ON DATABASE %I TO app_runtime', current_database()); END $$;"
+    )
     # Grant on existing schema; tables created in 0013 will receive their grants there
     op.execute("GRANT USAGE ON SCHEMA public TO app_runtime;")
 
@@ -65,6 +69,8 @@ def downgrade() -> None:
     op.execute("REVOKE ALL ON ALL TABLES IN SCHEMA public FROM app_runtime;")
     op.execute("REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM app_runtime;")
     op.execute("REVOKE USAGE ON SCHEMA public FROM app_runtime;")
-    op.execute("REVOKE CONNECT ON DATABASE postgres FROM app_runtime;")
+    op.execute(
+        "DO $$ BEGIN EXECUTE format('REVOKE CONNECT ON DATABASE %I FROM app_runtime', current_database()); END $$;"
+    )
     op.execute("DROP ROLE IF EXISTS app_runtime;")
     op.execute("DROP ROLE IF EXISTS app_migrator;")
