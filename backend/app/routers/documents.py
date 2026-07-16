@@ -552,7 +552,7 @@ async def get_document_trends(
     return DocumentTrends(trends=trends)
 
 
-_VALID_SOURCE_FILTERS = ("manual", "gmail", "portal", "all")
+_VALID_SOURCE_FILTERS = ("manual", "gmail", "portal", "google_drive", "all")
 
 
 @router.get("/all", response_model=DocumentListResponse)
@@ -565,7 +565,7 @@ async def get_all_documents(
     source_filter: str = Query(
         "all",
         description=(
-            "Provenance filter: manual | gmail | portal | all. "
+            "Provenance filter: manual | gmail | portal | google_drive | all. "
             "'gmail' covers both attachments and synthetic body documents."
         ),
     ),
@@ -598,6 +598,8 @@ async def get_all_documents(
         query = query.where(Document.source.in_(("gmail", "gmail_body")))
     elif source_filter == "portal":
         query = query.where(Document.source == "portal")
+    elif source_filter == "google_drive":
+        query = query.where(Document.source == "google_drive")
     # source_filter == "all" -> no extra filter
 
     total = await db.scalar(select(func.count()).select_from(query.subquery()))

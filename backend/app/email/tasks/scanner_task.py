@@ -48,13 +48,32 @@ def _get_header(headers: list[dict], name: str) -> str:
 
 
 def _iter_attachments(payload: dict):
-    """Yield (filename, attachment_id) for any attachment-bearing part."""
+    """Yield (filename, attachment_id) for any attachment-bearing part.
+
+    Gmail sometimes omits `filename` on PDF parts and only sets mimeType +
+    attachmentId. Those still need to land in the DMS / notice pipeline.
+    """
     parts = payload.get("parts", []) or []
     for part in parts:
-        if part.get("filename"):
-            att_id = part.get("body", {}).get("attachmentId")
-            if att_id:
-                yield part["filename"], att_id
+        att_id = (part.get("body") or {}).get("attachmentId")
+        filename = (part.get("filename") or "").strip()
+        mime = (part.get("mimeType") or "").lower()
+        if att_id:
+            if not filename:
+                if mime == "application/pdf":
+                    filename = "attachment.pdf"
+                elif mime.startswith("image/"):
+                    ext = mime.split("/", 1)[-1].split("+", 1)[0] or "img"
+                    filename = f"attachment.{ext}"
+                elif mime in (
+                    "application/msword",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ):
+                    filename = "attachment.docx"
+                else:
+                    filename = ""
+            if filename:
+                yield filename, att_id
         # recurse into nested multipart
         yield from _iter_attachments(part)
 
@@ -303,7 +322,10 @@ def run_scan(credential_id: int) -> None:
 
             if new_history_id:
                 cred.last_history_id = new_history_id
-                db.commit()
+            from datetime import datetime, timezone
+
+            cred.last_scan_at = datetime.now(timezone.utc)
+            db.commit()
 
             status = (
                 GmailFetchLog.STATUS_SUCCESS_WITH_RESULTS

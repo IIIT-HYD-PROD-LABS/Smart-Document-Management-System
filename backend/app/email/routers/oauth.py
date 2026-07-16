@@ -196,7 +196,30 @@ async def gmail_callback(
         scopes=token_data.get("scope"),
         google_account_email=None,
     )
+    # Seed operator-visible defaults once so compliance routing works
+    # immediately without a manual filter-rules visit.
+    try:
+        from app.email.services.default_filter_rules import (
+            seed_default_filter_rules_async,
+        )
+
+        await seed_default_filter_rules_async(db, int(cred.id))
+    except Exception:  # noqa: BLE001
+        logger.exception("seed_default_filter_rules_failed credential_id=%s", cred.id)
+
     schedule_gmail_scan(cred.id, cadence_minutes=cred.cadence_minutes)
+
+    # Kick an immediate first scan so notices appear without waiting cadence.
+    try:
+        import asyncio
+
+        from app.email.tasks.scanner_task import run_scan
+
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, run_scan, int(cred.id))
+    except Exception:  # noqa: BLE001
+        logger.exception("initial_scan_dispatch_failed credential_id=%s", cred.id)
+
     return RedirectResponse(
         url=(
             f"{frontend}/dashboard/email/connect?status=success"

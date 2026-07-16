@@ -117,10 +117,11 @@ async def drive_authorize(
 
 @router.get("/oauth/callback")
 async def drive_oauth_callback(code: str = "", state: str = "", error: str = ""):
-    """Exchange code for access token and bounce to the frontend with it.
+    """Exchange code for access token and bounce to the frontend with a one-time handle.
 
-    Access token is returned in the fragment/query for a one-shot import
-    session. It is short-lived and never stored server-side.
+    Never put the raw Google access token in the browser URL. Store it in
+    Redis for 5 minutes under a random code; the SPA exchanges the code via
+    POST /api/drive/session.
     """
     from fastapi.responses import RedirectResponse
 
@@ -152,9 +153,60 @@ async def drive_oauth_callback(code: str = "", state: str = "", error: str = "")
     if not access_token:
         return RedirectResponse(f"{dest}?drive_error=no_access_token")
 
-    # Put token in query for the SPA to pick up and clear. Prefer sessionStorage
-    # on the client immediately after load.
-    return RedirectResponse(f"{dest}?drive_token={access_token}")
+    import secrets
+
+    handle = secrets.token_urlsafe(24)
+    try:
+        import redis
+
+        r = redis.Redis.from_url(
+            getattr(settings, "REDIS_URL", None) or "redis://localhost:6379/0",
+            decode_responses=True,
+        )
+        # One-shot 5-minute handle; deleted on first exchange.
+        r.setex(f"drive:oauth:{handle}", 300, access_token)
+    except Exception:
+        logger.exception("drive_oauth_redis_store_failed")
+        return RedirectResponse(f"{dest}?drive_error=session_store_failed")
+
+    return RedirectResponse(f"{dest}?drive_code={handle}")
+
+
+class DriveSessionRequest(BaseModel):
+    code: str = Field(..., min_length=8, max_length=128)
+
+
+class DriveSessionResponse(BaseModel):
+    access_token: str
+
+
+@router.post("/session", response_model=DriveSessionResponse)
+async def exchange_drive_session(
+    body: DriveSessionRequest,
+    current_user: User = Depends(require_editor),
+):
+    """Exchange a one-time drive_code for the Google access token."""
+    import redis
+
+    try:
+        r = redis.Redis.from_url(
+            getattr(settings, "REDIS_URL", None) or "redis://localhost:6379/0",
+            decode_responses=True,
+        )
+        key = f"drive:oauth:{body.code}"
+        token = r.get(key)
+        if token:
+            r.delete(key)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("drive_session_exchange_failed")
+        raise HTTPException(status_code=503, detail="Session store unavailable") from e
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired Drive session code",
+        )
+    return DriveSessionResponse(access_token=str(token))
 
 
 @router.get("/files", response_model=DriveListResponse)

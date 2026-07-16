@@ -30,7 +30,8 @@ COMPLIANCE_SENDER_PATTERNS: list[re.Pattern] = [
 
 COMPLIANCE_SUBJECT_KEYWORDS: re.Pattern = re.compile(
     r"\b(notice|intimation|demand|scrutiny|show.cause|adjudication|"
-    r"assessment\s*order|penalty|hearing|summons|inquiry)\b",
+    r"assessment\s*order|penalty|hearing|summons|inquiry|"
+    r"SCN|DRC-?0?1|u/?s\s*\d+)\b",
     re.IGNORECASE,
 )
 
