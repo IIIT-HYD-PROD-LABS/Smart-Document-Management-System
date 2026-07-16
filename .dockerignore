@@ -1,0 +1,59 @@
+# Root dockerignore — keep `docker build .` (Jenkins) small.
+# Context is the monorepo root; only backend/ is needed for the root Dockerfile.
+
+.git
+.github
+.gstack
+.planning
+.ruff_cache
+.vercel
+.playwright-mcp
+.migrate-tmp
+.commandcode
+.claude
+.secrets-backup
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+!.env.prod.example
+
+# Frontend (built separately; not needed for root backend image)
+frontend/
+taxsync-frontend/
+../taxsync-frontend/
+
+# Docs / notes / deploy helpers not required in image
+docs/
+notes/
+scripts/
+*.md
+*.pdf
+*.png
+*.docx
+
+# Python junk
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.ruff_cache/
+**/venv/
+**/.venv/
+**/*.egg-info/
+
+# Large local artifacts
+backend/uploads/
+backend/models/
+backend/datasets/
+backend/**/__pycache__/
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/venv/
+backend/.venv/
+
+# Compose / local overrides
+docker-compose.override.yml
+docker-compose*.yml
+deploy-prod.sh
+taxsync-backend.service
