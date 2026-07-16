@@ -43,8 +43,7 @@ class DocumentResponse(BaseModel):
             data["total_versions"] = 1
         return data
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DocumentListItem(BaseModel):
@@ -113,8 +112,7 @@ class DocumentVersionResponse(BaseModel):
     change_reason: str | None = None
     is_current: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DocumentVersionListResponse(BaseModel):

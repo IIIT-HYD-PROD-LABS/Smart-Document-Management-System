@@ -148,3 +148,52 @@ async def delete_credential(
             "scheduler_remove_failed credential_id=%d", int(credential_id)
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/credentials/{credential_id}/scan-now",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def scan_credential_now(
+    credential_id: int,
+    db: AsyncSession = Depends(get_async_db),
+    membership: ClientMembership = Depends(
+        require_compliance_permission(CompliancePermission.EMAIL_INTEGRATION_USE)
+    ),
+):
+    """Trigger an immediate Gmail scan for this credential.
+
+    Runs the same ``run_scan`` path as APScheduler in a background thread so
+    the HTTP request returns quickly. Operators use this after connecting
+    Gmail or changing filter rules without waiting for the cadence timer.
+    """
+    result = await db.execute(
+        select(GmailCredential).where(
+            GmailCredential.id == credential_id,
+            GmailCredential.client_id == membership.client_id,
+        )
+    )
+    cred = result.scalar_one_or_none()
+    if cred is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Credential not found",
+        )
+    if cred.status != GmailCredential.STATUS_ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Credential is {cred.status}; reconnect Gmail to scan",
+        )
+
+    import asyncio
+
+    from app.email.tasks.scanner_task import run_scan
+
+    loop = asyncio.get_running_loop()
+    # Fire-and-forget on a worker thread; lock inside run_scan prevents overlap.
+    loop.run_in_executor(None, run_scan, int(credential_id))
+    return {
+        "status": "accepted",
+        "credential_id": credential_id,
+        "detail": "Scan started. Check Email → Activity for results.",
+    }

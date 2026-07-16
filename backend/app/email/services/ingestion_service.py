@@ -17,15 +17,16 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from typing import Optional
+from typing import Optional, Sequence
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.email.classifier_rules import MIN_BODY_LENGTH_FOR_CLASSIFICATION
 from app.email.models.credential import GmailCredential
+from app.email.models.filter_rule import GmailFilterRule
 from app.email.models.message_log import GmailMessageLog
-from app.email.services.classifier import classify
+from app.email.services.classifier import classify, resolve_route
 from app.models.document import Document, DocumentCategory, DocumentStatus
 from app.services.storage_service import save_file
 
@@ -47,6 +48,7 @@ def ingest_message(
     body: str,
     sender: str,
     subject: str,
+    rules: Optional[Sequence[GmailFilterRule]] = None,
 ) -> tuple[bool, GmailMessageLog, str]:
     """Classify and persist message log row. Returns (created, message_log, route_taken).
 
@@ -59,16 +61,12 @@ def ingest_message(
     fetch-once-discard. The D-39 gmail_body carve-out (no-rule-match plus
     body >= MIN_BODY_LENGTH_FOR_CLASSIFICATION) deliberately persists the
     body as a synthetic .txt Document so v1.0 ML classification can run.
+
+    ``rules``: pre-loaded enabled filter rules for this credential (priority
+    ASC). When omitted, resolve_route uses only built-in classifier + bill
+    heuristics.
     """
-    is_compliance, confidence = classify(sender, subject)
-    if is_compliance and confidence >= 0.75:
-        route = GmailMessageLog.ROUTE_COMPLIANCE
-    elif confidence == 0.5:
-        # Sender match but subject doesn't — uncertain; routed to review queue
-        # via process_classified_email later. Persisted as dms_only for now.
-        route = GmailMessageLog.ROUTE_DMS_ONLY
-    else:
-        route = GmailMessageLog.ROUTE_IGNORE
+    route = resolve_route(sender, subject, body=body or "", rules=rules)
 
     # G2: a re-observed message (history overlap or 404 full-scan fallback)
     # would violate UNIQUE(credential_id, gmail_message_id). Treat an existing
@@ -296,18 +294,30 @@ def process_classified_email(
     subject: str,
     primary_attachment_doc_id: Optional[int],
     system_user_id: int,
+    route: Optional[str] = None,
 ) -> None:
-    """EMAIL-06 wiring: classifier verdict -> ComplianceNotice OR review queue.
+    """EMAIL-06 wiring: classifier / route verdict -> ComplianceNotice OR review queue.
 
     D-34: body lives only in this Python frame; do NOT persist anywhere.
     D-36: review-queue payload omits body/subject/sender text — only
           sender_domain + body_sha256 references.
+
+    ``route`` is the resolve_route() result from ingest_message. When the
+    operator filter rules force compliance_notice, we create a notice even
+    if the built-in classifier would have scored lower.
     """
     is_compliance, confidence = classify(sender, subject)
+    forced_route = str(route or message_log.route_taken or "")
+
+    # Operator / bill / ignore short-circuits
+    if forced_route == GmailMessageLog.ROUTE_BILL:
+        return
+    if forced_route == GmailMessageLog.ROUTE_COMPLIANCE:
+        is_compliance, confidence = True, 1.0
 
     extracted_metadata = _extract_metadata(body)
 
-    if is_compliance and confidence == 1.0:
+    if is_compliance and confidence >= 0.75:
         from app.compliance.models.notice import ComplianceNotice
         from app.compliance.services.activity_service import log_activity
         from app.email.classifier_rules import authority_from_sender
@@ -373,6 +383,16 @@ def process_classified_email(
         db.add(notice)
         db.flush()
 
+        # Link the primary attachment Document to this notice for the
+        # compliance workflow UI (AttachmentList / notice detail).
+        if primary_attachment_doc_id is not None:
+            try:
+                doc = db.query(Document).filter(Document.id == primary_attachment_doc_id).first()
+                if doc is not None and doc.notice_id is None:
+                    doc.notice_id = notice.id
+            except Exception as e:  # noqa: BLE001
+                logger.warning("link attachment to notice failed: %s", e)
+
         # Persist the extraction envelope onto the notice regardless of
         # routing decision (D-23). When the gate failed, this also
         # enqueues a review-queue row.
@@ -415,10 +435,6 @@ def process_classified_email(
                 "body_sha256": message_log.body_sha256,
                 "sender_domain": message_log.sender_domain,
                 "gmail_message_log_id": message_log.id,
-                # D-24 audit cross-reference: when the extractor ran, name
-                # the action so the auditor can correlate this notice
-                # creation with the preceding NOTICE_AI_EXTRACT row by
-                # body_sha256.
                 "phase17_extraction_action": (
                     extraction_decision.get("action") if extraction_decision else "skipped"
                 ),
@@ -427,20 +443,75 @@ def process_classified_email(
         db.commit()
         db.refresh(notice)
         # Phase 10/11 — Gmail-ingested notices now enter the same classify +
-        # risk-score + deadline-alert pipeline as manually created notices,
-        # instead of sitting in 'received' until a human opens them.
+        # risk-score + deadline-alert pipeline as manually created notices.
         from app.compliance.services.notice_service import process_notice_intake
         process_notice_intake(notice.id, notice.response_deadline)
         return
 
     if not is_compliance and confidence == 0.5:
-        # Phase 10 review-queue path (CLASS-04). Per D-36, only sender_domain
-        # and body_sha256 are referenced — no body/sender/subject text.
-        # The actual review_queue requires a parent ComplianceNotice + per-
-        # field confidences. v2.0 wiring: log the routing decision here and
-        # defer the placeholder-notice creation to Plan 04 / Plan 05 once
-        # the review queue accepts gmail-source rows. For now, persist a
-        # diagnostic log entry with PII-redacted refs only.
+        # Sender matched a gov domain but subject lacked keywords. Create a
+        # lightweight notice so compliance can see it, then enqueue review.
+        from app.compliance.models.notice import ComplianceNotice
+        from app.email.classifier_rules import authority_from_sender
+        from app.services.audit_service import log_audit_event_strict
+
+        authority = authority_from_sender(sender)
+        notice_number = f"GMAIL-REV-{message_log.gmail_message_id[:8]}"
+        notice = ComplianceNotice(
+            client_id=credential.client_id,
+            notice_number=notice_number[:100],
+            authority=authority,
+            status="received",
+            source="gmail",
+            document_id=primary_attachment_doc_id,
+            created_by_user_id=system_user_id,
+        )
+        db.add(notice)
+        db.flush()
+        if primary_attachment_doc_id is not None:
+            try:
+                doc = db.query(Document).filter(Document.id == primary_attachment_doc_id).first()
+                if doc is not None and doc.notice_id is None:
+                    doc.notice_id = notice.id
+            except Exception as e:  # noqa: BLE001
+                logger.warning("link attachment to review notice failed: %s", e)
+
+        try:
+            from decimal import Decimal
+
+            from app.compliance.services.review_queue_service import enqueue_low_confidence
+
+            enqueue_low_confidence(
+                db,
+                notice=notice,
+                predicted_authority=authority,
+                predicted_authority_confidence=Decimal("0.50"),
+                predicted_type_id=None,
+                predicted_type_confidence=Decimal("0.00"),
+                model_version="gmail_sender_only_v1",
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("enqueue_low_confidence failed: %s", e)
+
+        log_audit_event_strict(
+            user_id=system_user_id,
+            action="NOTICE_AUTO_CREATED",
+            resource_type="compliance_notice",
+            resource_id=int(notice.id),
+            details={
+                "source": "gmail",
+                "credential_id": credential.id,
+                "body_sha256": message_log.body_sha256,
+                "sender_domain": message_log.sender_domain,
+                "gmail_message_log_id": message_log.id,
+                "route": "review_queue",
+                "confidence": 0.5,
+            },
+        )
+        db.commit()
+        db.refresh(notice)
+        from app.compliance.services.notice_service import process_notice_intake
+        process_notice_intake(int(notice.id), notice.response_deadline)
         logger.info(
             "gmail_review_queue_route",
             extra={
@@ -448,21 +519,11 @@ def process_classified_email(
                 "sender_domain": message_log.sender_domain,
                 "body_sha256": message_log.body_sha256,
                 "gmail_message_log_id": message_log.id,
+                "notice_id": notice.id,
                 "confidence": confidence,
                 "reason": "sender_match_only",
             },
         )
-        try:
-            # Best-effort enqueue when a notice with the same gmail_message_log_id
-            # already exists (e.g., user manually created a notice from this
-            # email). Otherwise this is a no-op until Plan 05 wires the proper
-            # placeholder-notice flow.
-            from app.compliance.services.review_queue_service import (
-                enqueue_low_confidence,
-            )
-            del enqueue_low_confidence  # available for future direct-enqueue
-        except ImportError:
-            pass
         return
 
     # confidence == 0.0 -> ignore (D-33 forwarded notices already routed

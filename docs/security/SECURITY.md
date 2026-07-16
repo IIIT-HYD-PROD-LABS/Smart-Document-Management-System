@@ -6,6 +6,18 @@
 | ------------ | --------- |
 | 1.0.x (current) | Yes   |
 
+## CRITICAL — committed production secrets (2026-07-16)
+
+Production `.env.prod` and hardcoded values inside `docker-compose.prod.yml`
+were tracked in git (private remotes only — still unsafe). Full incident
+response + rotation checklist:
+
+- [docs/security/SECRET_ROTATION_2026-07-16.md](./SECRET_ROTATION_2026-07-16.md)
+
+Policy: secrets load only from a server-local `.env.prod` (gitignored).
+Compose may use `env_file:` / `${VAR}` interpolation — never literal keys.
+CI runs `scripts/check_no_secrets.sh` on every push/PR.
+
 ## Recent hardening (2026-05-21 audit sweep)
 
 The latest end-to-end agent-team audit closed the following findings. See `docs/status/STATUS_REPORT.md` for the full session log + commit hashes.

@@ -2,7 +2,7 @@
 
 import re
 from datetime import datetime
-from pydantic import BaseModel, Field, field_validator
+from pydantic import ConfigDict, BaseModel, Field, field_validator
 
 
 # --- Request Schemas ---
@@ -88,8 +88,7 @@ class UserResponse(BaseModel):
         # that as the default False rather than failing bool validation.
         return False if v is None else v
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TokenResponse(BaseModel):

@@ -1,7 +1,7 @@
 """Pydantic schemas for Admin API routes."""
 
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import ConfigDict, BaseModel, Field
 
 
 class AdminUserResponse(BaseModel):
@@ -17,8 +17,7 @@ class AdminUserResponse(BaseModel):
     updated_at: datetime | None
     deleted_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminUserListResponse(BaseModel):

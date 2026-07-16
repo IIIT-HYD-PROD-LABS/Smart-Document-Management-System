@@ -1,0 +1,208 @@
+# Production docker-compose — runs the full TaxSync stack on 10.2.8.73.
+#   redis         — message broker (Docker, loopback :6379 only)
+#   celery_worker — OCR + doc processing (Docker)
+#   compliance_worker — ML inference: BERT, spaCy, XGBoost, SHAP (Docker)
+#   backend       — FastAPI (Docker, host :8025 -> container :8000)
+#   frontend      — Next.js (Docker, :8026)
+#
+# SECRETS POLICY (2026-07-16):
+#   Never hardcode SECRET_KEY / FERNET_KEY / DATABASE_URL* / SMTP_* /
+#   GEMINI_API_KEY / OAuth client secrets in this file. All secrets load
+#   from a server-local `.env.prod` via `env_file:` (gitignored). Copy
+#   `.env.prod.example` → `.env.prod` on the host and fill real values.
+#   Compose `environment:` below is for NON-SECRET deploy wiring only
+#   (service hostnames, public URLs, feature flags).
+#
+# Deploy:
+#   cd Smart-Document-Management-System
+#   test -f .env.prod || { echo "Missing .env.prod — copy .env.prod.example"; exit 1; }
+#   git pull gh-backend staging
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Verify:
+#   docker compose -f docker-compose.prod.yml ps
+#   curl https://canvas.iiit.ac.in/taxsyncbestage/api/health/
+#   curl https://canvas.iiit.ac.in/taxsyncfestage/
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: smartdocs-redis
+    # Prefer REDIS_PASSWORD from .env.prod when set. Empty password keeps
+    # prior campus behaviour (passwordless broker on the compose network).
+    # Host publish is loopback-only so campus peers cannot hit bare Redis.
+    command:
+      - sh
+      - -c
+      - |
+        if [ -n "$${REDIS_PASSWORD}" ]; then
+          exec redis-server --save "" --appendonly no --requirepass "$${REDIS_PASSWORD}"
+        else
+          exec redis-server --save "" --appendonly no
+        fi
+    env_file: .env.prod
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - |
+          if [ -n "$$REDIS_PASSWORD" ]; then
+            redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG
+          else
+            redis-cli ping | grep -q PONG
+          fi
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # FastAPI Backend — Docker (was bare-metal systemd until 2026-07-15). The
+  # container serves :8000 and is published on host :8025, so campus nginx's
+  # /taxsyncbestage upstream (http://…:8025) needs no change.
+  backend:
+    build:
+      context: ./backend
+    container_name: smartdocs-backend
+    restart: unless-stopped
+    env_file: .env.prod
+    environment: &shared_env
+      # Non-secret compose-network wiring ONLY.
+      # Secrets (DATABASE_URL*, SECRET_KEY, FERNET_KEY, GEMINI_API_KEY, SMTP_*,
+      # OAuth, Kaggle, …) come exclusively from env_file: .env.prod — never
+      # re-declare them here.
+      #
+      # REDIS_* are intentionally hardcoded to the compose service hostname so
+      # containers talk to the in-stack Redis over the Docker network. Values
+      # in .env.prod often point at the host IP (for bare-metal) and would break
+      # workers if they won over env_file. Not secrets.
+      REDIS_URL: redis://redis:6379/2
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: redis://redis:6379/3
+      # Public URLs for OAuth redirects + email links (not secrets).
+      FRONTEND_URL: ${FRONTEND_URL:-https://canvas.iiit.ac.in/taxsyncfestage}
+      BACKEND_URL: ${BACKEND_URL:-https://canvas.iiit.ac.in/taxsyncbestage}
+      AUDIT_FAILURES_PATH: /var/log/smartdocs/audit_failures.jsonl
+    ports:
+      # Container serves 8000 (start.sh default); publish on host 8025 so the
+      # campus nginx /taxsyncbestage upstream and the frontend's rewrite target
+      # both keep working unchanged.
+      - "8025:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/live')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    volumes:
+      - backend_uploads:/app/uploads
+      - audit_failures:/var/log/smartdocs
+      - ./backend/models:/app/models
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+
+  celery_worker:
+    build:
+      context: ./backend
+    container_name: smartdocs-celery
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2 --pool=prefork --max-memory-per-child=512000 --queues=celery,default
+    restart: unless-stopped
+    env_file: .env.prod
+    environment: *shared_env
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/app/uploads
+      - audit_failures:/var/log/smartdocs
+      - ./backend/models:/app/models
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  compliance_worker:
+    build:
+      context: ./backend
+    container_name: smartdocs-compliance-worker
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2 --pool=prefork --max-memory-per-child=2000000 --queues=compliance --hostname=compliance@%h
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      <<: *shared_env
+      HF_HOME: /app/models/hf_cache
+      TRANSFORMERS_CACHE: /app/models/hf_cache
+      TOKENIZERS_PARALLELISM: "false"
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/app/uploads
+      - audit_failures:/var/log/smartdocs
+      - ./backend/models:/app/models
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 2500M
+
+  # Next.js Frontend — served at https://canvas.iiit.ac.in/taxsyncfestage.
+  # Campus nginx strips /taxsyncfestage before forwarding to :8026;
+  # entry.js re-adds it in front of the internal Next server (:8027).
+  frontend:
+    build:
+      context: ../taxsync-frontend
+    container_name: taxsync-frontend
+    restart: unless-stopped
+    ports:
+      - "8026:8026"
+    environment:
+      # NEXT_PUBLIC_* is baked at build time via Dockerfile ARG defaults; the
+      # browser calls the backend directly through campus nginx. BACKEND_INTERNAL_URL
+      # is only used by Next's server-side /api rewrites (fallback path) — point it
+      # at the backend service over the compose network (no host hairpin needed).
+      BACKEND_INTERNAL_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+volumes:
+  backend_uploads:
+  audit_failures:

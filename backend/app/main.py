@@ -294,7 +294,8 @@ def health_check():
     health = {
         "status": "healthy",
         "version": settings.APP_VERSION,
-        "debug": settings.DEBUG,
+        # Intentionally omit `debug` — advertising DEBUG=true on a public
+        # health endpoint is free reconnaissance for attackers.
     }
 
     # Check database

@@ -106,6 +106,9 @@ def run_scan(credential_id: int) -> None:
             user_id=cred.user_id,
             cross_mode=False,
         )
+        from app.email.services.classifier import load_enabled_rules
+
+        filter_rules = load_enabled_rules(db, credential_id)
         try:
             creds = get_or_refresh_access_token(db, credential_id)
         except Exception as e:
@@ -216,6 +219,7 @@ def run_scan(credential_id: int) -> None:
                     body=body,
                     sender=sender,
                     subject=subject,
+                    rules=filter_rules,
                 )
                 msgs_processed += 1
 
@@ -275,24 +279,26 @@ def run_scan(credential_id: int) -> None:
 
                 # B2 wiring (EMAIL-06): classifier verdict -> ComplianceNotice
                 # OR review queue. Body still in Python local (D-34); cleared
-                # after this call returns.
-                try:
-                    process_classified_email(
-                        db,
-                        credential=cred,
-                        message_log=log,
-                        body=body,
-                        sender=sender,
-                        subject=subject,
-                        primary_attachment_doc_id=primary_attachment_doc_id,
-                        system_user_id=cred.user_id,
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "process_classified_email failed for msg=%s: %s",
-                        msg_id,
-                        e,
-                    )
+                # after this call returns. Skip for pure bill routes (handled above).
+                if route != GmailMessageLog.ROUTE_BILL:
+                    try:
+                        process_classified_email(
+                            db,
+                            credential=cred,
+                            message_log=log,
+                            body=body,
+                            sender=sender,
+                            subject=subject,
+                            primary_attachment_doc_id=primary_attachment_doc_id,
+                            system_user_id=cred.user_id,
+                            route=route,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "process_classified_email failed for msg=%s: %s",
+                            msg_id,
+                            e,
+                        )
                 # Body local goes out of scope at next iteration (D-34)
 
             if new_history_id:

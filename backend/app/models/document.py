@@ -87,8 +87,8 @@ class Document(Base):
 
     # Phase 15 D-39/D-40: provenance label driving the source filter on
     # /api/documents/all and the UI badge. CHECK constraint enforces the
-    # four valid values; existing rows default to 'manual'. Migration
-    # 0028 adds the column + CHECK + ix_documents_source index.
+    # allowed values; existing rows default to 'manual'. Migration
+    # 0028 adds the column + CHECK; 0041 adds google_drive.
     source = Column(
         String(20),
         nullable=False,

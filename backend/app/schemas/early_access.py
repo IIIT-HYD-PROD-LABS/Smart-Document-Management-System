@@ -2,7 +2,7 @@
 
 import re
 from datetime import datetime
-from pydantic import BaseModel, Field, field_validator
+from pydantic import ConfigDict, BaseModel, Field, field_validator
 
 
 class EarlyAccessSubmit(BaseModel):
@@ -39,8 +39,7 @@ class EarlyAccessResponse(BaseModel):
     reviewed_at: datetime | None
     reviewed_by: int | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EarlyAccessListResponse(BaseModel):

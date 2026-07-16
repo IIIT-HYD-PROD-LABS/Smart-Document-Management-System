@@ -1,7 +1,7 @@
 """Pydantic schemas for Audit Log API routes."""
 
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import ConfigDict, BaseModel
 
 
 class AuditLogResponse(BaseModel):
@@ -14,8 +14,7 @@ class AuditLogResponse(BaseModel):
     ip_address: str | None = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AuditLogListResponse(BaseModel):

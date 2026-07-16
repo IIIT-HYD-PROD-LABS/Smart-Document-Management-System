@@ -1,10 +1,21 @@
-# Environment variables (secrets)
+# Environment variables (secrets) — never commit real env files
 .env
 .env.local
 .env.production
 .env.development
 .env.staging
 .env.*.local
+.env.prod
+.env*.prod
+.env.bak
+.env.*.bak
+# Keep templates tracked
+!.env.example
+!.env.prod.example
+!backend/.env.example
+
+# Offline secret backups must never land in git
+.secrets-backup/
 
 # Certificates and private keys
 *.key
@@ -15,7 +26,7 @@
 *.secret
 *credentials*.json
 
-# Do NOT ignore .env.example (it is documentation)
+# Do NOT ignore .env.example / .env.prod.example (documentation only)
 
 # Python
 __pycache__/
@@ -64,13 +75,13 @@ docker-compose.override.yml
 docker-compose.override.yaml
 
 # Build artifacts
+frontend/
 frontend/tsconfig.tsbuildinfo
 frontend/.next/
 frontend/out/
 
 # Status report binary artifacts (regenerated from STATUS_REPORT.md)
 Smart_Document_Management_System_Status_Report*.docx
-.env.bak
 
 # Real-document test PDFs (PII; never commit). Tracked fixtures live under docs/exports/.
 /backend/*.pdf
