@@ -23,14 +23,9 @@ import {
 /**
  * Top-bar client switcher per UI-SPEC Section 5 (D-22, D-23).
  *
- * - Trigger pill: current client name + chevron; cross-client mode shows globe
- *   icon + faint accent background.
- * - Dropdown: 320px wide, max-height 480px, search input, alphabetical client
- *   list, "View all clients" toggle (gated by eligibility), "Onboard new client" link.
- * - Active client: 3px accent left-border + check icon.
- * - Outside-click + Escape close the dropdown (keyboard accessible per WCAG 2.1.1).
- * - Membership validation: persisted activeClientId is cleared if not present in
- *   fresh /memberships/me response (auditor expired, access revoked, etc.).
+ * Non-admin users get a clickable pill that opens their organization page
+ * (the previous static div looked like a button but did nothing).
+ * Platform admins with multiple memberships get the full dropdown.
  */
 export function ClientSwitcher() {
     const {
@@ -43,12 +38,6 @@ export function ClientSwitcher() {
     } = useCurrentClient();
     const { user } = useAuth();
 
-    // Tenant-isolation hardening (Phase 4 / 2026-05-09): only the platform
-    // admin (users.role === 'admin') gets the multi-org switcher and the
-    // cross-client toggle. Every other user is pinned to their single
-    // membership and never sees that other organizations exist. Even if a
-    // non-admin somehow has multiple memberships, they only see the first
-    // one (the SaaS contract assumes one org per non-admin user).
     const isPlatformAdmin = user?.role === "admin";
 
     const [open, setOpen] = useState(false);
@@ -60,10 +49,6 @@ export function ClientSwitcher() {
         queryFn: () => complianceApi.listMyMemberships().then((r) => r.data),
     });
 
-    // Determine eligibility for cross-client mode. Cross-client view is
-    // platform-admin only — the previous compliance_role gate (allowing
-    // ca_consultant / compliance_head / cfo to flip the toggle) leaked org
-    // existence to non-admin users in the multi-tenant SaaS deployment.
     useEffect(() => {
         if (!memberships) return;
         const eligible =
@@ -74,29 +59,22 @@ export function ClientSwitcher() {
         setEligibleForCrossClient(eligible);
     }, [memberships, setEligibleForCrossClient, isPlatformAdmin]);
 
-    // Auto-pin activeClientId to the user's single membership when they
-    // have exactly one. Non-admin users always end up here (the contract
-    // assumes one org per non-admin user) and admins with one membership
-    // get the same convenience.
+    // Auto-pin when the user has memberships and nothing selected yet.
     useEffect(() => {
         if (!memberships || memberships.length === 0) return;
-        if (memberships.length === 1 && activeClientId === null) {
+        if (activeClientId === null) {
             setActiveClientId(memberships[0].client_id);
         }
     }, [memberships, activeClientId, setActiveClientId]);
 
-    // Validate persisted activeClientId against fresh memberships on mount.
-    // If the user no longer has access (auditor expired, membership revoked),
-    // clear the active client to avoid sending a forbidden X-Client-Id.
+    // Validate persisted activeClientId against fresh memberships.
     useEffect(() => {
         if (!memberships || activeClientId === null) return;
         if (!memberships.some((m) => m.client_id === activeClientId)) {
-            setActiveClientId(null);
+            setActiveClientId(memberships[0]?.client_id ?? null);
         }
     }, [memberships, activeClientId, setActiveClientId]);
 
-    // Fetch active client name for the trigger button. Disabled in cross-client mode
-    // (we display "All Clients" then) and when no client is selected.
     const { data: activeClient } = useQuery<Client>({
         queryKey: ["client", activeClientId],
         queryFn: () =>
@@ -104,7 +82,6 @@ export function ClientSwitcher() {
         enabled: activeClientId !== null && !crossClientMode,
     });
 
-    // Close dropdown on outside click and Escape key (WCAG 2.1.1 keyboard accessibility).
     useEffect(() => {
         if (!open) return;
         const handleClick = (e: MouseEvent) => {
@@ -126,20 +103,41 @@ export function ClientSwitcher() {
         };
     }, [open]);
 
+    const membershipLabel = useCallback((m: Membership) => {
+        return (
+            m.client_name?.trim() ||
+            `Organization #${m.client_id}`
+        );
+    }, []);
+
     const filtered = useMemo(() => {
         if (!memberships) return [];
         const q = query.trim().toLowerCase();
         if (!q) return memberships;
-        // Client names not yet loaded for the full list (would require N+1 fetches);
-        // filter by client_id substring as a stable interim. Notice/Detail pages
-        // load names individually; future enhancement: batch /clients?ids=1,2,3.
-        return memberships.filter((m) => String(m.client_id).includes(q));
+        return memberships.filter((m) => {
+            const name = (m.client_name || "").toLowerCase();
+            return (
+                name.includes(q) ||
+                String(m.client_id).includes(q) ||
+                m.compliance_role.toLowerCase().includes(q)
+            );
+        });
     }, [memberships, query]);
+
+    const activeMembership = memberships?.find(
+        (m) => m.client_id === activeClientId
+    );
 
     const triggerLabel = crossClientMode
         ? "All Clients"
         : activeClient?.name ??
-          (activeClientId ? `Client #${activeClientId}` : "Select a client");
+          activeMembership?.client_name ??
+          (activeClientId ? `Organization #${activeClientId}` : "Select organization");
+
+    const orgHref =
+        activeClientId != null
+            ? `/dashboard/compliance/clients/${activeClientId}`
+            : "/dashboard/compliance/clients";
 
     const handleClientClick = useCallback(
         (clientId: number) => {
@@ -150,37 +148,36 @@ export function ClientSwitcher() {
         [setActiveClientId, setCrossClientMode]
     );
 
-    // Tenant isolation: non-admin users (and admins with a single
-    // membership) get a static pill instead of the dropdown — they should
-    // never see that other organizations exist. The dropdown is gated to
-    // platform admins with multiple memberships only.
+    // Platform admin with 2+ orgs: full switcher. Everyone else: clickable org pill.
     const showSwitcherDropdown =
         isPlatformAdmin && (memberships?.length ?? 0) > 1;
 
     if (!showSwitcherDropdown) {
         return (
-            <div
+            <Link
+                href={orgHref}
                 className="
                     inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-[13px]
                     bg-[var(--bg-elevated)] border border-[var(--border-default)]
                     text-[var(--text-primary)]
+                    hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-hover)]
+                    transition-colors cursor-pointer
+                    focus-visible:outline-none focus-visible:ring-2
+                    focus-visible:ring-[var(--accent-edge)]
                 "
-                aria-label="Your organization"
-                title={
-                    activeClient?.name ??
-                    (activeClientId ? `Org #${activeClientId}` : "Your organization")
-                }
+                aria-label="Open your organization"
+                title={triggerLabel}
             >
                 <FiBriefcase className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                 <span className="truncate max-w-[180px]">
-                    {activeClient?.name ??
-                        (activeClientId
-                            ? `Org #${activeClientId}`
-                            : isLoading
-                                ? "Loading…"
-                                : "Your organization")}
+                    {isLoading ? "Loading…" : triggerLabel}
                 </span>
-            </div>
+                {activeMembership?.compliance_role && (
+                    <span className="hidden sm:inline text-[10.5px] uppercase tracking-wide text-[var(--text-muted)] border-l border-[var(--border-default)] pl-2">
+                        {activeMembership.compliance_role.replaceAll("_", " ")}
+                    </span>
+                )}
+            </Link>
         );
     }
 
@@ -191,10 +188,10 @@ export function ClientSwitcher() {
                 onClick={() => setOpen(!open)}
                 aria-haspopup="menu"
                 aria-expanded={open}
-                aria-label="Switch client"
+                aria-label="Switch organization"
                 className={`
                     flex items-center gap-2 px-3 py-1.5 rounded-md text-[13px]
-                    border transition-colors
+                    border transition-colors cursor-pointer
                     ${
                         crossClientMode
                             ? "bg-[var(--accent-soft)] border-[var(--accent-edge)] text-[var(--accent)]"
@@ -202,7 +199,11 @@ export function ClientSwitcher() {
                     }
                 `}
             >
-                {crossClientMode && <FiGlobe className="w-3.5 h-3.5" />}
+                {crossClientMode ? (
+                    <FiGlobe className="w-3.5 h-3.5" />
+                ) : (
+                    <FiBriefcase className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                )}
                 <span className="truncate max-w-[160px]">{triggerLabel}</span>
                 <FiChevronDown className="w-3.5 h-3.5 text-[var(--text-subtle)]" />
             </button>
@@ -216,13 +217,12 @@ export function ClientSwitcher() {
                         z-50
                     "
                 >
-                    {/* Search input */}
                     <div className="p-2 border-b border-[var(--border-default)]">
                         <div className="relative">
                             <FiSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-subtle)]" />
                             <input
                                 type="text"
-                                placeholder="Search clients"
+                                placeholder="Search organizations"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 className="
@@ -232,7 +232,7 @@ export function ClientSwitcher() {
                                     focus:outline-none focus:border-[var(--accent)]
                                     focus:ring-2 focus:ring-[var(--accent-edge)]
                                 "
-                                aria-label="Search clients"
+                                aria-label="Search organizations"
                             />
                         </div>
                     </div>
@@ -250,7 +250,7 @@ export function ClientSwitcher() {
 
                     {!isLoading && memberships && memberships.length === 0 && (
                         <div className="p-4 text-[13px] text-[var(--text-muted)] text-center">
-                            No clients yet
+                            No organizations yet
                         </div>
                     )}
 
@@ -259,7 +259,7 @@ export function ClientSwitcher() {
                         memberships.length > 0 &&
                         filtered.length === 0 && (
                             <div className="p-4 text-[13px] text-[var(--text-muted)] text-center">
-                                No clients match {`"${query}"`}
+                                No organizations match {`"${query}"`}
                             </div>
                         )}
 
@@ -279,7 +279,7 @@ export function ClientSwitcher() {
                                         }
                                         className={`
                                             w-full flex items-center gap-2 px-3 py-2 text-[13.5px]
-                                            text-left hover:bg-[var(--bg-hover)] transition-colors
+                                            text-left hover:bg-[var(--bg-hover)] transition-colors cursor-pointer
                                             focus-visible:outline-none focus-visible:bg-[var(--bg-hover)]
                                             focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] focus-visible:ring-inset
                                             ${
@@ -290,10 +290,10 @@ export function ClientSwitcher() {
                                         `}
                                     >
                                         <span className="flex-1 text-[var(--text-primary)] truncate">
-                                            Client #{m.client_id}
+                                            {membershipLabel(m)}
                                         </span>
                                         <span className="text-[11px] text-[var(--text-muted)] uppercase font-semibold">
-                                            {m.compliance_role.replace(
+                                            {m.compliance_role.replaceAll(
                                                 "_",
                                                 " "
                                             )}
@@ -307,7 +307,6 @@ export function ClientSwitcher() {
                         </div>
                     )}
 
-                    {/* Cross-client toggle (D-23) — gated by eligibility */}
                     {eligibleForCrossClient && (
                         <>
                             <div className="border-t border-[var(--border-default)]" />
@@ -320,7 +319,7 @@ export function ClientSwitcher() {
                                 }}
                                 className={`
                                     w-full flex items-center gap-2 px-3 py-2 text-[13.5px]
-                                    transition-colors hover:bg-[var(--bg-hover)]
+                                    transition-colors hover:bg-[var(--bg-hover)] cursor-pointer
                                     focus-visible:outline-none focus-visible:bg-[var(--bg-hover)]
                                     focus-visible:ring-2 focus-visible:ring-[var(--accent-edge)] focus-visible:ring-inset
                                     ${
@@ -341,8 +340,21 @@ export function ClientSwitcher() {
                         </>
                     )}
 
-                    {/* Onboard new client */}
                     <div className="border-t border-[var(--border-default)]" />
+                    {activeClientId != null && (
+                        <Link
+                            href={`/dashboard/compliance/clients/${activeClientId}`}
+                            onClick={() => setOpen(false)}
+                            className="
+                                w-full flex items-center gap-2 px-3 py-2 text-[13.5px]
+                                text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors
+                                focus-visible:outline-none focus-visible:bg-[var(--bg-hover)]
+                            "
+                        >
+                            <FiBriefcase className="w-3.5 h-3.5" />
+                            Open current organization
+                        </Link>
+                    )}
                     <Link
                         href="/dashboard/compliance/clients/new"
                         onClick={() => setOpen(false)}
@@ -354,7 +366,7 @@ export function ClientSwitcher() {
                         "
                     >
                         <FiPlus className="w-3.5 h-3.5" />
-                        Onboard new client
+                        Onboard new organization
                     </Link>
                 </div>
             )}

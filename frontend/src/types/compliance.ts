@@ -31,6 +31,8 @@ export interface Membership {
     access_start: string | null;
     access_end: string | null;
     created_at: string;
+    /** Present on GET /clients/me so the switcher can label orgs without N+1. */
+    client_name?: string | null;
 }
 
 export interface Registration {

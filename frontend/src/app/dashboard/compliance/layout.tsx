@@ -1,16 +1,14 @@
 "use client";
 
-import { ClientSwitcher } from "@/components/compliance/ClientSwitcher";
 import { NotificationBell } from "@/components/compliance/NotificationBell";
 import { ComplianceScoreChip } from "@/components/compliance/ComplianceScoreChip";
 
 /**
  * Compliance dashboard layout — wraps every /dashboard/compliance/** route.
  *
- * Renders the sticky top header with the ClientSwitcher. The `QueryClient`
- * lives in the outer `dashboard/layout.tsx` (Phase 16 hoist) so the
- * sidebar's active-client query and child page queries share a single
- * cache — no nested providers, no shape divergence between caches.
+ * ClientSwitcher lives in the global dashboard topbar so "Your organization"
+ * works on every page. This header keeps compliance-only chrome (score +
+ * notifications).
  */
 export default function ComplianceLayout({
     children,
@@ -33,7 +31,6 @@ export default function ComplianceLayout({
                 <div className="flex items-center gap-3">
                     <ComplianceScoreChip />
                     <NotificationBell />
-                    <ClientSwitcher />
                 </div>
             </header>
             {children}

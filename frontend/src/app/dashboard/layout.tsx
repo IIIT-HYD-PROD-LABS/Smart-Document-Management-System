@@ -15,6 +15,7 @@ import { documentsApi } from "@/lib/api";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import AIChatFloating from "@/components/AIChatFloating";
 import { UserMenu } from "@/components/UserMenu";
+import { ClientSwitcher } from "@/components/compliance/ClientSwitcher";
 import { useCurrentClient } from "@/stores/currentClientStore";
 import { complianceApi } from "@/lib/api/compliance";
 import type { ClientDetail } from "@/types/compliance";
@@ -142,7 +143,29 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
     const activeClientId = useCurrentClient((s) => s.activeClientId);
     const crossClientMode = useCurrentClient((s) => s.crossClientMode);
+    const setActiveClientId = useCurrentClient((s) => s.setActiveClientId);
     const queryClient = useQueryClient();
+
+    // Bootstrap active organization for the whole dashboard (not only email /
+    // compliance). Without this, pages that send X-Client-Id stay blank until
+    // the user opens Compliance first.
+    useEffect(() => {
+        if (!user || activeClientId !== null || crossClientMode) return;
+        let cancelled = false;
+        complianceApi
+            .listMyMemberships()
+            .then((r) => {
+                if (cancelled) return;
+                const first = r.data?.[0];
+                if (first?.client_id) setActiveClientId(first.client_id);
+            })
+            .catch(() => {
+                /* membership bootstrap is best-effort */
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [user, activeClientId, crossClientMode, setActiveClientId]);
 
     // Data prefetch on link hover/focus. <Link> already prefetches the route
     // JS+RSC, but the page's data is what costs ~1s against the remote DB.
@@ -483,6 +506,11 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 <div className="border-t border-[var(--border-default)] p-3">
                     <UserMenu
                         user={user}
+                        organizationHref={
+                            activeClientId
+                                ? `/dashboard/compliance/clients/${activeClientId}`
+                                : "/dashboard/compliance/clients"
+                        }
                         onSignOut={async () => {
                             await logout();
                             router.push("/login");
@@ -510,9 +538,16 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             </aside>
 
             <main className="flex-1 min-w-0 md:ml-60 ml-0 mt-14 md:mt-0">
-                {/* Desktop topbar — theme toggle lives here */}
+                {/* Desktop topbar — org switcher + theme. ClientSwitcher was
+                    previously only on /compliance/**, so "Your organization"
+                    looked broken everywhere else. */}
                 <div className="hidden md:flex sticky top-0 z-30 h-14 px-6 lg:px-10 items-center justify-end gap-3 border-b border-[var(--border-default)] bg-[var(--bg-page)]/85 backdrop-blur">
+                    <ClientSwitcher />
                     <ThemeToggle />
+                </div>
+                {/* Mobile: org pill under the top bar so it stays reachable. */}
+                <div className="md:hidden sticky top-14 z-20 flex items-center justify-end gap-2 px-4 py-2 border-b border-[var(--border-default)] bg-[var(--bg-page)]/90 backdrop-blur">
+                    <ClientSwitcher />
                 </div>
                 <div className="p-6 md:p-10">
                     <div className="max-w-7xl mx-auto">{children}</div>

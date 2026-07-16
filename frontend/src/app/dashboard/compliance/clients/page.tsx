@@ -36,13 +36,29 @@ export default function ClientsListPage() {
     const { user, isLoading: authLoading } = useAuth();
     const router = useRouter();
 
-    // Admin-only route. Non-admins (editor/viewer) get redirected to the
-    // dashboard. We wait for auth to finish loading before deciding so a
-    // valid admin doesn't get a one-frame redirect on hard refresh.
+    // Non-admins with a membership land on their org detail (not the
+    // multi-org list, which is admin-only). Users with no membership still
+    // go home.
     useEffect(() => {
-        if (!authLoading && user && user.role !== "admin") {
-            router.replace("/dashboard");
-        }
+        if (authLoading || !user || user.role === "admin") return;
+        let cancelled = false;
+        complianceApi
+            .listMyMemberships()
+            .then((r) => {
+                if (cancelled) return;
+                const first = r.data?.[0];
+                if (first?.client_id) {
+                    router.replace(`/dashboard/compliance/clients/${first.client_id}`);
+                } else {
+                    router.replace("/dashboard");
+                }
+            })
+            .catch(() => {
+                if (!cancelled) router.replace("/dashboard");
+            });
+        return () => {
+            cancelled = true;
+        };
     }, [authLoading, user, router]);
 
     // Used by the row-click handler further down. Removed from the
@@ -182,7 +198,7 @@ export default function ClientsListPage() {
                             <div className="flex items-center justify-between gap-3">
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium text-[var(--text-primary)] truncate">
-                                        {c?.name ?? `Client #${m.client_id}`}
+                                        {c?.name ?? m.client_name ?? `Client #${m.client_id}`}
                                     </p>
                                     {c && (
                                         <p className="text-[11.5px] text-[var(--text-muted)] mt-0.5 truncate">

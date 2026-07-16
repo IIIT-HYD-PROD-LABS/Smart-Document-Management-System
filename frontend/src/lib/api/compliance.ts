@@ -324,14 +324,49 @@ export const complianceApi = {
             fd,
             withTenant({
                 headers: { "Content-Type": "multipart/form-data" },
-                // The upload now also runs AI extraction on the file (so a
-                // detail-page upload fills the form), which adds an OCR + LLM
-                // round-trip. That exceeds the shared 30s axios timeout, so
-                // override it like extract-preview to avoid a false failure.
                 timeout: 120000,
             })
         );
     },
+
+    /** Phase B — import a portal-exported PDF into the notice pipeline. */
+    importPortalExport: (
+        file: File,
+        opts: {
+            portal:
+                | "gst_portal"
+                | "it_efiling"
+                | "mca"
+                | "sebi"
+                | "rbi"
+                | "other";
+            create_notice?: boolean;
+            authority?: string;
+        },
+    ) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("portal", opts.portal);
+        fd.append("create_notice", String(opts.create_notice ?? true));
+        if (opts.authority) fd.append("authority", opts.authority);
+        return api.post<{
+            document_id: number;
+            notice_id: number | null;
+            portal: string;
+            authority: string | null;
+            notice_number: string | null;
+            source: string;
+            detail: string;
+        }>("/compliance/portal/import", fd, withTenant({
+            headers: { "Content-Type": "multipart/form-data" },
+            timeout: 120000,
+        }));
+    },
+
+    listPortalKinds: () =>
+        api.get<
+            { id: string; label: string; default_authority: string }[]
+        >("/compliance/portal/kinds", withTenant()),
 
     // ──── Phase 17 — AI extraction (BYOK) ────
     extractPreview: (file: File) => {

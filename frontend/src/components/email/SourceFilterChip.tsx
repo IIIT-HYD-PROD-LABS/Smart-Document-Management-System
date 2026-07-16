@@ -8,13 +8,19 @@
  * compliance notice list (Plan 09-07). Single source of truth so
  * all three surfaces stay in sync visually.
  */
-export type SourceFilterValue = "all" | "manual" | "portal" | "gmail";
+export type SourceFilterValue =
+    | "all"
+    | "manual"
+    | "portal"
+    | "gmail"
+    | "google_drive";
 
 const OPTIONS: { value: SourceFilterValue; label: string }[] = [
     { value: "all", label: "All" },
     { value: "manual", label: "Manual" },
     { value: "portal", label: "Portal" },
     { value: "gmail", label: "Gmail" },
+    { value: "google_drive", label: "Drive" },
 ];
 
 interface Props {

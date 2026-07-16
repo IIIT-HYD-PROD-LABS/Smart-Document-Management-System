@@ -48,13 +48,25 @@ export function FileDropzone({ noticeId, disabled = false }: Props) {
             setError(null);
             setUploading(true);
             try {
-                await complianceApi.uploadNoticeFile(noticeId, file);
-                toast.success(`Uploaded ${file.name}`);
+                const { data } = await complianceApi.uploadNoticeFile(noticeId, file);
+                const filled =
+                    data &&
+                    (data.extraction_status === "accepted" ||
+                        data.extraction_status === "completed" ||
+                        Boolean(data.extracted_fields));
+                toast.success(
+                    filled
+                        ? `Uploaded ${file.name} — notice fields updated from the file`
+                        : `Uploaded ${file.name}`,
+                );
                 queryClient.invalidateQueries({
                     queryKey: ["notice-activity", noticeId],
                 });
                 queryClient.invalidateQueries({
                     queryKey: ["notice", noticeId],
+                });
+                queryClient.invalidateQueries({
+                    queryKey: ["notice-extraction", noticeId],
                 });
             } catch (err) {
                 const msg =

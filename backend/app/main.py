@@ -170,6 +170,7 @@ from app.compliance.routers import (  # noqa: E402  (intentional grouping with v
     notice_types as compliance_notice_types,
     notices as compliance_notices,
     notifications as compliance_notifications,
+    portal as compliance_portal,
     regulatory_calendar as compliance_regulatory_calendar,
     reports as compliance_reports,
     responses as compliance_responses,
@@ -180,6 +181,7 @@ from app.compliance.routers import (  # noqa: E402  (intentional grouping with v
 app.include_router(compliance_clients.router, prefix="/api/compliance")
 app.include_router(compliance_memberships.router, prefix="/api/compliance")
 app.include_router(compliance_notices.router, prefix="/api/compliance")
+app.include_router(compliance_portal.router, prefix="/api/compliance")
 app.include_router(compliance_reports.router, prefix="/api/compliance")
 app.include_router(compliance_audit.router, prefix="/api/compliance")
 app.include_router(compliance_review_queue.router, prefix="/api/compliance")

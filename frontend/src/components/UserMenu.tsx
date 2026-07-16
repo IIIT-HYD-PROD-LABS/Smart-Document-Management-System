@@ -37,6 +37,15 @@ const PERSONAL_ITEMS: UserMenuItem[] = [
     { href: "/dashboard/email", icon: FiMail, label: "Email center" },
 ];
 
+// Shown for any user with an active org (compliance membership). Platform
+// admins still get the Admin group below; everyone else needs a path into
+// their organization without guessing URLs.
+const ORG_ITEM: UserMenuItem = {
+    href: "/dashboard/compliance/clients",
+    icon: FiBriefcase,
+    label: "Your organization",
+};
+
 // Admin entries point at the new unified /dashboard/admin shell (a
 // second-level sidebar lives inside that layout for deeper navigation).
 // Legacy URLs (/dashboard/settings/ai, /dashboard/model-evaluation)
@@ -47,9 +56,14 @@ const ADMIN_ITEMS: UserMenuItem[] = [
     { href: "/dashboard/admin/audit", icon: FiList, label: "Audit log" },
     { href: "/dashboard/admin/ai", icon: FiCpu, label: "AI provider" },
     {
-        href: "/dashboard/compliance/clients",
+        href: "/dashboard/admin/organization",
         icon: FiBriefcase,
-        label: "Organizations",
+        label: "Organization settings",
+    },
+    {
+        href: "/dashboard/compliance/clients",
+        icon: FiUsers,
+        label: "All organizations",
     },
 ];
 
@@ -63,9 +77,12 @@ interface UserShape {
 export function UserMenu({
     user,
     onSignOut,
+    organizationHref,
 }: {
     user: UserShape;
     onSignOut: () => Promise<void> | void;
+    /** Deep-link for "Your organization" when a client is selected. */
+    organizationHref?: string | null;
 }) {
     const [open, setOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -76,6 +93,7 @@ export function UserMenu({
     const displayName =
         user.full_name?.trim() || user.username || user.email || "User";
     const initial = displayName.charAt(0).toUpperCase();
+    const orgHref = organizationHref || ORG_ITEM.href;
 
     // Outside-click + Escape close. WCAG 2.1.1 keyboard accessibility.
     // Uses `click` (not `mousedown`) so a Link inside the menu still
@@ -222,6 +240,25 @@ export function UserMenu({
                                 </Link>
                             </li>
                         ))}
+                        {/* Your organization — every member, not only platform admin */}
+                        <li role="none">
+                            <Link
+                                href={orgHref}
+                                role="menuitem"
+                                onClick={() => setOpen(false)}
+                                className="
+                                    flex items-center gap-2.5
+                                    mx-1.5 px-2.5 py-2 rounded-md
+                                    text-[13px] text-[var(--text-primary)]
+                                    hover:bg-[var(--bg-hover)]
+                                    transition-colors duration-150 cursor-pointer
+                                    focus:outline-none focus:bg-[var(--bg-hover)]
+                                "
+                            >
+                                <ORG_ITEM.icon className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
+                                <span className="truncate">{ORG_ITEM.label}</span>
+                            </Link>
+                        </li>
                     </ul>
 
                     {/* Admin (role-gated) */}
