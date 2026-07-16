@@ -317,6 +317,12 @@ def process_classified_email(
 
     extracted_metadata = _extract_metadata(body)
 
+    # Prefer body; when body is short (PDF-only mail), still extract from
+    # subject so Phase 17 has something until attachment OCR completes.
+    extraction_text = (body or "").strip()
+    if len(extraction_text) < 40:
+        extraction_text = f"{subject or ''}\n{extraction_text}".strip()
+
     if is_compliance and confidence >= 0.75:
         from app.compliance.models.notice import ComplianceNotice
         from app.compliance.services.activity_service import log_activity
@@ -344,7 +350,7 @@ def process_classified_email(
                 db,
                 client_id=credential.client_id,
                 user_id=system_user_id,
-                text=body or "",
+                text=extraction_text or body or "",
                 notice_id=None,
             )
             extraction_decision = route_or_apply(extraction_envelope)

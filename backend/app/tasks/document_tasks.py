@@ -374,18 +374,29 @@ def process_document_task(self, document_id: int):
         doc.status = DocumentStatus.COMPLETED
         db.commit()
 
-        # Phase 17 — when this document is attached to a compliance notice,
-        # run LLM field extraction so the notice form gets pre-populated.
-        # Non-fatal: a failure leaves extraction_status='failed' and the
-        # user falls back to manual entry (D-09 + D-23).
+        # Unified pipeline: OCR text → notice field fill → risk + deadline alerts.
+        # Email often creates the notice from an empty body; attachment OCR is
+        # what actually has the deadline / demand figures the calendar needs.
         if getattr(doc, "notice_id", None):
-            _run_phase17_extraction(
-                db,
-                document_id=document_id,
-                notice_id=doc.notice_id,
-                user_id=getattr(doc, "user_id", None),
-                extracted_text=extracted_text,
-            )
+            try:
+                from app.compliance.services.notice_pipeline import (
+                    after_document_intelligence,
+                )
+
+                pipe = after_document_intelligence(
+                    db,
+                    document_id=document_id,
+                    notice_id=int(doc.notice_id) if doc.notice_id is not None else None,
+                    user_id=int(doc.user_id) if getattr(doc, "user_id", None) is not None else None,
+                    extracted_text=extracted_text or "",
+                )
+                logger.info("notice_pipeline_complete", **pipe)
+            except Exception as pipe_err:  # noqa: BLE001
+                logger.warning(
+                    "notice_pipeline_failed",
+                    document_id=document_id,
+                    error=str(pipe_err),
+                )
 
         logger.info(
             "document_processed",
