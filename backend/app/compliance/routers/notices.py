@@ -1025,10 +1025,15 @@ async def add_note(
 
 
 def _ocr_extract_text(file_bytes: bytes, file_ext: str) -> str:
-    """Run v1.0 OCR / PDF / DOCX extraction on raw bytes. Returns extracted text."""
-    from app.ml.classifier import extract_and_classify
-    text, _category, _confidence = extract_and_classify(file_bytes, file_ext)
-    return text or ""
+    """Run v1.0 OCR / PDF / DOCX extraction on raw bytes. Returns extracted text.
+
+    Classification is intentionally NOT run here: extract-preview only needs
+    text, and requiring the trained model artifact caused silent failures when
+    models were not mounted in a deployment.
+    """
+    from app.ml.classifier import extract_text_from_bytes
+
+    return extract_text_from_bytes(file_bytes, file_ext) or ""
 
 
 async def _maybe_autoextract_from_upload(
@@ -1038,16 +1043,21 @@ async def _maybe_autoextract_from_upload(
     detail-page upload populates the form instead of leaving it "Manual entry".
 
     No-op when the notice already has extraction or is frozen (accepted /
-    superseded), or when extraction fails for any reason — the file stays
-    attached and the notice is left untouched. Awaited on purpose so the
-    caller returns the populated notice (the upload client uses a long timeout).
+    superseded). Falls back to regex extraction when AI is unavailable so a
+    GST/IT PDF still pre-fills structural fields.
     """
     from app.compliance.services.extraction_routing_service import (
         apply_extraction_to_notice_async,
         route_or_apply,
         should_skip_extraction,
     )
-    from app.compliance.services.notice_extractor_service import extract_notice_fields_async
+    from app.compliance.services.notice_extractor_service import (
+        NoticeExtractionCredentialMissingError,
+        extract_notice_fields_async,
+    )
+    from app.compliance.services.notice_regex_fallback import (
+        extract_notice_fields_regex,
+    )
 
     if should_skip_extraction(notice) or notice.extracted_fields:
         return
@@ -1055,9 +1065,12 @@ async def _maybe_autoextract_from_upload(
         text = _ocr_extract_text(contents, ext)
         if not text.strip():
             return
-        envelope = await extract_notice_fields_async(
-            db, client_id=client_id, user_id=user_id, text=text, notice_id=notice.id
-        )
+        try:
+            envelope = await extract_notice_fields_async(
+                db, client_id=client_id, user_id=user_id, text=text, notice_id=notice.id
+            )
+        except NoticeExtractionCredentialMissingError:
+            envelope = extract_notice_fields_regex(text)
         decision = route_or_apply(envelope)
         await apply_extraction_to_notice_async(db, notice, envelope, decision, fill_columns=True)
         await db.commit()
@@ -1131,17 +1144,26 @@ async def extract_preview(
             notice_id=None,
         )
     except NoticeExtractionCredentialMissingError:
-        raise HTTPException(
-            status_code=status.HTTP_412_PRECONDITION_FAILED,
-            detail={
-                "code": "no_ai_credential",
-                "message": (
-                    "Connect an AI provider in settings to enable extraction. "
-                    "You can still upload and fill the form manually."
-                ),
-                "settings_path": "/dashboard/settings/ai-credentials",
-            },
+        # No BYOK and no server LLM — still return regex-extracted fields so
+        # the form pre-fills GSTIN / notice number / amounts instead of going
+        # fully blank manual.
+        from app.compliance.services.notice_regex_fallback import (
+            extract_notice_fields_regex,
         )
+
+        envelope = extract_notice_fields_regex(text)
+        if not (envelope.get("fields") or {}):
+            raise HTTPException(
+                status_code=status.HTTP_412_PRECONDITION_FAILED,
+                detail={
+                    "code": "no_ai_credential",
+                    "message": (
+                        "Connect an AI provider in settings to enable extraction. "
+                        "You can still upload and fill the form manually."
+                    ),
+                    "settings_path": "/dashboard/settings/ai",
+                },
+            )
     except ai_service.AIOutOfScopeError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

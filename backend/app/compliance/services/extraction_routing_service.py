@@ -137,6 +137,11 @@ def _stamp_extraction_fields(
         else:
             notice.extraction_status = "completed"
     else:
+        # Low-confidence / review path: still fill empty columns so the detail
+        # page metadata grid is populated from the PDF. Status stays
+        # 'completed' (awaiting human acceptance) rather than 'accepted'.
+        if fill_columns:
+            _apply_fields_to_columns(notice, envelope)
         notice.extraction_status = "completed"
 
 
@@ -171,10 +176,9 @@ def _apply_fields_to_columns(notice, envelope: dict) -> None:
 
     Fill-don't-clobber: a column that already holds a value (e.g. the
     notice_number/authority a human entered at creation, or the default
-    received_date) is left untouched. Per-field coercion failures are
-    swallowed so one unparseable value never aborts the whole apply — which,
-    in the Celery worker, would otherwise mark the extraction failed and
-    discard every good field with it.
+    received_date) is left untouched — except placeholder auto-generated
+    notice numbers (GMAIL-*/DRIVE-*) which are safe to replace with a
+    real extracted number.
     """
     from app.compliance.services.extraction_coercion import (
         CoercionError,
@@ -183,7 +187,8 @@ def _apply_fields_to_columns(notice, envelope: dict) -> None:
 
     fields = envelope.get("fields") or {}
     for field_name, (column, coerce) in FIELD_COERCERS.items():
-        if getattr(notice, column, None) is not None:
+        current = getattr(notice, column, None)
+        if current is not None and not _is_placeholder_value(column, current):
             continue
         payload = fields.get(field_name)
         if not isinstance(payload, dict):
@@ -195,6 +200,14 @@ def _apply_fields_to_columns(notice, envelope: dict) -> None:
         if value is None:
             continue
         setattr(notice, column, value)
+
+
+def _is_placeholder_value(column: str, current) -> bool:
+    """True when the existing column value is a machine placeholder safe to replace."""
+    if column != "notice_number":
+        return False
+    s = str(current or "")
+    return s.startswith(("GMAIL-", "DRIVE-", "GMAIL-REV-"))
 
 
 def _enqueue_for_review(db, notice, envelope: dict, decision: dict) -> None:

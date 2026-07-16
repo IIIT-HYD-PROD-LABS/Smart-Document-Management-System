@@ -169,6 +169,9 @@ class NoticeOut(BaseModel):
     extraction_confidence: Optional[Decimal] = None
     extracted_by_provider: Optional[str] = None
     extracted_at: Optional[datetime] = None
+    # Lightweight flag for clients after upload/auto-extract. Full envelope is
+    # still fetched via GET /{id}/extraction when the disclosure needs it.
+    extracted_fields: Optional[dict] = None
 
 
 class NoticeFilters(BaseModel):

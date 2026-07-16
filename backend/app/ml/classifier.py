@@ -88,38 +88,50 @@ def classify_document(text: str) -> tuple[str, float]:
     return prediction, confidence
 
 
-def extract_and_classify(file_bytes: bytes, file_type: str) -> tuple[str, str, float]:
-    """
-    Full pipeline: extract text → classify document.
-    Returns (extracted_text, category, confidence).
+def extract_text_from_bytes(file_bytes: bytes, file_type: str) -> str:
+    """Extract plain text from document bytes without running the classifier.
+
+    Used by compliance extract-preview / auto-extract where only the text is
+    needed. Must NOT depend on trained model artifacts being present.
     """
     from app.ml.docx_extractor import extract_text_from_docx
     from app.ml.ocr import extract_text_from_image, extract_text_from_tiff
     from app.ml.pdf_extractor import extract_text_from_pdf
 
-    # Extract text based on file type
-    if file_type == "pdf":
-        extracted_text = extract_text_from_pdf(file_bytes)
-    elif file_type == "docx":
-        extracted_text = extract_text_from_docx(file_bytes)
-    elif file_type == "txt":
-        # D-39: Gmail bodies are persisted as synthetic .txt files;
-        # decode directly rather than running OCR.
+    ft = (file_type or "").lower().lstrip(".")
+    if ft == "pdf":
+        return extract_text_from_pdf(file_bytes) or ""
+    if ft == "docx":
+        return extract_text_from_docx(file_bytes) or ""
+    if ft == "txt":
         try:
-            extracted_text = file_bytes.decode("utf-8", errors="replace")
+            return file_bytes.decode("utf-8", errors="replace")
         except Exception:
-            extracted_text = ""
-    elif file_type in ("tiff", "tif"):
-        # H3: cv2.imdecode would drop TIFF pages 2+. Use the frame-iterating
-        # path so multi-page scans are fully OCR'd.
-        extracted_text = extract_text_from_tiff(file_bytes)
-    else:
-        extracted_text = extract_text_from_image(file_bytes)
+            return ""
+    if ft in ("tiff", "tif"):
+        return extract_text_from_tiff(file_bytes) or ""
+    return extract_text_from_image(file_bytes) or ""
+
+
+def extract_and_classify(file_bytes: bytes, file_type: str) -> tuple[str, str, float]:
+    """
+    Full pipeline: extract text → classify document.
+    Returns (extracted_text, category, confidence).
+
+    Text extraction is independent of the classifier model. If model artifacts
+    are missing, text is still returned with category=\"unknown\" so document
+    intelligence and compliance extraction can proceed.
+    """
+    extracted_text = extract_text_from_bytes(file_bytes, file_type)
 
     if not extracted_text:
         return "", "unknown", 0.0
 
-    # Classify
-    category, confidence = classify_document(extracted_text)
+    try:
+        category, confidence = classify_document(extracted_text)
+    except ExtractionEngineError:
+        # Model artifacts not deployed yet — keep the OCR text, degrade class.
+        logger.warning("classification_skipped_model_missing")
+        return extracted_text, "unknown", 0.0
 
     return extracted_text, category, confidence
