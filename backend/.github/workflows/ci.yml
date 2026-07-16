@@ -18,11 +18,15 @@ jobs:
       - name: Block committed env/secret files
         run: |
           set -euo pipefail
-          if git ls-files | grep -E '(^|/)\.env(\.|$)|credentials\.json|id_rsa|\.pem$' ; then
+          # Allow *.example templates; block real env/key material only.
+          if git ls-files | grep -E '(^|/)\.env($|\.[^/]*$)' | grep -Ev '\.example$' ; then
             echo "Forbidden tracked secret-like paths"; exit 1
           fi
+          if git ls-files | grep -E 'credentials\.json|id_rsa|\.pem$' ; then
+            echo "Forbidden key material paths"; exit 1
+          fi
           if grep -RInE 'AIza[0-9A-Za-z_-]{20,}|BEGIN (RSA |OPENSSH )?PRIVATE KEY' \
-              --exclude-dir=.git --exclude-dir=tests --exclude='*.md' . ; then
+              --exclude-dir=.git --exclude-dir=tests --exclude='*.md' --exclude='*.example' . ; then
             echo "Possible live secret pattern in tree"; exit 1
           fi
           echo "Secret scan OK"
