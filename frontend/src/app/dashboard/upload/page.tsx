@@ -213,7 +213,7 @@ export default function UploadPage() {
                     {isDragActive ? "Release to upload" : "Drop files here or click to browse"}
                 </p>
                 <p className="text-xs text-[var(--text-muted)]">
-                    PDF, PNG, JPG, TIFF, DOCX &middot; up to 16 MB each
+                    PDF, PNG, JPG, TIFF, DOCX &middot; up to 50 MB each
                 </p>
             </div>
 
