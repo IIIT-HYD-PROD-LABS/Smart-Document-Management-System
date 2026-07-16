@@ -1,5 +1,9 @@
 name: Deploy
 
+# Image publish only. Campus runtime (IIIT 10.2.8.73 :8025/:8026, IIIT Postgres)
+# is deployed via deploy-prod.sh on the host with server-local .env.prod — not
+# from GitHub runners (they cannot reach campus network).
+
 on:
   workflow_run:
     workflows: ["CI"]
@@ -14,34 +18,65 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker images
-        run: docker compose build
+      - name: Build backend + frontend images
+        run: |
+          docker compose build backend
+          if [ -f frontend/package.json ]; then
+            docker compose build frontend
+          fi
 
       - name: Login to Docker Hub
-        if: env.DOCKER_USERNAME != ''
+        if: ${{ env.HAS_DOCKER_CREDS == 'true' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
         env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          HAS_DOCKER_CREDS: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
 
       - name: Tag and push backend image
-        if: env.DOCKER_USERNAME != ''
-        run: |
-          docker tag smart-document-management-system-backend:latest ${{ secrets.DOCKER_USERNAME }}/smartdocs-backend:latest
-          docker tag smart-document-management-system-backend:latest ${{ secrets.DOCKER_USERNAME }}/smartdocs-backend:${{ github.sha }}
-          docker push ${{ secrets.DOCKER_USERNAME }}/smartdocs-backend:latest
-          docker push ${{ secrets.DOCKER_USERNAME }}/smartdocs-backend:${{ github.sha }}
+        if: ${{ env.HAS_DOCKER_CREDS == 'true' }}
         env:
+          HAS_DOCKER_CREDS: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        run: |
+          docker tag smart-document-management-system-backend:latest "$DOCKER_USERNAME/smartdocs-backend:latest"
+          docker tag smart-document-management-system-backend:latest "$DOCKER_USERNAME/smartdocs-backend:${{ github.sha }}"
+          docker push "$DOCKER_USERNAME/smartdocs-backend:latest"
+          docker push "$DOCKER_USERNAME/smartdocs-backend:${{ github.sha }}"
 
       - name: Tag and push frontend image
-        if: env.DOCKER_USERNAME != ''
-        run: |
-          docker tag smart-document-management-system-frontend:latest ${{ secrets.DOCKER_USERNAME }}/smartdocs-frontend:latest
-          docker tag smart-document-management-system-frontend:latest ${{ secrets.DOCKER_USERNAME }}/smartdocs-frontend:${{ github.sha }}
-          docker push ${{ secrets.DOCKER_USERNAME }}/smartdocs-frontend:latest
-          docker push ${{ secrets.DOCKER_USERNAME }}/smartdocs-frontend:${{ github.sha }}
+        if: ${{ env.HAS_DOCKER_CREDS == 'true' }}
         env:
+          HAS_DOCKER_CREDS: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        run: |
+          if [ ! -f frontend/package.json ]; then
+            echo "No frontend package in this tree; skip frontend image push"
+            exit 0
+          fi
+          docker tag smart-document-management-system-frontend:latest "$DOCKER_USERNAME/smartdocs-frontend:latest"
+          docker tag smart-document-management-system-frontend:latest "$DOCKER_USERNAME/smartdocs-frontend:${{ github.sha }}"
+          docker push "$DOCKER_USERNAME/smartdocs-frontend:latest"
+          docker push "$DOCKER_USERNAME/smartdocs-frontend:${{ github.sha }}"
+
+      - name: Campus deploy reminder
+        run: |
+          cat <<'EOF'
+          GitHub Actions cannot reach the IIIT campus network (10.2.8.x).
+
+          Production/staging on campus:
+            host: 10.2.8.73
+            backend:  :8025  (nginx → https://canvas.iiit.ac.in/taxsyncbestage)
+            frontend: :8026  (nginx → https://canvas.iiit.ac.in/taxsyncfestage)
+            Postgres: IIIT host Postgres (DATABASE_URL* in server-local .env.prod)
+
+          On the deploy host:
+            cd Smart-Document-Management-System
+            test -f .env.prod || cp .env.prod.example .env.prod
+            # fill DATABASE_URL* with IIIT Postgres (not Supabase)
+            ./deploy-prod.sh
+
+          Taxsync_Backend / Taxsync_Frontend are the split remotes used by
+          some campus jobs; monorepo origin is the source of truth for CI.
+          EOF

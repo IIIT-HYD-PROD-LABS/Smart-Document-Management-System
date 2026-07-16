@@ -637,6 +637,20 @@ def _ensure_phase9_test_user(app_runtime_engine):
                 s.commit()
             except Exception:
                 s.rollback()
+        # Explicit id=1 inserts do NOT advance the serial sequence. Without this
+        # resync, the next plain User() insert tries id=1 and CI fails with
+        # UniqueViolation on users_pkey (seen in test_async_pilot_rls_integration).
+        try:
+            s.execute(
+                text(
+                    "SELECT setval("
+                    "pg_get_serial_sequence('users', 'id'), "
+                    "GREATEST((SELECT COALESCE(MAX(id), 1) FROM users), 1))"
+                )
+            )
+            s.commit()
+        except Exception:
+            s.rollback()
     finally:
         s.close()
     yield

@@ -7,7 +7,6 @@ pipeline so files land in DMS and can be attached to compliance notices.
 from __future__ import annotations
 
 import logging
-import mimetypes
 import os
 from typing import Optional
 from urllib.parse import urlencode
@@ -15,7 +14,6 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.user import User
