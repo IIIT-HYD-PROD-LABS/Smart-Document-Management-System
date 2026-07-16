@@ -312,11 +312,21 @@ class TestDocxCorruptHandling:
         assert exc.value.reason == "docx_corrupt"
 
     def test_valid_empty_docx_returns_empty_string(self):
+        import io as _io
+
+        import docx as _docx
+
         from app.ml import docx_extractor
+
+        # Real (openable) empty .docx bytes so the zip-bomb size guard passes;
+        # DocxDocument is still mocked to isolate the empty-content path.
+        _buf = _io.BytesIO()
+        _docx.Document().save(_buf)
+        valid_empty_docx = _buf.getvalue()
 
         empty_doc = MagicMock()
         empty_doc.paragraphs = []
         empty_doc.tables = []
         with patch.object(docx_extractor, "DocxDocument", return_value=empty_doc):
-            result = docx_extractor.extract_text_from_docx(b"fake-but-opens")
+            result = docx_extractor.extract_text_from_docx(valid_empty_docx)
         assert result == ""

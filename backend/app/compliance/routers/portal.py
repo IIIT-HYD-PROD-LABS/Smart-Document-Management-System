@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from datetime import date
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.dependencies import require_compliance_permission
@@ -135,7 +137,21 @@ async def import_portal_export(
         source="portal",
     )
     db.add(doc)
-    await db.flush()
+    # The Document INSERT is emitted by this flush (we need doc.id below), so a
+    # duplicate (user_id, original_filename) raises here, not at the later commit.
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        if file_path:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A document with this filename was already imported",
+        )
     doc_id = int(doc.id)
     user_id = int(current_user.id)
 
@@ -206,14 +222,6 @@ async def import_portal_export(
         await db.commit()
     except Exception as exc:  # noqa: BLE001
         logger.warning("portal celery dispatch failed: %s", exc)
-
-    if notice_id is not None:
-        try:
-            from app.compliance.services.notice_service import process_notice_intake
-
-            process_notice_intake(notice_id, None)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("portal intake dispatch failed: %s", exc)
 
     return PortalImportResult(
         document_id=int(doc.id),

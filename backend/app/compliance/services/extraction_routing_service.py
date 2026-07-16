@@ -137,11 +137,11 @@ def _stamp_extraction_fields(
         else:
             notice.extraction_status = "completed"
     else:
-        # Low-confidence / review path: still fill empty columns so the detail
-        # page metadata grid is populated from the PDF. Status stays
-        # 'completed' (awaiting human acceptance) rather than 'accepted'.
-        if fill_columns:
-            _apply_fields_to_columns(notice, envelope)
+        # Review path: park the extraction envelope for human review but do NOT
+        # stamp canonical columns. A sub-threshold extraction must not write a
+        # possibly-hallucinated response_deadline that would then drive real
+        # T-7/T-3/T-1 deadline alerts. Status stays 'completed' (awaiting human
+        # acceptance) rather than 'accepted'.
         notice.extraction_status = "completed"
 
 
@@ -207,7 +207,7 @@ def _is_placeholder_value(column: str, current) -> bool:
     if column != "notice_number":
         return False
     s = str(current or "")
-    return s.startswith(("GMAIL-", "DRIVE-", "GMAIL-REV-"))
+    return s.startswith(("GMAIL-", "DRIVE-", "GMAIL-REV-", "PORTAL-"))
 
 
 def _enqueue_for_review(db, notice, envelope: dict, decision: dict) -> None:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 
 import redis
 from apscheduler.triggers.interval import IntervalTrigger
@@ -49,16 +50,36 @@ def schedule_gmail_scan(credential_id: int, cadence_minutes: int = 15) -> None:
     )
 
 
-def acquire_scan_lock(credential_id: int) -> bool:
+def acquire_scan_lock(credential_id: int) -> str | None:
+    """Acquire the per-credential scan lock. Returns a unique token to hand to
+    release_scan_lock, or None if another scan holds it. The token lets release
+    do a compare-and-delete so a run whose lock expired mid-scan cannot delete a
+    later run's freshly-acquired lock.
+    """
     r = _get_redis()
-    return bool(
-        r.set(f"gmail:scan_lock:{credential_id}", "1", nx=True, ex=300)
-    )
+    token = secrets.token_hex(16)
+    if r.set(f"gmail:scan_lock:{credential_id}", token, nx=True, ex=300):
+        return token
+    return None
 
 
-def release_scan_lock(credential_id: int) -> None:
+# Only release the lock if we still own it (stored value == our token).
+_RELEASE_LOCK_LUA = (
+    "if redis.call('get', KEYS[1]) == ARGV[1] then "
+    "return redis.call('del', KEYS[1]) else return 0 end"
+)
+
+
+def release_scan_lock(credential_id: int, token: str | None = None) -> None:
     r = _get_redis()
-    r.delete(f"gmail:scan_lock:{credential_id}")
+    key = f"gmail:scan_lock:{credential_id}"
+    if not token:
+        r.delete(key)
+        return
+    try:
+        r.eval(_RELEASE_LOCK_LUA, 1, key, token)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("scan lock release failed for %s: %s", credential_id, e)
 
 
 def record_fetch_outcome(

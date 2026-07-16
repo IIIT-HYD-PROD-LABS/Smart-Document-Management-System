@@ -21,16 +21,6 @@ if settings.TESSERACT_CMD:
     pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
 
 
-def _tesseract_available() -> bool:
-    """Best-effort check that the tesseract binary is resolvable."""
-    try:
-        pytesseract.get_tesseract_version()
-        return True
-    except Exception as exc:  # noqa: BLE001
-        logger.critical("tesseract_unresolvable_at_startup", error=str(exc))
-        return False
-
-
 def _upscale_if_small(image: np.ndarray, min_height: int = 800, max_height: int = 4000) -> np.ndarray:
     """Upscale small images so Tesseract has enough pixels to work with."""
     h, w = image.shape[:2]
@@ -101,10 +91,34 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
 # A 6000x6000 RGB image is ~100 MB in memory; this caps at ~108 MP.
 _MAX_IMAGE_PIXELS = 108_000_000
 
+# M3: bound PIL's own decompression-bomb guard so every PIL decode path (the
+# cv2-fallback below, TIFF frames, PIL images) refuses gigapixel rasters rather
+# than PIL's warn-only default. cv2.imdecode ignores this, so
+# extract_text_from_image also probes the header before handing bytes to cv2.
+Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
+
 
 def extract_text_from_image(image_bytes: bytes) -> str:
     """Extract text from image bytes using Tesseract OCR with preprocessing."""
     try:
+        # M3: cv2.imdecode rasterizes attacker-controlled bytes with no pixel
+        # budget, so a small uniform-color PNG can decode to gigapixels and
+        # OOM-kill the worker. Probe the declared dimensions from the header
+        # (Image.open does not rasterize) and reject oversized geometry before
+        # it reaches cv2.imdecode. Non-image bytes fail the probe and fall
+        # through to the existing decode/fallback handling below.
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as probe:
+                probe_w, probe_h = probe.size
+        except Image.DecompressionBombError:
+            logger.warning("image_rejected_decompression_bomb")
+            return ""
+        except Exception:
+            probe_w = probe_h = 0
+        if probe_w * probe_h > _MAX_IMAGE_PIXELS:
+            logger.warning("image_rejected_oversized", declared_w=probe_w, declared_h=probe_h)
+            return ""
+
         nparr = np.frombuffer(image_bytes, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         del nparr  # free compressed buffer

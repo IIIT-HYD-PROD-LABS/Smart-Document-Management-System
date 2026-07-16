@@ -153,6 +153,16 @@ def ingest_attachment(
     """
     file_size = len(attachment_bytes)
     sha256 = hashlib.sha256(attachment_bytes).hexdigest()
+    # Gmail omits filenames on many attachments, so _iter_attachments names them
+    # all "attachment.<ext>". Two different filename-less attachments for the same
+    # user would then collide on uq_documents_user_filename (user_id,
+    # original_filename). Content-address the generic placeholder so distinct
+    # attachments stay distinct and identical bytes still dedup below.
+    if filename.startswith("attachment."):
+        _ext = filename[len("attachment.") :]
+        filename = (
+            f"attachment-{sha256[:12]}.{_ext}" if _ext else f"attachment-{sha256[:12]}"
+        )
     existing = (
         db.query(Document)
         .join(GmailMessageLog, Document.source_email_id == GmailMessageLog.id)
@@ -184,9 +194,26 @@ def ingest_attachment(
         source_email_id=message_log.id,
         source="gmail",
     )
-    db.add(doc)
-    db.commit()
-    db.refresh(doc)
+    # uq_documents_user_filename guard: a concurrent or prior insert of the same
+    # (user_id, original_filename) would raise IntegrityError and poison the whole
+    # scan session. Insert inside a SAVEPOINT; on collision drop the orphaned file
+    # and treat the attachment as already ingested.
+    try:
+        with db.begin_nested():
+            db.add(doc)
+        db.commit()
+        db.refresh(doc)
+    except IntegrityError:
+        db.rollback()
+        if file_path:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+        logger.info(
+            "Attachment dedup (unique index) name=%s sha=%s", filename, sha256[:8]
+        )
+        return None
     try:
         from app.tasks.document_tasks import process_document_task
         process_document_task.delay(doc.id)
@@ -312,10 +339,13 @@ def process_classified_email(
     # Operator / bill / ignore short-circuits
     if forced_route == GmailMessageLog.ROUTE_BILL:
         return
+    if forced_route in (GmailMessageLog.ROUTE_IGNORE, GmailMessageLog.ROUTE_DMS_ONLY):
+        # Honor an operator's explicit suppress / DMS-only route; do not let the
+        # built-in classifier auto-create a notice against that intent. Body
+        # persistence for these routes already ran in ingest_message.
+        return
     if forced_route == GmailMessageLog.ROUTE_COMPLIANCE:
         is_compliance, confidence = True, 1.0
-
-    extracted_metadata = _extract_metadata(body)
 
     # Prefer body; when body is short (PDF-only mail), still extract from
     # subject so Phase 17 has something until attachment OCR completes.
@@ -372,6 +402,9 @@ def process_classified_email(
                 applied_authority = ext_auth["value"]
 
         if not notice_number:
+            # Only run the secondary LLM metadata extraction when Phase 17 did
+            # not yield a notice_number (and never for non-compliance mail).
+            extracted_metadata = _extract_metadata(extraction_text or body or "")
             notice_number = (
                 extracted_metadata.get("notice_number")
                 or f"GMAIL-{message_log.gmail_message_id[:8]}"

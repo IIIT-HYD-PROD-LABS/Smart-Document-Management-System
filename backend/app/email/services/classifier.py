@@ -8,6 +8,7 @@ entry point for the scanner.
 """
 from __future__ import annotations
 
+import email.utils
 import re
 from typing import Any, Optional, Sequence
 
@@ -43,6 +44,16 @@ _BILL_SUBJECT_HINTS = re.compile(
 )
 
 
+def _sender_address(sender: str) -> str:
+    """Bare address from a raw From header ('Name <a@b.in>' -> 'a@b.in').
+
+    COMPLIANCE_SENDER_PATTERNS are $-anchored on the domain, so they must match
+    the bare address, not the 'Display Name <addr>' form the From header carries.
+    """
+    addr = email.utils.parseaddr(sender or "")[1]
+    return addr or (sender or "")
+
+
 def classify(sender: str, subject: str) -> tuple[bool, float]:
     """Returns (is_compliance_notice, confidence).
 
@@ -52,7 +63,7 @@ def classify(sender: str, subject: str) -> tuple[bool, float]:
       subject match only      -> (False, 0.0) -> dms_only per D-33 (forwarded)
       neither match           -> (False, 0.0) -> ignored
     """
-    sender_match = any(p.search(sender or "") for p in COMPLIANCE_SENDER_PATTERNS)
+    sender_match = any(p.search(_sender_address(sender)) for p in COMPLIANCE_SENDER_PATTERNS)
     subject_match = bool(COMPLIANCE_SUBJECT_KEYWORDS.search(subject or ""))
     if sender_match and subject_match:
         return True, 1.0
@@ -69,11 +80,17 @@ def _rule_matches(rule: Any, sender: str, subject: str) -> bool:
     """
     sender = sender or ""
     subject = subject or ""
+    addr = _sender_address(sender)
     sender_pat = str(getattr(rule, "sender_pattern", None) or "").strip()
     subject_pat = str(getattr(rule, "subject_pattern", None) or "").strip()
     if sender_pat:
         try:
-            if not re.search(sender_pat, sender, re.IGNORECASE):
+            # Match the raw From and the bare address, so a $-anchored domain
+            # rule still fires on the 'Display Name <addr>' form.
+            if not (
+                re.search(sender_pat, sender, re.IGNORECASE)
+                or re.search(sender_pat, addr, re.IGNORECASE)
+            ):
                 return False
         except re.error:
             # Bad operator regex — treat as non-match rather than crash the scan.

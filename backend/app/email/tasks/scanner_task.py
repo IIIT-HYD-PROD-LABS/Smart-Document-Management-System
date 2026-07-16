@@ -103,7 +103,8 @@ def run_scan(credential_id: int) -> None:
         release_scan_lock,
     )
 
-    if not acquire_scan_lock(credential_id):
+    scan_token = acquire_scan_lock(credential_id)
+    if not scan_token:
         logger.info("scan_lock not acquired for %s; skipping", credential_id)
         return
 
@@ -262,6 +263,7 @@ def run_scan(credential_id: int) -> None:
                             **bill_data,
                         )
                     except Exception as e:
+                        db.rollback()
                         logger.warning("bill extraction failed for %s: %s", msg_id, e)
 
                 # Attachment ingestion
@@ -289,6 +291,7 @@ def run_scan(credential_id: int) -> None:
                         if doc is not None and primary_attachment_doc_id is None:
                             primary_attachment_doc_id = doc.id
                     except Exception as e:
+                        db.rollback()
                         logger.warning(
                             "attachment ingest failed (msg=%s name=%s): %s",
                             msg_id,
@@ -313,6 +316,7 @@ def run_scan(credential_id: int) -> None:
                             route=route,
                         )
                     except Exception as e:
+                        db.rollback()
                         logger.warning(
                             "process_classified_email failed for msg=%s: %s",
                             msg_id,
@@ -392,4 +396,4 @@ def run_scan(credential_id: int) -> None:
             raise
     finally:
         db.close()
-        release_scan_lock(credential_id)
+        release_scan_lock(credential_id, scan_token)

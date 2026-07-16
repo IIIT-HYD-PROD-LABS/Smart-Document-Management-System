@@ -12,9 +12,12 @@ from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.compliance.dependencies import require_compliance_permission
+from app.compliance.models.membership import ClientMembership
+from app.compliance.services.permission_registry import CompliancePermission
 from app.config import settings
 from app.models.user import User
 from app.utils.security import require_editor
@@ -357,9 +360,9 @@ def _import_one_file_sync(
         db.add(doc)
         db.flush()
         notice_id = None
+        notice_deadline = None
         if create_notice:
             from app.compliance.models.notice import ComplianceNotice
-            from app.compliance.services.notice_service import process_notice_intake
 
             notice = ComplianceNotice(
                 client_id=client_id,
@@ -373,8 +376,8 @@ def _import_one_file_sync(
             db.add(notice)
             db.flush()
             doc.notice_id = notice.id
-            notice_id = notice.id
-            process_notice_intake(int(notice.id), notice.response_deadline)
+            notice_id = int(notice.id)
+            notice_deadline = notice.response_deadline
 
         db.commit()
         db.refresh(doc)
@@ -385,6 +388,13 @@ def _import_one_file_sync(
         except Exception as e:  # noqa: BLE001
             logger.warning("drive import celery delay failed: %s", e)
 
+        # Intake AFTER commit: the Celery worker reads the notice row on a
+        # separate connection, so it must be committed first (mirrors portal).
+        if notice_id is not None:
+            from app.compliance.services.notice_service import process_notice_intake
+
+            process_notice_intake(notice_id, notice_deadline)
+
         return DriveImportResult(
             file_id=file_id,
             name=name,
@@ -394,6 +404,13 @@ def _import_one_file_sync(
         )
     except Exception as e:  # noqa: BLE001
         db.rollback()
+        # save_file may have written the file before a later step failed; drop
+        # the now-orphaned file. Guarded so cleanup never masks the real error.
+        if "file_path" in locals() and file_path:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
         logger.exception("drive import failed for %s", file_id)
         return DriveImportResult(
             file_id=file_id,
@@ -409,22 +426,20 @@ def _import_one_file_sync(
 async def import_drive_files(
     body: DriveImportRequest,
     current_user: User = Depends(require_editor),
-    x_client_id: str | None = Header(default=None, alias="X-Client-Id"),
+    membership: ClientMembership = Depends(
+        require_compliance_permission(CompliancePermission.NOTICE_CREATE)
+    ),
 ):
     """Import selected Drive files into the document pipeline.
 
-    Optional notice stubs require ``X-Client-Id`` plus create_notices=true.
+    Optional notice stubs require create_notices=true; the notice is scoped to
+    the caller's validated active client (membership), never a client-supplied
+    header.
     """
     import asyncio
 
-    client_id = 0
-    if x_client_id and x_client_id != "*":
-        try:
-            client_id = int(x_client_id)
-        except ValueError:
-            client_id = 0
-
-    create_notices = bool(body.create_notices and client_id > 0)
+    client_id = membership.client_id
+    create_notices = bool(body.create_notices)
 
     loop = asyncio.get_running_loop()
     results: list[DriveImportResult] = []

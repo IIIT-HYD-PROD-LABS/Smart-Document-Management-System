@@ -1,5 +1,6 @@
 """Celery tasks for async document processing."""
 
+import contextvars
 import os
 import structlog
 from celery.exceptions import SoftTimeLimitExceeded
@@ -207,6 +208,15 @@ def process_document_task(self, document_id: int):
 
     Reports progress stages via self.update_state for frontend polling.
     """
+    # M1: the prefork worker reuses one contextvars.Context across tasks, so the
+    # tenant vars set while processing a notice-linked document (deep in
+    # _run_phase17_extraction) would leak into the next task on this worker. Run
+    # the body in an isolated context copy so every ContextVar mutation is
+    # discarded when the task returns.
+    return contextvars.copy_context().run(_process_document, self, document_id)
+
+
+def _process_document(self, document_id: int):
     if not isinstance(document_id, int) or document_id <= 0:
         logger.error("invalid_document_id", document_id=document_id)
         return {"error": "Invalid document_id"}

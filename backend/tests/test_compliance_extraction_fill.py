@@ -29,8 +29,11 @@ def test_regex_fallback_finds_gstin_and_drc():
     assert env["model"] == "regex_fallback"
 
 
-def test_review_queue_decision_still_fills_columns():
-    """Low-confidence decision must still populate empty notice columns."""
+def test_review_queue_decision_parks_envelope_without_stamping_columns():
+    """A low-confidence (review_queue) extraction records the envelope + status
+    for human review but must NOT stamp the canonical columns: a possibly
+    hallucinated response_deadline there would drive real deadline alerts and
+    render as authoritative fact (confidence-gate fix)."""
 
     class _N:
         notice_number = None
@@ -56,4 +59,7 @@ def test_review_queue_decision_still_fills_columns():
     assert decision["action"] == "review_queue"
     _stamp_extraction_fields(notice, envelope, decision, fill_columns=True)
     assert notice.extraction_status == "completed"
-    assert notice.notice_number is not None or notice.tax_demand is not None
+    # Envelope is parked for human review...
+    assert notice.extracted_fields is not None
+    # ...but the canonical columns are NOT stamped from an unreviewed extraction.
+    assert notice.notice_number is None and notice.tax_demand is None
