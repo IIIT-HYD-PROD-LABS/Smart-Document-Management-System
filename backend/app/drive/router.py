@@ -360,7 +360,6 @@ def _import_one_file_sync(
         db.add(doc)
         db.flush()
         notice_id = None
-        notice_deadline = None
         if create_notice:
             from app.compliance.models.notice import ComplianceNotice
 
@@ -377,23 +376,21 @@ def _import_one_file_sync(
             db.flush()
             doc.notice_id = notice.id
             notice_id = int(notice.id)
-            notice_deadline = notice.response_deadline
 
         db.commit()
         db.refresh(doc)
+        # process_document_task runs OCR then the notice pipeline
+        # (after_document_intelligence -> process_notice_intake) using the
+        # deadline extracted from the document. Intake is therefore NOT
+        # dispatched here: doing both would classify the notice twice -- once
+        # on the empty pre-OCR row -- and race on the risk-score write. Mirrors
+        # portal, which also relies on the task for intake.
         try:
             from app.tasks.document_tasks import process_document_task
 
             process_document_task.delay(doc.id)
         except Exception as e:  # noqa: BLE001
             logger.warning("drive import celery delay failed: %s", e)
-
-        # Intake AFTER commit: the Celery worker reads the notice row on a
-        # separate connection, so it must be committed first (mirrors portal).
-        if notice_id is not None:
-            from app.compliance.services.notice_service import process_notice_intake
-
-            process_notice_intake(notice_id, notice_deadline)
 
         return DriveImportResult(
             file_id=file_id,

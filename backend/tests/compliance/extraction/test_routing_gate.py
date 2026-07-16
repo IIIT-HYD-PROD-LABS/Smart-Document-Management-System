@@ -6,7 +6,24 @@ authority ≥ 0.85. Failure of any one routes to the Phase 10 review queue.
 """
 from __future__ import annotations
 
+import pytest
+
 from app.compliance.services.extraction_routing_service import route_or_apply
+
+
+@pytest.fixture(autouse=True)
+def _pin_gate_thresholds(monkeypatch):
+    """Pin the D-06 gate to its documented 0.85 thresholds.
+
+    route_or_apply reads settings.EXTRACTION_AVG_GATE / _CRITICAL_GATE at call
+    time, and deployments lower them for local LLMs that under-report their
+    confidence. These tests assert the gate LOGIC at the canonical thresholds,
+    so they must not inherit the ambient deployment tuning.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "EXTRACTION_AVG_GATE", 0.85)
+    monkeypatch.setattr(settings, "EXTRACTION_CRITICAL_GATE", 0.85)
 
 
 def test_high_confidence_envelope_routes_to_apply(extraction_envelope_fixture):
