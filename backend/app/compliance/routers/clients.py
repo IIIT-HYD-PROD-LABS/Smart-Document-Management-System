@@ -109,12 +109,30 @@ async def list_my_memberships(
     The query bypasses the get_active_membership dep entirely so users can
     discover their tenancies before sending an X-Client-Id header.
     """
+    from app.compliance.models.client import Client
+
     result = await db.execute(
-        select(ClientMembership).where(
-            ClientMembership.user_id == current_user.id
-        )
+        select(ClientMembership, Client.name)
+        .outerjoin(Client, Client.id == ClientMembership.client_id)
+        .where(ClientMembership.user_id == current_user.id)
+        .order_by(ClientMembership.id.asc())
     )
-    return result.scalars().all()
+    rows = result.all()
+    out: list[MembershipOut] = []
+    for membership, client_name in rows:
+        out.append(
+            MembershipOut(
+                id=membership.id,
+                user_id=membership.user_id,
+                client_id=membership.client_id,
+                compliance_role=membership.compliance_role,
+                access_start=membership.access_start,
+                access_end=membership.access_end,
+                created_at=membership.created_at,
+                client_name=client_name,
+            )
+        )
+    return out
 
 
 @router.post(

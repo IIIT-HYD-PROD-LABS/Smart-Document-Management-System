@@ -129,6 +129,9 @@ class MembershipOut(BaseModel):
     access_start: Optional[datetime] = None
     access_end: Optional[datetime] = None
     created_at: datetime
+    # Populated by GET /clients/me so the switcher can label rows without an
+    # N+1 fan-out of GET /clients/{id} calls.
+    client_name: Optional[str] = None
     # Optional surface for the immediate add response: true when the
     # backend pre-created a User and sent an invite email. The list
     # endpoint (`GET /clients/me`) reads this field from the DB row
