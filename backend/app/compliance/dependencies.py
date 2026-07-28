@@ -27,7 +27,6 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
 
 from app.compliance.middleware.auditor_expiry import (
     is_membership_active,
@@ -43,7 +42,7 @@ from app.compliance.services.permission_registry import (
     ComplianceRole,
     has_permission,
 )
-from app.database import get_async_db, get_db
+from app.database import get_async_db
 from app.models.user import User
 from app.utils.security import get_current_user
 
@@ -213,7 +212,6 @@ def require_compliance_permission(perm: CompliancePermission):
 
 def require_client_create_or_first_onboard(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> Optional[ClientMembership]:
     """Onboarding gate for POST /compliance/clients, admin-only (2026-05-21).
 
