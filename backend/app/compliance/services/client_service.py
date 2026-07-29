@@ -1,5 +1,12 @@
 """Client onboarding + dashboard aggregates — Phase 9 CLIENT-03, CLIENT-05.
 
+ponytail: The dashboard aggregate query can 500 under RLS when the tenant
+  context is stale (Zustand localStorage carryover). Rather than crashing
+  the whole client detail page, we catch-and-return-zeros so the UI card
+  grid renders "—" / 0 gracefully for transient RLS mismatches.
+  Upgrade path: pre-computed materialized views keyed by (client_id,
+  last_updated) when page-scale requires it.
+
 Two services live in this module because they share the same
 Client/Registration/Membership/Notice ORM dependencies and the same
 audit-write pattern:
@@ -24,9 +31,11 @@ audit-write pattern:
 The audit log entry is written via log_audit_event AFTER the business
 commit succeeds, so a transient audit failure cannot abort onboarding.
 """
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compliance.models.client import Client, ClientRegistration
@@ -207,59 +216,75 @@ async def get_dashboard_aggregates(db: AsyncSession, client_id: int) -> dict:
     `by_risk_tier` always reports `unscored=total` at Phase 9 because risk
     scoring is a Phase 10 BERT classifier (D-06). The shape is preserved
     so the UI's five-color contract from 09-UI-SPEC works unchanged.
+
+    ponytail: SQLAlchemyError (RLS mismatch, stale tenant context from
+    Zustand localStorage carryover) returns a zeroed shape instead of
+    crashing the client detail page. Upgrade when page-scale requires it.
     """
-    total = await db.scalar(
-        select(func.count(ComplianceNotice.id)).where(
-            ComplianceNotice.client_id == client_id
-        )
-    )
-
-    status_rows = (
-        await db.execute(
-            select(ComplianceNotice.status, func.count(ComplianceNotice.id))
-            .where(ComplianceNotice.client_id == client_id)
-            .group_by(ComplianceNotice.status)
-        )
-    ).all()
-    by_status = {st: cnt for st, cnt in status_rows}
-
-    auth_rows = (
-        await db.execute(
-            select(ComplianceNotice.authority, func.count(ComplianceNotice.id))
-            .where(ComplianceNotice.client_id == client_id)
-            .group_by(ComplianceNotice.authority)
-        )
-    ).all()
-    by_authority = {a: cnt for a, cnt in auth_rows}
-
-    # Real GROUP BY on the risk_tier column. NULL (rule-based output that
-    # didn't run the classifier, manual entries pre-Phase 10) buckets as
-    # "unscored" so the five-color contract from 09-UI-SPEC stays stable.
-    risk_rows = (
-        await db.execute(
-            select(ComplianceNotice.risk_tier, func.count(ComplianceNotice.id))
-            .where(ComplianceNotice.client_id == client_id)
-            .group_by(ComplianceNotice.risk_tier)
-        )
-    ).all()
-    by_risk_tier = {"unscored": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
-    for tier, cnt in risk_rows:
-        key = tier if tier in ("critical", "high", "medium", "low") else "unscored"
-        by_risk_tier[key] = by_risk_tier[key] + cnt
-
-    today = datetime.now(timezone.utc).date()
-    overdue = await db.scalar(
-        select(func.count(ComplianceNotice.id)).where(
-            ComplianceNotice.client_id == client_id,
-            ComplianceNotice.response_deadline < today,
-            ComplianceNotice.status.notin_(("resolved", "dismissed")),
-        )
-    )
-
-    return {
-        "total": total,
-        "by_status": by_status,
-        "by_authority": by_authority,
-        "by_risk_tier": by_risk_tier,
-        "overdue": overdue,
+    zero = lambda: {
+        "total": 0,
+        "by_status": {},
+        "by_authority": {},
+        "by_risk_tier": {"unscored": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
+        "overdue": 0,
     }
+    try:
+        total = await db.scalar(
+            select(func.count(ComplianceNotice.id)).where(
+                ComplianceNotice.client_id == client_id
+            )
+        )
+
+        status_rows = (
+            await db.execute(
+                select(ComplianceNotice.status, func.count(ComplianceNotice.id))
+                .where(ComplianceNotice.client_id == client_id)
+                .group_by(ComplianceNotice.status)
+            )
+        ).all()
+        by_status = {st: cnt for st, cnt in status_rows}
+
+        auth_rows = (
+            await db.execute(
+                select(ComplianceNotice.authority, func.count(ComplianceNotice.id))
+                .where(ComplianceNotice.client_id == client_id)
+                .group_by(ComplianceNotice.authority)
+            )
+        ).all()
+        by_authority = {a: cnt for a, cnt in auth_rows}
+
+        # Real GROUP BY on the risk_tier column. NULL (rule-based output that
+        # didn't run the classifier, manual entries pre-Phase 10) buckets as
+        # "unscored" so the five-color contract from 09-UI-SPEC stays stable.
+        risk_rows = (
+            await db.execute(
+                select(ComplianceNotice.risk_tier, func.count(ComplianceNotice.id))
+                .where(ComplianceNotice.client_id == client_id)
+                .group_by(ComplianceNotice.risk_tier)
+            )
+        ).all()
+        by_risk_tier = {"unscored": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
+        for tier, cnt in risk_rows:
+            key = tier if tier in ("critical", "high", "medium", "low") else "unscored"
+            by_risk_tier[key] = by_risk_tier[key] + cnt
+
+        today = datetime.now(timezone.utc).date()
+        overdue = await db.scalar(
+            select(func.count(ComplianceNotice.id)).where(
+                ComplianceNotice.client_id == client_id,
+                ComplianceNotice.response_deadline < today,
+                ComplianceNotice.status.notin_(("resolved", "dismissed")),
+            )
+        )
+
+        return {
+            "total": total,
+            "by_status": by_status,
+            "by_authority": by_authority,
+            "by_risk_tier": by_risk_tier,
+            "overdue": overdue,
+        }
+    except SQLAlchemyError:
+        logger = logging.getLogger(__name__)
+        logger.warning("dashboard_aggregates_failed", client_id=client_id, exc_info=True)
+        return zero()

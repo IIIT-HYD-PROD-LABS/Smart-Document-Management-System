@@ -347,7 +347,7 @@ def train_model(mode: str = "auto"):
     logger.info("model_training", model="logistic_regression")
     lr_params = {"C": [0.1, 1.0, 10.0], "max_iter": [500]}
     lr_grid = GridSearchCV(
-        LogisticRegression(random_state=42, solver="lbfgs", multi_class="multinomial", class_weight="balanced"),
+        LogisticRegression(random_state=42, solver="lbfgs", class_weight="balanced"),
         lr_params, cv=5, scoring="accuracy", n_jobs=-1,
     )
     lr_grid.fit(X_train_vec, y_train)

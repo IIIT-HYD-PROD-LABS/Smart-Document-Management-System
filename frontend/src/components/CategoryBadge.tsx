@@ -9,6 +9,7 @@ const categoryStyles: Record<string, { bg: string; fg: string; border: string }>
     tax:      { bg: "var(--accent-soft)",  fg: "var(--accent-strong)", border: "var(--accent-edge)" },
     bank:     { bg: "var(--info-soft)",    fg: "var(--info)",          border: "var(--info-soft)" },
     invoices: { bg: "var(--danger-soft)",  fg: "var(--danger)",        border: "var(--danger-soft)" },
+    unknown:  { bg: "var(--bg-muted)",     fg: "var(--text-muted)",    border: "var(--border-default)" },
 };
 
 export function CategoryBadge({ category }: { category: string }) {
