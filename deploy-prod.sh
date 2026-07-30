@@ -8,15 +8,19 @@ set -euo pipefail
 
 COMPOSE_FILE="docker-compose.prod.yml"
 FRONTEND_DIR="../taxsync-frontend"
-ENV_FILE=".env.prod"
+ENV_FILE=""
 
 echo "=== TaxSync Production Deploy ==="
 
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "ERROR: $ENV_FILE is missing."
-  echo "  Copy the template and fill real secrets on this host only:"
-  echo "    cp .env.prod.example .env.prod && chmod 600 .env.prod && \$EDITOR .env.prod"
-  echo "  See docs/security/SECRET_ROTATION_2026-07-16.md"
+if [[ -f ".env.prod" ]]; then
+  ENV_FILE=".env.prod"
+elif [[ -f "backend/.env" ]]; then
+  ENV_FILE="backend/.env"
+  echo "NOTE: using tracked backend/.env (no .env.prod on host)."
+else
+  echo "ERROR: neither .env.prod nor backend/.env found."
+  echo "  cp .env.prod.example .env.prod && chmod 600 .env.prod && \$EDITOR .env.prod"
+  echo "  or commit backend/.env in the private repo with real DATABASE_URL / OAuth keys."
   exit 1
 fi
 
@@ -49,10 +53,14 @@ else
 fi
 
 echo "[3/6] Building + starting full stack (Redis, Backend, Celery, Frontend)..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --build
+COMPOSE_ENV=(--env-file "$ENV_FILE")
+if [[ -f "backend/.env" && "$ENV_FILE" != "backend/.env" ]]; then
+  COMPOSE_ENV+=(--env-file backend/.env)
+fi
+docker compose -f "$COMPOSE_FILE" "${COMPOSE_ENV[@]}" up -d --build
 
 echo "[4/6] Running database migrations..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm celery_worker alembic upgrade head
+docker compose -f "$COMPOSE_FILE" "${COMPOSE_ENV[@]}" run --rm celery_worker alembic upgrade head
 
 echo "[5/6] Disabling any old bare-metal backend unit (backend now runs in Docker)..."
 if systemctl list-unit-files 2>/dev/null | grep -q '^taxsync-backend\.service'; then

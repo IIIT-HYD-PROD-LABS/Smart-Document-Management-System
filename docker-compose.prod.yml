@@ -7,17 +7,14 @@
 #
 # SECRETS POLICY (2026-07-16):
 #   Never hardcode SECRET_KEY / FERNET_KEY / DATABASE_URL* / SMTP_* /
-#   GEMINI_API_KEY / OAuth client secrets in this file. All secrets load
-#   from a server-local `.env.prod` via `env_file:` (gitignored). Copy
-#   `.env.prod.example` → `.env.prod` on the host and fill real values.
+#   GEMINI_API_KEY / OAuth client secrets in this file. Secrets load from
+#   tracked backend/.env (private repo) and optional server .env.prod overrides.
 #   Compose `environment:` below is for NON-SECRET deploy wiring only
 #   (service hostnames, public URLs, feature flags).
 #
 # Deploy:
 #   cd Smart-Document-Management-System
-#   test -f .env.prod || { echo "Missing .env.prod — copy .env.prod.example"; exit 1; }
-#   git pull gh-backend staging
-#   docker compose -f docker-compose.prod.yml up -d --build
+#   ./deploy-prod.sh
 #
 # Verify:
 #   docker compose -f docker-compose.prod.yml ps
@@ -40,7 +37,10 @@ services:
         else
           exec redis-server --save "" --appendonly no
         fi
-    env_file: .env.prod
+    env_file:
+      - backend/.env
+      - path: .env.prod
+        required: false
     restart: unless-stopped
     ports:
       - "127.0.0.1:6379:6379"
@@ -74,7 +74,10 @@ services:
       context: ./backend
     container_name: smartdocs-backend
     restart: unless-stopped
-    env_file: .env.prod
+    env_file:
+      - backend/.env
+      - path: .env.prod
+        required: false
     environment: &shared_env
       # Non-secret compose-network wiring ONLY.
       # Secrets (DATABASE_URL*, SECRET_KEY, FERNET_KEY, GEMINI_API_KEY, SMTP_*,
@@ -126,7 +129,10 @@ services:
     container_name: smartdocs-celery
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2 --pool=prefork --max-memory-per-child=512000 --queues=celery,default
     restart: unless-stopped
-    env_file: .env.prod
+    env_file:
+      - backend/.env
+      - path: .env.prod
+        required: false
     environment: *shared_env
     depends_on:
       redis:
@@ -151,7 +157,10 @@ services:
     container_name: smartdocs-compliance-worker
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2 --pool=prefork --max-memory-per-child=2000000 --queues=compliance --hostname=compliance@%h
     restart: unless-stopped
-    env_file: .env.prod
+    env_file:
+      - backend/.env
+      - path: .env.prod
+        required: false
     environment:
       <<: *shared_env
       HF_HOME: /app/models/hf_cache

@@ -1,6 +1,5 @@
 __pycache__
 *.pyc
-.env
 venv/
 uploads/
 # ML trained model weights (not app/models/ which contains SQLAlchemy models)

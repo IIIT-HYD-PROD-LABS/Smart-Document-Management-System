@@ -31,6 +31,7 @@ mapfile -t CANDIDATES < <(
   git ls-files \
     | grep -E '\.(ya?ml|yml|toml|ini|cfg|env|py|ts|tsx|js|jsx|sh|json|service)$' \
     | grep -Ev '(^|/)(\.env\.example|\.env\.prod\.example)$' \
+    | grep -Ev '(^|/)backend/\.env$' \
     | grep -Ev '(^|/)backend/\.env\.example$' \
     | grep -Ev '(^|/)(docs|notes|\.planning)/' \
     | grep -Ev '(^|/)backend/tests/' \

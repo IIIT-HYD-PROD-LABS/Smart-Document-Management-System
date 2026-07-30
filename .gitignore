@@ -13,6 +13,7 @@
 !.env.example
 !.env.prod.example
 !backend/.env.example
+!backend/.env
 
 # Offline secret backups must never land in git
 .secrets-backup/

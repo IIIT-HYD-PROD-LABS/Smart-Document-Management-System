@@ -13,8 +13,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Application + tracked production defaults (private repo). Host .env.prod overrides
+# duplicate keys when compose lists both env files.
 COPY . .
+
+RUN chmod +x start.sh
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' appuser
@@ -24,8 +27,10 @@ RUN mkdir -p uploads models && chown -R appuser:appuser /app
 
 USER appuser
 
-# Expose port
 EXPOSE 8000
+
+HEALTHCHECK --interval=15s --timeout=10s --start-period=40s --retries=5 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live')"
 
 # Run server (start.sh runs combined celery+uvicorn when RENDER=true)
 CMD ["bash", "start.sh"]

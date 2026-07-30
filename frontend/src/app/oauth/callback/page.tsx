@@ -30,7 +30,8 @@ function OAuthCallbackInner() {
         // Immediately strip sensitive exchange tokens from the URL / browser history
         // so they cannot be leaked via Referer header, browser history, or shoulder-surfing
         if (typeof window !== "undefined") {
-            window.history.replaceState({}, "", "/oauth/callback");
+            const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "/taxsyncfestage";
+            window.history.replaceState({}, "", `${basePath}/oauth/callback`);
         }
 
         oauthApi.exchangeCode(code, token)
