@@ -201,7 +201,19 @@ services:
       BACKEND_INTERNAL_URL: http://backend:8000
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:8026/login',(r)=>{process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))",
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
     logging:
       driver: "json-file"
       options:
