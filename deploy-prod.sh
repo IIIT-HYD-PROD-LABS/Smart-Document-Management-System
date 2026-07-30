@@ -42,6 +42,12 @@ chmod 600 "$ENV_FILE" 2>/dev/null || true
 echo "[1/6] Pulling latest backend code from gh-backend staging..."
 git pull gh-backend staging
 
+echo "[1b/6] Ensure backend/.env exists (tracked in Taxsync_Backend staging)..."
+if [[ ! -f backend/.env ]]; then
+  echo "  ERROR: backend/.env missing after pull. Copy from Taxsync_Backend or .env.prod."
+  exit 1
+fi
+
 echo "[2/6] Pulling latest frontend code..."
 if [[ -d "$FRONTEND_DIR/.git" ]]; then
   (
