@@ -213,12 +213,19 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         .then((r) => r.data),
             });
         },
-        "/dashboard/compliance/review": () =>
+        "/dashboard/compliance/review": () => {
+            // Review queue is client-scoped. Mirror the page's
+            // enabled:(activeClientId !== null) guard so we never fire the
+            // null-client fetch (the backend 400s without X-Client-Id), and
+            // key it by activeClientId so the prefetch is a cache hit for the
+            // page instead of a mismatched, wasted request.
+            if (activeClientId === null) return;
             void queryClient.prefetchQuery({
-                queryKey: ["compliance-review-pending"],
+                queryKey: ["compliance-review-pending", activeClientId],
                 queryFn: () =>
                     complianceApi.listPendingReview(1, 200).then((r) => r.data),
-            }),
+            });
+        },
     };
 
     // Co-brand cluster: fetch the active client's name + logo so the

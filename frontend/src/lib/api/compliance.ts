@@ -57,7 +57,6 @@ function withTenant(config?: AxiosRequestConfig): AxiosRequestConfig {
     };
 }
 
-
 // ──── Request payload types ────
 
 export interface OnboardClientPayload {
@@ -221,11 +220,6 @@ export const complianceApi = {
     getClient: (clientId: number) =>
         api.get<ClientDetail>(`/compliance/clients/${clientId}`, withTenant()),
 
-    /** Same as getClient but does NOT send X-Client-Id (for list-page
-     *  fan-out where no tenant is selected yet). */
-    getClientWithConfig: (clientId: number, _config?: AxiosRequestConfig) =>
-        api.get<ClientDetail>(`/compliance/clients/${clientId}`),
-
     getClientDashboard: (clientId: number) =>
         api.get<DashboardAggregates>(
             `/compliance/clients/${clientId}/dashboard`,
@@ -330,12 +324,16 @@ export const complianceApi = {
             fd,
             withTenant({
                 headers: { "Content-Type": "multipart/form-data" },
+                // The upload now also runs AI extraction on the file (so a
+                // detail-page upload fills the form), which adds an OCR + LLM
+                // round-trip. That exceeds the shared 30s axios timeout, so
+                // override it like extract-preview to avoid a false failure.
                 timeout: 120000,
             })
         );
     },
 
-    /** Phase B — import a portal-exported PDF into the notice pipeline. */
+    /** Import a portal-exported PDF into the notice pipeline (Phase B). */
     importPortalExport: (
         file: File,
         opts: {

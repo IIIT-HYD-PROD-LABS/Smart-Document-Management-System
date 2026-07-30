@@ -14,10 +14,6 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string }
     failed: { color: "var(--danger)", bg: "var(--danger-soft)", label: "Failed" },
     // degraded_local is a soft-failure / LLM-fallback state — map to warning
     degraded_local: { color: "var(--warning)", bg: "var(--warning-soft)", label: "Degraded" },
-    // no_text: the doc is a non-.txt that yielded no text; show as a soft failure
-    no_text: { color: "var(--danger)", bg: "var(--danger-soft)", label: "No text" },
-    // incomplete_scanned_pdf: OCR hit the page limit; partial text available
-    incomplete_scanned_pdf: { color: "var(--warning)", bg: "var(--warning-soft)", label: "Partial scan" },
     skipped: { color: "var(--text-subtle)", bg: "var(--bg-muted)", label: "Skipped" },
 };
 

@@ -74,11 +74,13 @@ Thumbs.db
 docker-compose.override.yml
 docker-compose.override.yaml
 
-# Build artifacts
-frontend/
+# Build artifacts (do not ignore the whole frontend tree — source is tracked)
 frontend/tsconfig.tsbuildinfo
 frontend/.next/
 frontend/out/
+frontend/node_modules/
+frontend/.env
+frontend/.env.local
 
 # Status report binary artifacts (regenerated from STATUS_REPORT.md)
 Smart_Document_Management_System_Status_Report*.docx

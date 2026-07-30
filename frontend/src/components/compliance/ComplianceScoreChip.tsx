@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { FiTrendingUp, FiTrendingDown, FiMinus } from "react-icons/fi";
 import { complianceApi } from "@/lib/api/compliance";
+import { useCurrentClient } from "@/stores/currentClientStore";
 
 /**
  * Compliance Score chip — Phase 11 D-14.
@@ -12,7 +13,9 @@ import { complianceApi } from "@/lib/api/compliance";
  *   per RESEARCH-FINAL §5 (severity-weighted variants ship in v2.1).
  */
 export function ComplianceScoreChip() {
+    const activeClientId = useCurrentClient((s) => s.activeClientId);
     const scoreQ = useQuery({
+        enabled: activeClientId !== null,
         queryKey: ["compliance-score-90d"],
         queryFn: async () => {
             const { data } = await complianceApi.getComplianceScore(90);

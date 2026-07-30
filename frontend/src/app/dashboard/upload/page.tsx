@@ -9,7 +9,6 @@ import { useAuth } from "@/context/AuthContext";
 import { documentsApi, extractErrorMessage } from "@/lib/api";
 import { ConfidenceBadge } from "@/components";
 import { FiUploadCloud, FiFile, FiCheckCircle, FiX, FiLoader, FiLock } from "react-icons/fi";
-import DriveImportPanel from "@/components/drive/DriveImportPanel";
 import PortalImportPanel from "@/components/compliance/PortalImportPanel";
 
 interface UploadItem {
@@ -219,7 +218,6 @@ export default function UploadPage() {
 
             <div className="mt-6 space-y-4">
                 <PortalImportPanel />
-                <DriveImportPanel />
             </div>
 
             {uploads.length > 0 && (

@@ -1,5 +1,9 @@
-node_modules
+# Never ship host build artifacts into the image.
 .next
+node_modules
 .git
+.github
 *.md
-.env*
+tsconfig.tsbuildinfo
+.env.local
+.vercel

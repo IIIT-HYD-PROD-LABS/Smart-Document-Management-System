@@ -87,11 +87,7 @@ export default function ClientsListPage() {
         queries: (memberships ?? []).map((m) => ({
             queryKey: ["client", m.client_id],
             queryFn: async () => {
-                // Use withoutTenant — the list page fires before the user has
-                // selected a client, and a stale activeClientId from localStorage
-                // would send the wrong X-Client-Id header, causing 400/403 from
-                // the backend.
-                const { data } = await complianceApi.getClientWithConfig(m.client_id);
+                const { data } = await complianceApi.getClient(m.client_id);
                 return data;
             },
             enabled: Boolean(memberships) && isAdmin,

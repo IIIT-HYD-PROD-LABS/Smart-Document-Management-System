@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+concurrency:
+  group: fe-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+        env:
+          # Campus public API origin (browser). Not a secret.
+          NEXT_PUBLIC_API_URL: https://canvas.iiit.ac.in/taxsyncbestage
+      - name: Verify standalone layout
+        run: test -f .next/standalone/server.js
