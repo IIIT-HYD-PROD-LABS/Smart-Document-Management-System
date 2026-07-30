@@ -57,6 +57,7 @@ function withTenant(config?: AxiosRequestConfig): AxiosRequestConfig {
     };
 }
 
+
 // ──── Request payload types ────
 
 export interface OnboardClientPayload {
@@ -219,6 +220,11 @@ export const complianceApi = {
 
     getClient: (clientId: number) =>
         api.get<ClientDetail>(`/compliance/clients/${clientId}`, withTenant()),
+
+    /** Same as getClient but does NOT send X-Client-Id (for list-page
+     *  fan-out where no tenant is selected yet). */
+    getClientWithConfig: (clientId: number, _config?: AxiosRequestConfig) =>
+        api.get<ClientDetail>(`/compliance/clients/${clientId}`),
 
     getClientDashboard: (clientId: number) =>
         api.get<DashboardAggregates>(

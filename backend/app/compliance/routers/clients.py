@@ -29,10 +29,12 @@ client-switcher needs to enumerate the user's memberships BEFORE selecting
 one.
 """
 import base64
+import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -94,6 +96,22 @@ def _validate_logo_magic(data: bytes, mime: str) -> bool:
 
 router = APIRouter(prefix="/clients", tags=["compliance-clients"])
 
+_logger = logging.getLogger(__name__)
+
+
+def _db_error_response(exc: SQLAlchemyError) -> None:
+    """Log and re-raise a SQLAlchemyError with a safe message.
+
+    One caller pattern for all unguarded client-routes so transient DB
+    failures (connection timeout, RLS mismatch, stale pool state) produce
+    503 instead of the global 500 catch-all.
+    """
+    _logger.warning("client_db_error", error=str(exc), exc_info=True)
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Database temporarily unavailable. Please retry.",
+    )
+
 
 @router.get("/me", response_model=List[MembershipOut])
 async def list_my_memberships(
@@ -111,12 +129,15 @@ async def list_my_memberships(
     """
     from app.compliance.models.client import Client
 
-    result = await db.execute(
-        select(ClientMembership, Client.name)
-        .outerjoin(Client, Client.id == ClientMembership.client_id)
-        .where(ClientMembership.user_id == current_user.id)
-        .order_by(ClientMembership.id.asc())
-    )
+    try:
+        result = await db.execute(
+            select(ClientMembership, Client.name)
+            .outerjoin(Client, Client.id == ClientMembership.client_id)
+            .where(ClientMembership.user_id == current_user.id)
+            .order_by(ClientMembership.id.asc())
+        )
+    except SQLAlchemyError as exc:
+        _db_error_response(exc)
     rows = result.all()
     out: list[MembershipOut] = []
     for membership, client_name in rows:
@@ -169,14 +190,17 @@ async def onboard(
         actor=current_user,
     )
     # Eager-load relationships for the detail response.
-    result = await db.execute(
-        select(Client)
-        .options(
-            selectinload(Client.registrations),
-            selectinload(Client.memberships),
+    try:
+        result = await db.execute(
+            select(Client)
+            .options(
+                selectinload(Client.registrations),
+                selectinload(Client.memberships),
+            )
+            .where(Client.id == client.id)
         )
-        .where(Client.id == client.id)
-    )
+    except SQLAlchemyError as exc:
+        _db_error_response(exc)
     return result.scalar_one()
 
 
@@ -189,14 +213,17 @@ async def get_client(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Fetch a single client (RLS-filtered by membership)."""
-    result = await db.execute(
-        select(Client)
-        .options(
-            selectinload(Client.registrations),
-            selectinload(Client.memberships),
+    try:
+        result = await db.execute(
+            select(Client)
+            .options(
+                selectinload(Client.registrations),
+                selectinload(Client.memberships),
+            )
+            .where(Client.id == client_id)
         )
-        .where(Client.id == client_id)
-    )
+    except SQLAlchemyError as exc:
+        _db_error_response(exc)
     client = result.scalar_one_or_none()
     if not client:
         raise HTTPException(
@@ -248,7 +275,10 @@ async def update_branding(
 ):
     """Update website + address for a client (logo has its own endpoint)."""
     _assert_path_matches_membership(client_id, membership)
-    client = await db.get(Client, client_id)
+    try:
+        client = await db.get(Client, client_id)
+    except SQLAlchemyError as exc:
+        _db_error_response(exc)
     if not client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -261,7 +291,10 @@ async def update_branding(
     if "address" in data:
         client.address = data["address"] or None
 
-    await db.commit()
+    try:
+        await db.commit()
+    except SQLAlchemyError as exc:
+        _db_error_response(exc)
     await db.refresh(client)
 
     log_audit_event(
@@ -323,7 +356,10 @@ async def upload_logo(
             ),
         )
 
-    client = await db.get(Client, client_id)
+    try:
+        client = await db.get(Client, client_id)
+    except SQLAlchemyError as exc:
+        _db_error_response(exc)
     if not client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -333,7 +369,10 @@ async def upload_logo(
     encoded = base64.b64encode(blob).decode("ascii")
     client.logo_url = f"data:{mime};base64,{encoded}"
 
-    await db.commit()
+    try:
+        await db.commit()
+    except SQLAlchemyError as exc:
+        _db_error_response(exc)
     await db.refresh(client)
 
     log_audit_event(
@@ -356,7 +395,10 @@ async def delete_logo(
 ):
     """Clear the client's logo (sets logo_url to NULL)."""
     _assert_path_matches_membership(client_id, membership)
-    client = await db.get(Client, client_id)
+    try:
+        client = await db.get(Client, client_id)
+    except SQLAlchemyError as exc:
+        _db_error_response(exc)
     if not client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -366,7 +408,10 @@ async def delete_logo(
         return client
 
     client.logo_url = None
-    await db.commit()
+    try:
+        await db.commit()
+    except SQLAlchemyError as exc:
+        _db_error_response(exc)
     await db.refresh(client)
 
     log_audit_event(
