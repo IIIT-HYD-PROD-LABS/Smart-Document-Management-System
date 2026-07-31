@@ -221,13 +221,6 @@ async def get_dashboard_aggregates(db: AsyncSession, client_id: int) -> dict:
     Zustand localStorage carryover) returns a zeroed shape instead of
     crashing the client detail page. Upgrade when page-scale requires it.
     """
-    zero = lambda: {
-        "total": 0,
-        "by_status": {},
-        "by_authority": {},
-        "by_risk_tier": {"unscored": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
-        "overdue": 0,
-    }
     try:
         total = await db.scalar(
             select(func.count(ComplianceNotice.id)).where(
@@ -287,4 +280,10 @@ async def get_dashboard_aggregates(db: AsyncSession, client_id: int) -> dict:
     except SQLAlchemyError:
         logger = logging.getLogger(__name__)
         logger.warning("dashboard_aggregates_failed", client_id=client_id, exc_info=True)
-        return zero()
+        return {
+            "total": 0,
+            "by_status": {},
+            "by_authority": {},
+            "by_risk_tier": {"unscored": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
+            "overdue": 0,
+        }
