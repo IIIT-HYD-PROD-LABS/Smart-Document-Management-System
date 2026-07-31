@@ -37,9 +37,22 @@ def get_scheduler():
         logger.warning("APScheduler not installed — alert scheduling disabled")
         return None
 
-    jobstore_url = os.environ.get("DATABASE_URL_RUNTIME") or os.environ.get(
-        "DATABASE_URL"
+    # Prefer owner DATABASE_URL when RLS is off — campus often has a wrong /
+    # placeholder password on app_runtime, which must not block API boot.
+    enforce_rls = os.environ.get("DB_ENFORCE_RLS", "false").lower() in (
+        "1",
+        "true",
+        "yes",
     )
+    if enforce_rls and os.environ.get("DATABASE_URL_RUNTIME"):
+        jobstore_url = os.environ["DATABASE_URL_RUNTIME"]
+    else:
+        jobstore_url = os.environ.get("DATABASE_URL") or os.environ.get(
+            "DATABASE_URL_RUNTIME"
+        )
+    if not jobstore_url:
+        logger.warning("No DATABASE_URL for APScheduler jobstore — alerts disabled")
+        return None
     # Bound libpq connect at 10s so an unreachable DB fails fast instead of
     # blocking the FastAPI lifespan indefinitely. pool_pre_ping recovers from
     # idle disconnects (Supabase pooler trims sessions aggressively).

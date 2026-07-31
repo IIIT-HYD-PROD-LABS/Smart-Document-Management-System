@@ -7,6 +7,9 @@
 #   docker run -d --name smartdocs-backend --restart unless-stopped \
 #     -p 8025:8000 tt0docker/stage_taxsync_be:${BUILD_NUMBER:-latest}
 #
+# MUST map host 8025 → container 8000 (not 8025:8025). Public 502 = wrong map
+# or container down. Logs must show GOOGLE_OAUTH=configured and Redis host IP.
+#
 # No --env-file, no deploy scripts: secrets live in /app/.env inside the image.
 # Host 8025 → container 8000 (uvicorn). Public: canvas.iiit.ac.in/taxsyncbestage
 # =============================================================================
