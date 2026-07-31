@@ -11,6 +11,9 @@ FRONTEND_DIR="../taxsync-frontend"
 ENV_FILE=""
 
 echo "=== TaxSync Production Deploy ==="
+echo "NOTE: Jenkins Stage_Taxsync_BE only builds the image; it does NOT create"
+echo "      smartdocs-backend. This script (or scripts/campus-start-backend.sh)"
+echo "      must run on 10.2.8.73 after each backend build."
 
 if [[ -f ".env.prod" ]]; then
   ENV_FILE=".env.prod"

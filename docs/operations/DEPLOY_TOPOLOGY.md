@@ -65,6 +65,30 @@ test -f .env.prod || { echo "copy .env.prod.example first"; exit 1; }
 - Frontend CI: `Taxsync_Frontend` workflow runs `npm ci` + `tsc` + `build`
 - Prefer merging monorepo `main` first, then subtree-export backend / copy frontend
 
+## Jenkins autotrigger vs running container
+
+| Step | Who | What happens |
+|------|-----|----------------|
+| Stage_Taxsync_BE build | Jenkins | Builds Docker image from `Taxsync_Backend` `staging` — **success does not start any container** |
+| Deploy on host | Campus / deploy team | Must run compose on **10.2.8.73** so **`smartdocs-backend`** exists and publishes **8025→8000** |
+
+If deploy team reports **“backend container is missing”**, nginx `/taxsyncbestage` will **502** and Google sign-in will fail until someone runs:
+
+```bash
+cd ~/Smart-Document-Management-System
+git pull origin main
+chmod +x scripts/campus-start-backend.sh
+./scripts/campus-start-backend.sh
+```
+
+(`./deploy-prod.sh` is the full-stack equivalent: Redis, backend, workers, frontend.)
+
+Verify container exists:
+
+```bash
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep smartdocs-backend
+```
+
 ## Health checks after campus deploy
 
 ```bash
