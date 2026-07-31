@@ -1,8 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Start script for deployment (runs both Celery worker and Uvicorn in one container)
-# For Docker Compose, the services are split into separate containers.
+# Taxsync_Backend — campus / Jenkins runtime (10.2.8.73)
+# Repo: IIITH-Product-Labs/Taxsync_Backend  branch: staging
+# NOT the Smart-Document-Management-System monorepo.
 
 load_dotenv_into_shell() {
   local env_file="${1:-.env}"
@@ -23,9 +24,7 @@ PY
 )"
 }
 
-# Campus: .env baked at /app (Taxsync_Backend) or backend/.env (monorepo copy).
-# Jenkins: pass --env-file on the host OR rebuild with backend/.env in image context.
-for candidate in "${ENV_FILE:-}" ".env" "backend/.env" "/app/.env"; do
+for candidate in "${ENV_FILE:-}" ".env" "/app/.env"; do
   if [[ -n "$candidate" && -f "$candidate" ]]; then
     load_dotenv_into_shell "$candidate"
   fi
@@ -35,12 +34,10 @@ required_vars=(SECRET_KEY DATABASE_URL)
 for v in "${required_vars[@]}"; do
   if [[ -z "${!v:-}" ]]; then
     echo "ERROR: $v is not set." >&2
-    echo "  Checked: ENV_FILE=${ENV_FILE:-<unset>}, .env, backend/.env, /app/.env" >&2
-    echo "  In container: ls -la .env backend/.env 2>/dev/null || true" >&2
-    ls -la .env backend/.env 2>/dev/null || true
-    echo "  Fix (on 10.2.8.73):" >&2
-    echo "    docker run --env-file /path/to/.env -p 8025:8000 <image>" >&2
-    echo "    OR: cd Smart-Document-Management-System && ./scripts/campus-start-backend.sh" >&2
+    echo "  Checked: ENV_FILE=${ENV_FILE:-<unset>}, .env, /app/.env" >&2
+    ls -la .env 2>/dev/null || true
+    echo "  Fix: docker run --env-file ./.env -p 8025:8000 <image>" >&2
+    echo "  Or on host: ./scripts/run-backend-campus.sh <jenkins-image-tag>" >&2
     exit 1
   fi
 done
