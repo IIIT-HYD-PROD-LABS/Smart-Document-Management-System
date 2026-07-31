@@ -4,10 +4,35 @@ set -euo pipefail
 # Start script for deployment (runs both Celery worker and Uvicorn in one container)
 # For Docker Compose, the services are split into separate containers.
 
+# Taxsync_Backend / Jenkins images COPY a tracked .env into /app but often run
+# without --env-file. Pydantic would load .env at import time, but pre-flight
+# checks here need the same values in the shell — load via python-dotenv (safe
+# for JSON-ish values like ALLOWED_ORIGINS that break naive `source .env`).
+load_dotenv_into_shell() {
+  local env_file="${1:-.env}"
+  [[ -f "$env_file" ]] || return 0
+  eval "$(ENV_FILE="$env_file" python - <<'PY'
+import os, shlex
+from pathlib import Path
+from dotenv import dotenv_values
+
+path = Path(os.environ["ENV_FILE"])
+for key, val in (dotenv_values(path) or {}).items():
+    if not val:
+        continue
+    if os.environ.get(key):
+        continue
+    print(f"export {key}={shlex.quote(val)}")
+PY
+)"
+}
+
+load_dotenv_into_shell ".env"
+
 required_vars=(SECRET_KEY DATABASE_URL)
 for v in "${required_vars[@]}"; do
   if [[ -z "${!v:-}" ]]; then
-    echo "ERROR: $v is not set. Load backend/.env or server .env.prod before starting."
+    echo "ERROR: $v is not set. Load backend/.env, use docker --env-file, or bake .env in the image."
     exit 1
   fi
 done
@@ -38,5 +63,6 @@ if [ "${RENDER:-}" = "true" ] || [ "${COMBINED_MODE:-}" = "true" ]; then
     trap cleanup SIGTERM SIGINT EXIT
 fi
 
-echo "Starting Uvicorn on 0.0.0.0:8000..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+UVICORN_PORT="${PORT:-8000}"
+echo "Starting Uvicorn on 0.0.0.0:${UVICORN_PORT}..."
+exec uvicorn app.main:app --host 0.0.0.0 --port "${UVICORN_PORT}"

@@ -27,10 +27,9 @@ RUN adduser --disabled-password --gecos '' appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
-# Backend serves 8025 in prod. start.sh runs `uvicorn --port ${PORT:-8000}`,
-# so PORT pins it to 8025 here; EXPOSE documents it for the deploy step.
-ENV PORT=8025
-EXPOSE 8025
+# Campus nginx publishes host :8025 -> container :8000 (see docker-compose.prod.yml).
+# Do NOT set PORT=8025 here — Jenkins/campus jobs must map -p 8025:8000.
+EXPOSE 8000
 
 # start.sh runs uvicorn (and, when RENDER/COMBINED_MODE=true, a celery worker too)
 CMD ["bash", "start.sh"]
