@@ -1,6 +1,18 @@
+# =============================================================================
+# Taxsync_Backend — campus deploy uses THIS FILE ONLY (IIITH Product Labs).
+# Branch: staging (tracked .env is copied into the image at build time).
+#
+#   docker build -t tt0docker/stage_taxsync_be:${BUILD_NUMBER:-latest} .
+#   docker rm -f smartdocs-backend 2>/dev/null || true
+#   docker run -d --name smartdocs-backend --restart unless-stopped \
+#     -p 8025:8000 tt0docker/stage_taxsync_be:${BUILD_NUMBER:-latest}
+#
+# No --env-file, no deploy scripts: secrets live in /app/.env inside the image.
+# Host 8025 → container 8000 (uvicorn). Public: canvas.iiit.ac.in/taxsyncbestage
+# =============================================================================
+
 FROM python:3.11-slim
 
-# Install system dependencies for OCR
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     libgl1 \
@@ -9,27 +21,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Application + tracked production defaults (private repo). Jenkins autotrigger
-# requires .env in git on staging; start.sh and/or docker --env-file load it.
-COPY . .
-
-RUN chmod +x start.sh deploy.sh scripts/run-backend-campus.sh
-
-# Fail build early if campus secrets file missing (prevents empty SECRET_KEY at runtime).
+# Production config (SECRET_KEY, DATABASE_URL, OAuth, Redis, …) — required in git on staging.
+COPY .env .env
 RUN test -s .env \
     && grep -q '^SECRET_KEY=.' .env \
     && grep -q '^DATABASE_URL=.' .env \
-    || (echo "ERROR: .env with SECRET_KEY and DATABASE_URL must be in build context (staging branch)." && exit 1)
+    || (echo "ERROR: commit .env on staging before docker build." && exit 1)
 
-# Create non-root user
-RUN adduser --disabled-password --gecos '' appuser
+COPY . .
 
-# Create necessary directories with correct ownership
-RUN mkdir -p uploads models && chown -R appuser:appuser /app
+RUN chmod +x start.sh
+
+RUN adduser --disabled-password --gecos '' appuser \
+    && mkdir -p uploads models \
+    && chown -R appuser:appuser /app
 
 USER appuser
 
@@ -38,5 +46,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=10s --start-period=40s --retries=5 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live')"
 
-# Run server (start.sh runs combined celery+uvicorn when RENDER=true)
 CMD ["bash", "start.sh"]

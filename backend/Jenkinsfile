@@ -1,37 +1,24 @@
-// Taxsync_Backend — reference pipeline for campus autotrigger (Stage_Taxsync_BE).
-// Product Labs: point the Jenkins job at this file or call ./deploy.sh after docker build.
+// Taxsync_Backend — Dockerfile-only deploy (Product Labs Jenkins).
 pipeline {
     agent any
-
     environment {
-        DOCKER_IMAGE = 'tt0docker/stage_taxsync_be'
+        IMAGE = 'tt0docker/stage_taxsync_be'
     }
-
     stages {
-        stage('Checkout') {
+        stage('Build') {
             steps {
                 checkout scm
-                sh 'test -f .env && grep -q ^SECRET_KEY= .env'
+                sh 'docker build -t ${IMAGE}:${BUILD_NUMBER} -t ${IMAGE}:latest .'
             }
         }
-
-        stage('Build image') {
+        stage('Run') {
             steps {
-                sh 'docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest .'
+                sh '''
+                  docker rm -f smartdocs-backend 2>/dev/null || true
+                  docker run -d --name smartdocs-backend --restart unless-stopped \
+                    -p 8025:8000 ${IMAGE}:${BUILD_NUMBER}
+                '''
             }
-        }
-
-        stage('Deploy on host') {
-            steps {
-                sh 'chmod +x deploy.sh scripts/run-backend-campus.sh'
-                sh 'SKIP_DOCKER_BUILD=1 DOCKER_IMAGE=${DOCKER_IMAGE} BUILD_NUMBER=${BUILD_NUMBER} ./deploy.sh'
-            }
-        }
-    }
-
-    post {
-        failure {
-            echo 'Deploy failed — check docker logs smartdocs-backend and .env on workspace.'
         }
     }
 }
