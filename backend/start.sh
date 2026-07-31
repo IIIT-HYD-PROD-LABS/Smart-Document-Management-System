@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Loads /app/.env baked in at docker build (Taxsync_Backend Dockerfile COPY .env).
+# Loads .env from the working directory (baked into image via COPY . or --env-file).
 
 load_dotenv_into_shell() {
   local env_file="${1:-.env}"
@@ -32,7 +32,7 @@ required_vars=(SECRET_KEY DATABASE_URL)
 for v in "${required_vars[@]}"; do
   if [[ -z "${!v:-}" ]]; then
     echo "ERROR: $v is not set." >&2
-    echo "  Rebuild image from Taxsync_Backend staging — Dockerfile must COPY .env into /app." >&2
+    echo "  Ensure Taxsync_Backend staging .env has SECRET_KEY and DATABASE_URL." >&2
     ls -la /app/.env .env 2>/dev/null || true
     exit 1
   fi
