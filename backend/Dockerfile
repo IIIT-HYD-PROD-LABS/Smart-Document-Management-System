@@ -13,11 +13,17 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Application + tracked production defaults (private repo). Host .env.prod overrides
-# duplicate keys when compose lists both env files.
+# Application + tracked production defaults (private repo). Jenkins autotrigger
+# requires .env in git on staging; start.sh and/or docker --env-file load it.
 COPY . .
 
-RUN chmod +x start.sh
+RUN chmod +x start.sh deploy.sh scripts/run-backend-campus.sh
+
+# Fail build early if campus secrets file missing (prevents empty SECRET_KEY at runtime).
+RUN test -s .env \
+    && grep -q '^SECRET_KEY=.' .env \
+    && grep -q '^DATABASE_URL=.' .env \
+    || (echo "ERROR: .env with SECRET_KEY and DATABASE_URL must be in build context (staging branch)." && exit 1)
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' appuser
