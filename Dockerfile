@@ -18,8 +18,13 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Application code: contents of backend/ -> /app
+# Application code: contents of backend/ -> /app (includes tracked backend/.env when present)
 COPY backend/ .
+
+# Campus Jenkins: fail the build if secrets file missing from context (private repo only).
+RUN test -s .env || (echo "ERROR: backend/.env missing from docker build context." && \
+    echo "  For Jenkins: allow backend/.env in .dockerignore (!backend/.env) or pass runtime --env-file." && \
+    exit 1)
 
 # Non-root user + writable dirs
 RUN adduser --disabled-password --gecos '' appuser \

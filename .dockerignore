@@ -13,9 +13,10 @@
 .claude
 .secrets-backup
 
-# Local env / secrets
+# Local env / secrets — allow tracked campus backend/.env in Jenkins root `docker build .`
 .env
 .env.*
+!backend/.env
 !.env.example
 !.env.prod.example
 
