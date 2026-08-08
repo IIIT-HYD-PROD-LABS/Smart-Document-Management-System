@@ -78,7 +78,7 @@ boto3==1.33.6
 
 # Celery & Redis
 celery==5.3.6
-redis==5.0.1
+redis==5.3.1
 
 # Configuration
 python-dotenv==1.2.2
