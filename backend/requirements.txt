@@ -83,7 +83,7 @@ redis==5.0.1
 # Configuration
 python-dotenv==1.2.2
 pydantic==2.13.4  # Phase 15: bumped from 2.11.3 to match live container resolution under fastmcp 3.2.4
-pydantic-settings==2.13.0
+pydantic-settings==2.14.2
 
 # Security & Rate Limiting
 slowapi==0.1.9
