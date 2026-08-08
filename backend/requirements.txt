@@ -7,7 +7,7 @@ fastapi==0.120.4
 starlette==0.49.3
 anyio==4.13.0
 uvicorn[standard]==0.47.0  # Phase 15: bumped from 0.24.0 to satisfy fastmcp 3.2.4 (uvicorn>=0.35)
-python-multipart==0.0.27  # CVE GHSA-: unbounded multipart part headers DoS, fixed in 0.0.27
+python-multipart==0.0.31  # CVE GHSA-: unbounded multipart part headers DoS, fixed in 0.0.27
 
 # Database
 sqlalchemy==2.0.49
